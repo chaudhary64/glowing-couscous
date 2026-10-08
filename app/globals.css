@@ -1,26 +1,68 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+  EcoEPR design tokens.
+  Palette is drawn from the materials this product actually handles, not from
+  generic "eco green": PCB graphite for ink, cool ledger paper, copper trace for
+  the accent, and stamp green reserved strictly for a valid verdict.
+*/
+@theme {
+  --color-ink: #12171b;
+  --color-ink-soft: #2b3138;
+  --color-ink-muted: #6d747c;
+
+  --color-paper: #e7e9e2;
+  --color-paper-raised: #f5f6f1;
+  --color-rule: #c6cabd;
+  --color-rule-soft: #d9dcd2;
+
+  --color-copper: #a2542a;
+  --color-copper-tint: #f0e3d9;
+
+  --color-verified: #1d5c3c;
+  --color-verified-tint: #dde8e0;
+
+  --color-hazard: #b0311c;
+  --color-hazard-tint: #f2ded8;
+
+  --color-review: #8a6108;
+  --color-review-tint: #f1e8d3;
+
+  --color-lead: #5a6470;
+
+  --font-display: var(--font-anton), "Arial Narrow", Impact, sans-serif;
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "Courier New", monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  /* Ledger figures must not shift column width when they change. */
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background-color: var(--color-copper);
+  color: var(--color-paper-raised);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-copper);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
