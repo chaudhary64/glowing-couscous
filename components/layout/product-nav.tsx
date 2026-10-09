@@ -67,7 +67,7 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
           ECO<span className="text-copper">EPR</span>
         </Link>
         <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.18em] text-paper/60">
-          Waste &amp; Energy · Track 03
+          Verifiable e-waste take-back
         </p>
       </div>
 

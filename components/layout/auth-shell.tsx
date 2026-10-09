@@ -38,7 +38,7 @@ export async function AuthShell({ children }: { children: React.ReactNode }) {
             ECO<span className="text-copper">EPR</span>
           </Link>
           <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.18em] text-paper/60">
-            Waste &amp; Energy · Track 03
+            Verifiable e-waste take-back
           </p>
         </div>
 
@@ -104,12 +104,9 @@ export async function AuthShell({ children }: { children: React.ReactNode }) {
 
         <footer className="border-t border-rule">
           <div className="mx-auto w-full max-w-xl px-5 py-6 sm:px-8">
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
-              EcoEPR · prototype
-            </p>
-            <p className="mt-2 text-[12px] leading-relaxed text-ink-muted">
-              A demo build over a real Cognito pool and a real RDS instance. Every
-              figure inside is a fixture.
+            <p className="text-[12px] leading-relaxed text-ink-muted">
+              Runs on a real Cognito pool and a real RDS instance. Every figure inside
+              is a fixture.
             </p>
           </div>
         </footer>

@@ -23,7 +23,7 @@ export default function DocIndexPage() {
     <div className="flex flex-col gap-12">
       <header className="border-b-2 border-ink pb-8">
         <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-copper">
-          Feature documentation · Track 03 · Waste &amp; Energy
+          Feature documentation
         </p>
         <h1 className="mt-4 max-w-4xl font-display text-4xl uppercase leading-[0.95] tracking-tight sm:text-6xl">
           The formal route, priced at the doorstep.
@@ -209,29 +209,31 @@ export default function DocIndexPage() {
           </ul>
         </Panel>
 
-        <Panel eyebrow="Build it / Ship it" title="Stack">
+        <Panel eyebrow="What actually runs" title="Stack">
           <div className="flex flex-col gap-4">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-muted">
-                Build it
+                The model calls
               </p>
               <p className="mt-1 text-sm leading-relaxed text-ink-soft">
-                PartyRock for fast multimodal prompt iteration, SAM CLI for local
-                serverless execution.
+                A plain fetch against the Gemini REST API — no SDK sits between the
+                app and the model, which is why moving back to Bedrock is one file.
+                Every reply is shaped by a response schema and parsed, never
+                trusted.
               </p>
             </div>
             <div className="border-t border-rule pt-4">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-muted">
-                Ship it
+                The rest
               </p>
               <ul className="mt-1.5 flex flex-wrap gap-1.5">
                 {[
+                  "Next.js 16 · Amplify SSR",
+                  "Amazon Cognito",
+                  "PostgreSQL 16 on RDS",
                   "Gemini (multimodal: photo + audio)",
-                  "Gemini response schema (typed JSON)",
-                  "API Gateway + Lambda",
-                  "DynamoDB",
-                  "OpenSearch (local)",
-                  "Next.js",
+                  "Drizzle ORM",
+                  "Tailwind CSS 4",
                 ].map((service) => (
                   <li key={service}>
                     <Badge tone="neutral">{service}</Badge>

@@ -77,9 +77,6 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
 
         <footer className="border-t border-rule">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-5 py-6 sm:px-8">
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
-              EcoEPR · prototype
-            </p>
             <p className="max-w-3xl text-[12px] leading-relaxed text-ink-muted">
               Every figure on these screens is a fixture, not a live reading. Credits
               are simulated, this is not a payout system, and we route to

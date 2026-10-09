@@ -24,7 +24,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EcoEPR — Waste & Energy, Track 03",
+  title: "EcoEPR — Verifiable e-waste take-back",
   description:
     "Multi-modal AI bridge connecting informal e-waste collectors to CPCB-registered recyclers, producing verifiable brand EPR compliance.",
 };

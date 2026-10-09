@@ -196,7 +196,7 @@ export default function RoadmapPage() {
           </p>
           <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">
             The web intake is what a collector can use right now, and it is the
-            surface every demo on this prototype runs through.
+            channel the rest of the app is built around.
           </p>
         </div>
         <Link

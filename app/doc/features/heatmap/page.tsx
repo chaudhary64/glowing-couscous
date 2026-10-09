@@ -39,7 +39,7 @@ export default function HeatmapPage() {
       >
         <div className="flex flex-col gap-3">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-            This is the only screen in the prototype that does not touch a
+            This is the only screen in the app that does not touch a
             collector&apos;s payout. It reads the same pickup stream that{" "}
             <Link
               href="/pickups"

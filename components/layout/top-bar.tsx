@@ -1,15 +1,26 @@
-import { features } from "@/lib/data/features";
-
-const stack = ["Gemini", "Lambda", "API Gateway", "DynamoDB", "OpenSearch"];
+/**
+ * Strip across the top of the documentation.
+ *
+ * The list is the stack that actually serves these pages — Gemini for the model
+ * calls, Cognito for identity, Postgres on RDS, Amplify's SSR compute to run it.
+ * Lambda, API Gateway, DynamoDB and OpenSearch were in the first proposal and were
+ * never built: this app ships no function, gateway or queue table of its own, and the
+ * validation queue says as much on the screen itself. Amplify's SSR compute runs on
+ * Lambda underneath, but that is the host's business rather than a service this app
+ * deploys and names, and the distinction is the whole point of the list.
+ *
+ * The count of capabilities in the core loop used to sit here too. It is a fact
+ * about the build order, not about the product, so it belongs in the priority
+ * ladder under `/doc` rather than in every page's header.
+ */
+const stack = ["Gemini", "Cognito", "RDS Postgres", "Amplify SSR"];
 
 export function TopBar() {
-  const coreCount = features.filter((f) => f.status === "core").length;
-
   return (
     <div className="sticky top-0 z-10 border-b border-rule bg-paper/95 backdrop-blur supports-[backdrop-filter]:bg-paper/80">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5 sm:px-8">
         <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
-          Demo build · {coreCount} of {features.length} capabilities in the core loop
+          Built on
         </span>
 
         <span className="hidden h-3 w-px bg-rule sm:block" />
