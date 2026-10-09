@@ -1,5 +1,10 @@
 import { analyseItem } from "@/lib/ai/analyse";
 import { aiErrorResponse, authorize, jsonResponse, readPayload } from "@/lib/ai/http";
+import {
+  archiveMediaParts,
+  archiveRequests,
+  archiveWarning,
+} from "@/lib/s3/archive";
 
 /**
  * POST /api/ai/valuation — identify, assay, price, gate. One submission in, one
@@ -7,6 +12,11 @@ import { aiErrorResponse, authorize, jsonResponse, readPayload } from "@/lib/ai/
  *
  * Everything with a rupee sign on it is computed after the model has finished, from
  * the rate card, on this side of the wire. See `lib/ai/analyse.ts` for why.
+ *
+ * The submitted media is archived in S3 beside the model call, so the photograph a
+ * price came from is still there after the request that priced it. A storage fault
+ * is reported in `storage.error` and in the warnings; it never becomes the reason a
+ * paid-for analysis is thrown away.
  */
 
 // No segment config: a POST-only handler is dynamic by definition, and this build's
@@ -28,16 +38,28 @@ export async function POST(request: Request) {
   const parsed = readPayload(body);
   if (!parsed.ok) return parsed.response;
 
-  try {
-    const analysis = await analyseItem({
+  // Both awaited, both independent — see the longer note in the intake route for why
+  // the archive runs beside the model rather than after it, and why a storage
+  // failure is reported instead of thrown.
+  const [analysed, archived] = await Promise.allSettled([
+    analyseItem({
       media: [parsed.payload.photo, parsed.payload.audio].filter(
         (part): part is NonNullable<typeof part> => part !== undefined,
       ),
       note: parsed.payload.note,
       declaredMassGrams: parsed.payload.declaredMassGrams,
-    });
-    return jsonResponse(analysis);
-  } catch (error) {
-    return aiErrorResponse(error);
-  }
+    }),
+    archiveMediaParts(archiveRequests(parsed.payload)),
+  ]);
+
+  if (analysed.status === "rejected") return aiErrorResponse(analysed.reason);
+
+  const storage = archived.status === "fulfilled" ? archived.value : null;
+  const warning = storage ? archiveWarning(storage) : null;
+
+  return jsonResponse({
+    ...analysed.value,
+    warnings: warning ? [...analysed.value.warnings, warning] : analysed.value.warnings,
+    storage,
+  });
 }

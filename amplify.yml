@@ -33,6 +33,15 @@
 # Secrets Manager or SSM instead of from a file. Until then the key lives in the
 # environment, it is scoped to this one API, and it should be rotated if the deployment
 # artifacts are ever shared.
+#
+# `S3_BUCKET`, `S3_REGION` and the two `AWS_*` names are copied for the same reason and
+# with the same caveat: without the bucket the archive reports itself as off, and
+# without the key the writes fail on the deployment while working on a laptop. These
+# four are the integration this file's own note argues to retire — `lib/s3/archive.ts`
+# builds its client without credentials of its own and lets the SDK resolve the chain,
+# so an IAM role on the compute would make the static key unnecessary with no code
+# change at all. Setting `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` here is the
+# stopgap, not the design.
 version: 1
 frontend:
   phases:
@@ -41,7 +50,7 @@ frontend:
         - npm ci --cache .npm --prefer-offline
     build:
       commands:
-        - env | grep -E '^(COGNITO_REGION|COGNITO_USER_POOL_ID|COGNITO_CLIENT_ID|COGNITO_ISSUER|GEMINI_API_KEY|GEMINI_MODEL|GEMINI_FALLBACK_MODEL)=' >> .env.production
+        - env | grep -E '^(COGNITO_REGION|COGNITO_USER_POOL_ID|COGNITO_CLIENT_ID|COGNITO_ISSUER|GEMINI_API_KEY|GEMINI_MODEL|GEMINI_FALLBACK_MODEL|S3_BUCKET|S3_REGION|S3_PREFIX|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY)=' >> .env.production
         - npm run build
   artifacts:
     baseDirectory: .next
