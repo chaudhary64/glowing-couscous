@@ -66,7 +66,23 @@ interface Failure {
 }
 
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
-const MAX_AUDIO_BYTES = 6 * 1024 * 1024;
+/**
+ * 3 MB, not 6.
+ *
+ * A bigger clip passed this check and then died on the way out: the hosting layer
+ * caps one request at roughly 6 MiB, base64 adds a third on top of the file, and a
+ * 6 MB recording encodes to 8 MB — a guaranteed failure that reached the operator as
+ * a bare HTTP 413 the server never produced.
+ */
+const MAX_AUDIO_BYTES = 3 * 1024 * 1024;
+
+/**
+ * Both attachments together, in base64 characters.
+ *
+ * The per-file limits above each fit alone, but the pair has to fit in one request,
+ * so they are bounded again here. Mirrors `MAX_TOTAL_CHARS` in `lib/ai/http.ts`.
+ */
+const MAX_TOTAL_CHARS = 5_500_000;
 
 const ENDPOINTS: Record<LiveMode, string> = {
   valuation: "/api/ai/valuation",
@@ -181,7 +197,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
     if (file.size > MAX_AUDIO_BYTES) {
       setFailure({
         code: "payload_too_large",
-        message: `That clip is ${Math.round(file.size / 1024 / 1024)} MB. Keep it under 6 MB — ten seconds of speech is plenty.`,
+        message: `That clip is ${Math.round(file.size / 1024 / 1024)} MB. Keep it under 3 MB — ten seconds of speech is plenty.`,
       });
       return;
     }
@@ -217,7 +233,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
         if (blob.size > MAX_AUDIO_BYTES) {
           setFailure({
             code: "payload_too_large",
-            message: "That recording is over 6 MB. Keep it under about a minute.",
+            message: "That recording is over 3 MB. Keep it under about a minute.",
           });
           return;
         }
@@ -253,6 +269,20 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
     }
     if (mode === "intake" && audioSeconds > 0) {
       body.durationSeconds = Math.round(audioSeconds);
+    }
+
+    // Refused here rather than upstream. The server checks the same total, but past
+    // roughly 6 MiB the hosting layer answers 413 itself, so the request never
+    // arrives and nothing on the server can explain what went wrong.
+    const encodedChars =
+      (photo?.dataBase64.length ?? 0) + (audio?.dataBase64.length ?? 0);
+    if (encodedChars > MAX_TOTAL_CHARS) {
+      setFailure({
+        code: "payload_too_large",
+        message: `The photo and the recording together are ${Math.round(encodedChars / 1024 / 1024)} MB encoded. One upload carries about 4 MB of file, so attach a shorter clip or send the photo on its own.`,
+      });
+      setStatus("idle");
+      return;
     }
 
     try {

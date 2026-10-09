@@ -14,7 +14,8 @@ import { aiErrorResponse, authorize, jsonResponse, readPayload } from "@/lib/ai/
  */
 
 export async function POST(request: Request) {
-  const denied = await authorize(request);
+  // Guarded as the screen is guarded: this is the `/intake` capability.
+  const denied = await authorize(request, "/intake");
   if (denied) return denied;
 
   let body: unknown;

@@ -50,13 +50,29 @@ const CODE_MAP: Record<string, AuthErrorCode> = {
   UsernameExistsException: "already-exists",
   AliasExistsException: "already-exists",
   InvalidPasswordException: "weak-password",
-  InvalidParameterException: "invalid-email",
   CodeMismatchException: "bad-code",
   ExpiredCodeException: "expired-code",
   TooManyRequestsException: "too-many",
   TooManyFailedAttemptsException: "too-many",
   LimitExceededException: "too-many",
 };
+
+/**
+ * The one case where "invalid parameter" really is the caller's typing.
+ *
+ * `InvalidParameterException` is Cognito's catch-all for a request it will not
+ * accept, and only some of those are a user error. A malformed address comes back as
+ * it — and so does an app client with the wrong auth flow enabled, or a client id
+ * that belongs to another pool. Mapping the whole code to `invalid-email` told anyone
+ * locked out by a deployment fault to check their typing, and it did so silently:
+ * an error that is mapped is an error that never reaches the log below. Only a
+ * message that names the address stays a user error; everything else becomes
+ * `server`, which is logged.
+ */
+const invalidEmail = (type: string, message: string | undefined): AuthErrorCode | null =>
+  type === "InvalidParameterException" && !!message && /email/i.test(message)
+    ? "invalid-email"
+    : null;
 
 /** Calls one operation and turns Cognito's error envelope into an `AuthError`. */
 async function call<T>(operation: CognitoOperation, body: Record<string, unknown>): Promise<T> {
@@ -90,13 +106,16 @@ async function call<T>(operation: CognitoOperation, body: Record<string, unknown
         "",
     ).split(":")[0];
     const message = (payload as { message?: string }).message;
-    const code = CODE_MAP[type] ?? "server";
+    const code = CODE_MAP[type] ?? invalidEmail(type, message) ?? "server";
     // `server` is also what an unrecognised type becomes, and the two are worth telling
     // apart in a log even though the form shows one sentence for both. A provider error
     // this table does not know — a changed flow, a client secret turned on — is a bug
-    // here, not a user mistake, and it is otherwise invisible from the outside.
+    // here, not a user mistake, and it is otherwise invisible from the outside. The
+    // provider's own words are safe to log and are the only thing that names the cause.
     if (code === "server") {
-      console.error(`[auth] ${operation} failed with an unmapped error: ${type || response.status}`);
+      console.error(
+        `[auth] ${operation} failed with an unhandled error: ${type || response.status}${message ? ` — ${message.slice(0, 200)}` : ""}`,
+      );
     }
     throw new AuthError(code, message);
   }

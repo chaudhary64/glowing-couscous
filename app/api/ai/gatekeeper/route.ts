@@ -12,7 +12,9 @@ import { aiErrorResponse, authorize, jsonResponse, readPayload } from "@/lib/ai/
  */
 
 export async function POST(request: Request) {
-  const denied = await authorize(request);
+  // Guarded as the screen is guarded: the only caller is the validation queue, so
+  // this is the `/validation` capability.
+  const denied = await authorize(request, "/validation");
   if (denied) return denied;
 
   let body: unknown;

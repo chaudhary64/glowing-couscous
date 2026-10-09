@@ -78,6 +78,13 @@ guidance is that proxy checks are optimistic. So every product page calls
 `requireAccess("/its-own-path")`, which re-verifies the token and re-consults the same
 matrix.
 
+The three AI endpoints are gated by that same matrix, one screen each, precisely because
+the proxy never sees `/api`: `POST /api/ai/intake` needs `/intake`'s operator, and
+`/api/ai/valuation` and `/api/ai/gatekeeper` need the officer that `/valuation` and
+`/validation` require. A session on its own is not authority here — an account holding
+no group is turned away by every screen, and it must not be able to spend the model's
+quota instead.
+
 The matrix lives in exactly one module and is imported by all three readers — the proxy,
 the data access layer, and the rail that hides links a role cannot open. Hiding a link
 is a courtesy; the page check is the control.

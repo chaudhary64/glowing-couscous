@@ -140,10 +140,28 @@ const normalise = (pathname: string): string => {
   return pathname;
 };
 
-/** The guard covering a path, or null when the path is not gated. */
+/**
+ * The guard covering a path, or null when the path is not gated.
+ *
+ * A guarded screen covers what is beneath it as well as itself: `/intake` and
+ * `/intake/7` are the same authority, and matching only the exact string meant a
+ * nested route added later silently lost its rank check — the proxy would still
+ * require a session, so the hole would be invisible until someone noticed a viewer
+ * reading an officer's screen.
+ *
+ * The comparison is against `path + "/"`, not a bare prefix, so `/map-archive` is
+ * not covered by `/map`. `/` is excluded from the nested case for the obvious
+ * reason: as a prefix it matches the entire site.
+ */
 export function guardFor(pathname: string): Guard | null {
   const path = normalise(pathname);
-  return GUARDS.find((guard) => guard.paths.includes(path)) ?? null;
+  return (
+    GUARDS.find(
+      (guard) =>
+        guard.paths.includes(path) ||
+        guard.paths.some((base) => base !== "/" && path.startsWith(`${base}/`)),
+    ) ?? null
+  );
 }
 
 /** Pages that exist only for signed-out or unassigned users. */
