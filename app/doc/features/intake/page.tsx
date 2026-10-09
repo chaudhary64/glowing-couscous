@@ -11,24 +11,28 @@ import type { IntakeSample, ResolvedItemSummary } from "@/lib/types";
 
 const pipeline: { step: string; service: string; detail: string }[] = [
   {
-    step: "Speech to text",
-    service: "Amazon Transcribe",
-    detail: "Hindi and regional audio becomes a transcript before anything else runs.",
-  },
-  {
-    step: "Read the item",
-    service: "Amazon Bedrock · Claude 3.5 Sonnet",
-    detail: "Vision and the transcript together yield item class, brand and condition.",
+    step: "Read the upload",
+    service: "Google Gemini · multimodal",
+    detail:
+      "One call takes the photograph and the Hindi audio together. Nothing is transcribed by a separate service first.",
   },
   {
     step: "Contract to fields",
-    service: "Lambda",
-    detail: "The model output is coerced into typed fields, each with its own confidence.",
+    service: "Gemini response schema",
+    detail:
+      "The reply is constrained to a typed shape, so every field arrives with its own confidence and its source.",
   },
   {
-    step: "Persist the intake",
-    service: "DynamoDB",
-    detail: "The record is written before valuation, so nothing is priced off thin air.",
+    step: "Price it",
+    service: "EcoEPR rate card",
+    detail:
+      "Material fractions are matched against a closed list and priced on the server. The model never states a rupee figure.",
+  },
+  {
+    step: "Gate it",
+    service: "Reject rules R-01 to R-04",
+    detail:
+      "The same pass returns verified, held for review or rejected, naming the rule that fired and why.",
   },
 ];
 

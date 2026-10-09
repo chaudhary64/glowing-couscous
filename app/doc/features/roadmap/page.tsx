@@ -26,7 +26,7 @@ export default function RoadmapPage() {
     {
       title: shipped.map((channel) => channel.name).join(" + "),
       status: "shipped",
-      note: "Live today. Both run the same Amazon Bedrock and Amazon Transcribe pipeline, which is why neither needed new model work.",
+      note: "Live today. Both run the same Gemini call — photo and Hindi audio read in one pass — which is why neither needed new model work.",
     },
     ...channels
       .filter((channel) => channel.status !== "shipped")
@@ -58,7 +58,7 @@ export default function RoadmapPage() {
           label="Shipped today"
           value={String(shipped.length)}
           unit="channels"
-          note="Web intake and the Hindi voice note, both on Bedrock."
+          note="Web intake and the Hindi voice note, both on one Gemini call."
         />
         <Stat
           label="Next"
@@ -129,7 +129,7 @@ export default function RoadmapPage() {
             <Field label="Model work required" value="None" mono tone="copper" />
             <Field
               label="Pipeline reused"
-              value="Amazon Bedrock + Amazon Transcribe, unchanged"
+              value="One Gemini call (photo + audio), unchanged"
             />
             <Field
               label="Effect on collectors today"

@@ -1,6 +1,6 @@
 import { features } from "@/lib/data/features";
 
-const stack = ["Amazon Bedrock", "Amazon Transcribe", "Lambda", "API Gateway", "DynamoDB", "OpenSearch"];
+const stack = ["Gemini", "Lambda", "API Gateway", "DynamoDB", "OpenSearch"];
 
 export function TopBar() {
   const coreCount = features.filter((f) => f.status === "core").length;

@@ -2,8 +2,8 @@ import type { Channel } from "@/lib/types";
 
 /**
  * Delivery channels, ordered by priority. WhatsApp is last on purpose: it is the
- * same Bedrock + Transcribe pipeline behind different plumbing, so it adds
- * integration risk without adding capability.
+ * same Gemini pipeline behind different plumbing, so it adds integration risk
+ * without adding capability.
  */
 export const channels: Channel[] = [
   {
@@ -21,7 +21,7 @@ export const channels: Channel[] = [
     name: "Hindi voice note",
     rank: 2,
     status: "shipped",
-    effort: "Built on Transcribe",
+    effort: "Built on Gemini audio",
     reach: "Collectors who describe items instead of typing",
     why: "The differentiator. Speech is how 1.5M informal collectors already work.",
     blockers: [],
@@ -65,7 +65,7 @@ export const channels: Channel[] = [
 export const whatsappVerdict = {
   decision: "Not in this build",
   headline:
-    "A channel, not a capability. Same Bedrock pipeline, more moving parts, zero new intelligence.",
+    "A channel, not a capability. Same Gemini pipeline, more moving parts, zero new intelligence.",
   demoLine:
     "If a judge asks how collectors reach us: web app today, WhatsApp next, one pipeline behind both.",
   costOfBuilding: "3–5 days of integration for no change in what the AI can do",

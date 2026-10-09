@@ -80,9 +80,9 @@ export function IntakeConsole({
             ) : (
               <Panel eyebrow="Vision extraction" title="No text was typed">
                 <p className="text-sm leading-relaxed text-ink-soft">
-                  This intake arrived as a single photo. Amazon Bedrock read the
-                  object class, the brand plate and the hazard markers straight off
-                  the image, so the collector never filled in a form.
+                  This intake arrived as a single photo. Gemini read the object
+                  class, the brand plate and the hazard markers straight off the
+                  image, so the collector never filled in a form.
                 </p>
                 <Surface
                   tone="inset"

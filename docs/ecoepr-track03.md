@@ -53,3 +53,17 @@ Ranking criteria: does it prove the AI is doing real work, does it survive a liv
 - Not a real payout system — credits are simulated, which is exactly why the gatekeeper (#3) exists.
 - Not certified recycling — we route to CPCB-registered centers, we do not process waste.
 - Not a WhatsApp product — that is the next channel, not this build.
+
+---
+
+## Implementation note (added after the build)
+
+Features 1–3 above are built and wired, but not on the service the table names. Bedrock is blocked in this account: every call returns `AccessDeniedException: Your account is currently being verified`, and that clears on AWS's side, not ours. The pipeline therefore runs on **Google Gemini**, model id from the `GEMINI_MODEL` environment variable, defaulting to `gemini-2.5-flash`. Gemini reads the photograph and the Hindi voice note in a single multimodal call, which is also why the transcript now comes from the model rather than from Amazon Transcribe. The Bedrock row above is the original plan and stands as written; only the transport is vendor-specific, so moving it back is one file.
+
+What actually runs:
+
+- `POST /api/ai/valuation` — identify, assay, price and gate one submission.
+- `POST /api/ai/intake` — photo and/or Hindi audio in; transcript, extracted fields and the priced item back in one round trip.
+- `POST /api/ai/gatekeeper` — the same pass, answered as a valid / held / rejected decision with the rule that fired.
+
+The one design decision worth defending on stage: **the model never states a rupee figure.** It returns an item class from a closed list, material ids with mass estimates, and a verdict with a confidence. Every price is computed on the server from the rate card in `lib/data/rate-card.ts`, and a reply whose ids or verdict fall outside those closed lists is discarded rather than guessed at. The money is arithmetic a reviewer can check line by line, not a number a language model produced — which is what makes the valuation defensible in an audit.

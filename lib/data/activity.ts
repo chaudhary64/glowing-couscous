@@ -59,7 +59,7 @@ export const activityFeed: ActivityEvent[] = [
     kind: "valuation",
     subject: "ECO-2026-0434 priced",
     detail: "Printer power supply · ₹226 gross, ₹106 net, 320 g copper",
-    actor: "Bedrock · Claude 3.5 Sonnet",
+    actor: "Gemini 2.5 Flash",
     href: "/valuation",
   },
   {

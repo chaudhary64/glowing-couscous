@@ -226,8 +226,8 @@ export default function DocIndexPage() {
               </p>
               <ul className="mt-1.5 flex flex-wrap gap-1.5">
                 {[
-                  "Amazon Bedrock (Claude 3.5 Sonnet, multimodal)",
-                  "Amazon Transcribe (Hindi)",
+                  "Gemini (multimodal: photo + audio)",
+                  "Gemini response schema (typed JSON)",
                   "API Gateway + Lambda",
                   "DynamoDB",
                   "OpenSearch (local)",
