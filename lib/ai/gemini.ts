@@ -62,7 +62,26 @@ export class AiCallError extends Error {
 export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
 export const DEFAULT_FALLBACK_MODEL = "gemini-2.5-flash";
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
-const TIMEOUT_MS = 60_000;
+
+/**
+ * The whole budget for one request, shared across every attempt.
+ *
+ * This is a ceiling imposed from outside rather than a preference. Amplify Hosting
+ * cuts a server-rendered request off at around thirty seconds and answers a bare 504
+ * with no body at all. Measured against the deployment: a call that took 28.6 s came
+ * back as a 504 while one that took 24.2 s succeeded. A per-attempt 60 s timeout —
+ * which is what stood here — therefore let this code wait patiently while the
+ * platform killed the connection, and the operator was shown a status code instead of
+ * the sentence that explains it.
+ *
+ * The substitute model is asked with whatever is left of the budget, never with a
+ * fresh clock, so one request can never outlive the ceiling it is running under.
+ */
+const TOTAL_BUDGET_MS = 26_000;
+
+/** Never hand an attempt less than this: it would be aborted before it could answer. */
+const MIN_ATTEMPT_MS = 4_000;
+
 const MAX_MEDIA_BYTES = 8 * 1024 * 1024;
 
 /**
@@ -122,6 +141,7 @@ async function invoke(
   key: string,
   args: AiCallArgs,
   parts: Record<string, unknown>[],
+  deadline: number,
 ): Promise<AiCallResult> {
   const started = Date.now();
   let response: Response;
@@ -142,12 +162,16 @@ async function invoke(
           maxOutputTokens: MAX_TEXT_TOKENS,
         },
       }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      // Measured against the shared deadline, not a fresh per-attempt clock.
+      signal: AbortSignal.timeout(Math.max(MIN_ATTEMPT_MS, deadline - Date.now())),
     });
   } catch (error) {
+    const elapsed = Date.now() - started;
     const reason =
-      (error as Error).name === "TimeoutError" ? "timed out" : "could not be reached";
-    throw new AiCallError(`Gemini ${reason} after ${Date.now() - started} ms.`);
+      (error as Error).name === "TimeoutError" ? "ran out of time" : "could not be reached";
+    throw new AiCallError(
+      `${model} ${reason} (${elapsed} ms elapsed, in a ${TOTAL_BUDGET_MS} ms request budget).`,
+    );
   }
 
   const body = await response.text();
@@ -223,15 +247,23 @@ export function getAiProvider(): AiProvider {
     model,
     async generate(args: AiCallArgs): Promise<AiCallResult> {
       const parts = buildParts(args);
+      const deadline = Date.now() + TOTAL_BUDGET_MS;
       try {
-        return await invoke(model, key, args, parts);
+        return await invoke(model, key, args, parts, deadline);
       } catch (error) {
         // An overloaded model is a capacity problem, not a wrong answer, so one
         // documented substitute is allowed — but it is never silent: the caller gets
-        // `fallbackFrom` and puts it on screen next to the model that answered.
+        // `fallbackFrom` and puts it on screen next to the model that answered, and
+        // it only ever gets the time that is left.
         if (!fallback || fallback === model || !isCapacityFailure(error)) throw error;
+        if (Date.now() >= deadline - MIN_ATTEMPT_MS) {
+          throw new AiCallError(
+            `${model} was at capacity and there was not enough of the ${TOTAL_BUDGET_MS} ms request budget left to ask ${fallback}, so nothing was priced. Try again.`,
+            503,
+          );
+        }
         try {
-          const result = await invoke(fallback, key, args, parts);
+          const result = await invoke(fallback, key, args, parts, deadline);
           return { ...result, fallbackFrom: model };
         } catch (retryError) {
           // Both are busy. Say so, and name both, because "503" alone reads like a
