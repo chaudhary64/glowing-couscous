@@ -69,3 +69,43 @@ export function formatTimeOfDay(timestamp: string): string {
   const match = timestamp.match(/\b\d{2}:\d{2}\b/);
   return match ? match[0] : timestamp;
 }
+
+/**
+ * An ISO timestamp as an operator reads it: "09 Oct 2026, 14:19".
+ *
+ * Distinct from `formatTimeOfDay`, which scrapes a clock time out of the pre-formatted
+ * strings the fixtures carry. This is for the timestamps a query returns, which are ISO
+ * and would otherwise print as a machine string in a narrow column. No zone suffix is
+ * added: the reader is shown their own clock, and claiming "IST" over a value the server
+ * formatted in another zone would be the more confident lie.
+ */
+export function formatTimestamp(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const day = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+  const clock = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+  return `${day}, ${clock}`;
+}
+
+/**
+ * Bytes as a person reads them, for evidence whose exact size nothing acts on.
+ *
+ * The binary units are deliberate: the archive stores what S3 stored, and a screen that
+ * quietly switched to decimal MB would disagree with every other tool looking at the
+ * same object.
+ */
+export function formatBytes(bytes: number | null): string {
+  if (bytes === null || !Number.isFinite(bytes) || bytes < 0) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}

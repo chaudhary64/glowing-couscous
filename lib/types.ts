@@ -30,7 +30,8 @@ export type ProductHref =
   | "/pickups"
   | "/map"
   | "/collectors"
-  | "/recyclers";
+  | "/recyclers"
+  | "/evidence";
 
 /** The feature write-ups. */
 export type DocHref = "/doc" | `/doc/features/${FeatureSlug}`;
@@ -333,4 +334,34 @@ export interface Channel {
   reach: string;
   why: string;
   blockers: string[];
+}
+
+/* --------------------------------------------------------------- evidence */
+
+/**
+ * One archived object, as a screen needs it.
+ *
+ * Shaped for the client viewer the way `PendingDecision` is shaped for the decision
+ * queue: the component that renders it must not reach into `lib/s3/*`, which imports
+ * the AWS SDK and the database client, and a client bundle has no business carrying
+ * either. `kind` reuses `InputMode` because the schema does: a media asset is a photo
+ * or a voice note, which is the same distinction as an intake's mode.
+ */
+export interface EvidenceAsset {
+  /** `media_assets.id` — the surrogate key, not what identifies the bytes. */
+  id: string;
+  /** The content-addressed S3 key, and the only string the read API will sign. */
+  storageKey: string;
+  kind: InputMode;
+  mimeType: string | null;
+  byteSize: number | null;
+  checksumSha256: string | null;
+  /** ISO timestamp as the database returned it. */
+  uploadedAt: string;
+  /**
+   * `users.full_name` where the uploader resolved, and `null` where no row exists.
+   * Null is the normal case today, not a failure: nothing provisions a `users` row
+   * on sign-in yet, so most evidence is genuinely unattributed.
+   */
+  uploaderName: string | null;
 }

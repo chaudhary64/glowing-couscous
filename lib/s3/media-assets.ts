@@ -1,7 +1,8 @@
-import { eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 
 import { database, databaseConfigured } from "@/db/client";
 import { mediaAssets, users } from "@/db/schema";
+import type { EvidenceAsset } from "@/lib/types";
 
 import {
   archiveMediaParts,
@@ -219,4 +220,87 @@ export async function forgetMediaRecords(keys: string[]): Promise<number> {
     .where(inArray(mediaAssets.storageKey, keys))
     .returning({ id: mediaAssets.id });
   return removed.length;
+}
+
+/**
+ * The most recent objects in the archive, newest first — what a screen lists.
+ *
+ * A read, not a report. It carries no totals, because a total over a bounded window
+ * reads as a total over the whole archive: the real count is a different query, and a
+ * number that means two things is worse than no number.
+ *
+ * The uploader is resolved through `users.full_name` and is `null` far more often than
+ * not, which is the honest answer rather than a placeholder name. Nothing creates a
+ * `users` row on sign-in yet — `users.full_name` is `NOT NULL`, so provisioning is
+ * genuinely a separate piece of work — and the column is nullable for exactly that
+ * reason.
+ */
+export interface MediaAssetListing {
+  /** False when there is no `DATABASE_URL`: rows were never recorded, so nothing lists. */
+  configured: boolean;
+  assets: EvidenceAsset[];
+  /** Set when the database was configured and the read still failed. Never thrown. */
+  error: string | null;
+}
+
+/** Bounded so a screen cannot ask for the whole table by accident. */
+const LIST_LIMIT_MAX = 60;
+
+const LIST_LIMIT_DEFAULT = 24;
+
+export async function listRecentMediaAssets(
+  limit: number = LIST_LIMIT_DEFAULT,
+): Promise<MediaAssetListing> {
+  if (!databaseConfigured()) return { configured: false, assets: [], error: null };
+  const connection = database();
+  if (!connection) return { configured: false, assets: [], error: null };
+
+  const bounded = Math.min(Math.max(Math.round(limit), 1), LIST_LIMIT_MAX);
+
+  try {
+    const rows = await connection.db
+      .select({
+        id: mediaAssets.id,
+        storageKey: mediaAssets.storageKey,
+        kind: mediaAssets.kind,
+        mimeType: mediaAssets.mimeType,
+        byteSize: mediaAssets.byteSize,
+        checksumSha256: mediaAssets.checksumSha256,
+        uploadedAt: mediaAssets.uploadedAt,
+        uploaderName: users.fullName,
+      })
+      .from(mediaAssets)
+      // Left, not inner: evidence with no attributed uploader is still evidence, and an
+      // inner join would silently hide every row the missing provisioning affects.
+      .leftJoin(users, eq(users.id, mediaAssets.uploaderUserId))
+      // `media_assets_uploaded_idx` covers this ordering, so the screen walks an index
+      // rather than sorting the table.
+      .orderBy(desc(mediaAssets.uploadedAt))
+      .limit(bounded);
+
+    return {
+      configured: true,
+      assets: rows.map((row) => ({
+        id: row.id,
+        storageKey: row.storageKey,
+        kind: row.kind,
+        mimeType: row.mimeType,
+        byteSize: row.byteSize,
+        checksumSha256: row.checksumSha256,
+        uploadedAt: row.uploadedAt.toISOString(),
+        uploaderName: row.uploaderName,
+      })),
+      error: null,
+    };
+  } catch (error) {
+    // The inner cause, for the same reason the write path reports it: Drizzle wraps a
+    // driver failure in the whole statement plus its parameters, and the part worth
+    // reading — "connect ETIMEDOUT" — is one level down in `cause`.
+    const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : null;
+    const message = (cause ?? (error instanceof Error ? error.message : String(error)))
+      .replace(/\s+/g, " ")
+      .trim();
+    console.error("[db] listing the archived media failed", message);
+    return { configured: true, assets: [], error: message.slice(0, 200) };
+  }
 }

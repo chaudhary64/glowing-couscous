@@ -25,6 +25,7 @@ export const productNav: ProductNavGroup[] = [
       { label: "Valuations", href: "/valuation", hint: "Price an item and issue the EPR credit" },
       { label: "Validation queue", href: "/validation", hint: "Clear items the model could not settle" },
       { label: "Pickups", href: "/pickups", hint: "Route loads and settle credit notes" },
+      { label: "Evidence", href: "/evidence", hint: "The archived photo or voice note behind a submission" },
     ],
   },
   {

@@ -116,6 +116,16 @@ export const GUARDS: readonly Guard[] = [
     paths: ["/collectors"],
   },
   {
+    // Deliberately the same authority `/api/media/read` requires — it authorizes
+    // against `/intake`, which is this rank. A weaker guard here would render a Read
+    // button the API then refuses, and a stronger one would hide evidence from the
+    // operators who produce it.
+    id: "evidence",
+    minRank: RANK_OPERATOR,
+    requirement: "operator or above",
+    paths: ["/evidence"],
+  },
+  {
     id: "valuation",
     minRank: RANK_OFFICER,
     requirement: "officer or above",

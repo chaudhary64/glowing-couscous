@@ -61,6 +61,7 @@ nothing.
 | Intake | `/intake` | operator |
 | Pickups | `/pickups` | operator |
 | Collectors | `/collectors` | operator |
+| Evidence archive | `/evidence` | operator |
 | Valuations | `/valuation` | officer |
 | Validation queue | `/validation` | officer |
 | Recyclers | `/recyclers` | officer |

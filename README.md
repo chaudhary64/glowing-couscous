@@ -22,10 +22,10 @@ nothing has to be discovered by reading code.
 |---|---|
 | Live AI pipeline (Microsoft Foundry) | **Real** — three working endpoints, closed-list validation |
 | Authentication & roles (Cognito) | **Real** — JWKS verification, httpOnly session, enforced role matrix |
-| Product screens | **Built** — 8 role-gated screens, but they render fixtures |
+| Product screens | **Built** — 9 role-gated screens, one of which reads the live archive; the rest render fixtures |
 | Doc site | **Built** — 6 feature write-ups, public |
 | Media archive (S3) | **Real** — every submitted photo and voice note is written to `impact-proof-bucket` under a content-addressed key |
-| Database schema | **Applied to real RDS, unused by the app** — 39 tables, zero queries |
+| Database schema | **Applied to real RDS; one table is read by the app** — 39 tables, `media_assets` in use |
 | Money | **Simulated** — no payout, no ledger writes |
 
 ---
@@ -111,6 +111,7 @@ Full detail, including the reasoning behind each choice and the list of gaps, is
 | Intake | `/intake` | operator |
 | Pickups | `/pickups` | operator |
 | Collectors | `/collectors` | operator |
+| Evidence archive | `/evidence` | operator |
 | Valuations | `/valuation` | officer |
 | Validation queue | `/validation` | officer |
 | Recyclers | `/recyclers` | officer |
@@ -142,13 +143,18 @@ The design, the deletion policy, the role model and the instance details are in
 ### The database is not wired to the app
 
 This is the largest remaining gap and it is deliberate, not an oversight. The schema is
-fully designed and applied to RDS, but **no file under `app/` or `lib/` imports Drizzle
-or reads `DATABASE_URL`**. Every screen — every table, receipt, stat and dashboard —
+fully designed and applied to RDS, but **only the media archive reads it**:
+[`lib/s3/media-assets.ts`](lib/s3/media-assets.ts) writes `media_assets` rows as evidence
+is archived, lists them for [`/evidence`](app/(product)/evidence/page.tsx), and resolves
+an uploader's Cognito subject. Nothing else under `app/` or `lib/` imports Drizzle or
+reads `DATABASE_URL`. Every other screen — every table, receipt, stat and dashboard —
 renders hardcoded fixtures from [`lib/data/`](lib/data). `lib/types.ts` says so
 directly.
 
-So the screens are a complete, honest interface over sample data, and the AI endpoints
-are real, but the two have never been joined to a database.
+So the screens are a complete, honest interface over sample data with one real archive
+behind it, and the AI endpoints are real, but a submission has never been joined to the
+database: no `intakes` row is written, so the evidence the archive holds cannot be found
+from the valuation it priced.
 
 ### Auth gaps
 
