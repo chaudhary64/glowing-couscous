@@ -55,7 +55,8 @@ nothing.
 
 | Screen | Path | Minimum |
 |---|---|---|
-| Dashboard | `/` | any role |
+| Landing | `/` | public |
+| Dashboard | `/dashboard` | any role |
 | Hotspot map | `/map` | any role |
 | Intake | `/intake` | operator |
 | Pickups | `/pickups` | operator |

@@ -18,9 +18,12 @@ export type FeatureSlug =
   | "heatmap"
   | "roadmap";
 
-/** The product surface. */
+/**
+ * The product surface. The dashboard lives at `/dashboard`, not `/`, because `/`
+ * is the public landing page — a signed-out visitor is the audience there.
+ */
 export type ProductHref =
-  | "/"
+  | "/dashboard"
   | "/intake"
   | "/valuation"
   | "/validation"
@@ -31,6 +34,12 @@ export type ProductHref =
 
 /** The feature write-ups. */
 export type DocHref = "/doc" | `/doc/features/${FeatureSlug}`;
+
+/**
+ * The sign-in flow. Public: these are the pages a landing CTA is allowed to send a
+ * brand buyer to, and the only routes that render before a session exists.
+ */
+export type AuthHref = "/login" | "/signup" | "/confirm" | "/no-access";
 
 /**
  * Priority rank, 1 = highest. Mirrors the ranking in `docs/ecoepr-track03.md`.

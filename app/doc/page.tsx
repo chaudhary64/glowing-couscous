@@ -38,7 +38,7 @@ export default function DocIndexPage() {
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <ButtonLink href="/intake">Open the intake screen</ButtonLink>
-          <ButtonLink href="/" variant="secondary">
+          <ButtonLink href="/dashboard" variant="secondary">
             Back to the app
           </ButtonLink>
           <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">

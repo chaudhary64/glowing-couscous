@@ -28,7 +28,7 @@ const activePickups = pickups.filter(
 );
 
 export default async function DashboardPage() {
-  await requireAccess("/");
+  await requireAccess("/dashboard");
 
   return (
     <div className="flex flex-col gap-10">

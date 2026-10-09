@@ -28,16 +28,18 @@ export async function proxy(request: NextRequest) {
   // Sign-in and sign-up are pointless once you hold a session, and `/confirm` is only
   // ever reached before one exists. Note that this bounces a signed-in user who holds
   // *no* role as well: leaving them on the form would offer a second session for the
-  // same identity, and a form they can never complete. Sending them to `/` hands them to
-  // the guard, which explains the missing role on `/no-access` and offers a way out.
+  // same identity, and a form they can never complete. Sending them to `/dashboard`
+  // hands them to the guard, which explains the missing role on `/no-access` and offers
+  // a way out. It is deliberately not `/` any more: the root is the public landing page
+  // and would not run the guard at all.
   if (isAuthPage(pathname)) {
     const token = request.cookies.get(SESSION_COOKIE)?.value;
     const user = token ? await verifyIdToken(token) : null;
-    if (user) return NextResponse.redirect(new URL("/", request.url));
+    if (user) return NextResponse.redirect(new URL("/dashboard", request.url));
     return NextResponse.next();
   }
 
-  // `/doc` and its feature write-ups are public on purpose.
+  // `/`, `/doc` and the feature write-ups are public on purpose.
   if (isPublicPath(pathname)) return NextResponse.next();
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;

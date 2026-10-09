@@ -31,7 +31,7 @@ export function DocNav() {
           Feature documentation
         </p>
         <Link
-          href="/"
+          href="/dashboard"
           className="mt-3 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
         >
           ← Back to the app

@@ -24,6 +24,12 @@ export function formatMass(grams: number): string {
   if (grams >= 1000) {
     return `${(grams / 1000).toFixed(1)} kg`;
   }
+  // Sub-gram masses are the precious-metal lines — gold and palladium plating is
+  // fractions of a gram. Rounding those to a whole gram printed "0 g" beside a
+  // five-figure value, which reads as a broken scale rather than a thin yield.
+  if (grams > 0 && grams < 1) {
+    return `${grams.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")} g`;
+  }
   return `${Math.round(grams).toLocaleString("en-IN")} g`;
 }
 

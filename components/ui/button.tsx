@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
-import type { DocHref, ProductHref } from "@/lib/types";
+import type { AuthHref, DocHref, ProductHref } from "@/lib/types";
 
 /**
  * Square, mono, uppercase. Actions invert on hover and never round a corner —
  * the same rule the rest of the interface follows.
  */
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "inverse";
 
 const variants: Record<ButtonVariant, string> = {
   primary: "border-2 border-ink bg-ink text-paper hover:bg-paper hover:text-ink",
@@ -16,6 +16,10 @@ const variants: Record<ButtonVariant, string> = {
   ghost:
     "border-0 bg-transparent px-0 text-ink underline decoration-rule underline-offset-2 hover:decoration-copper",
   danger: "border-2 border-hazard bg-hazard text-paper hover:bg-paper hover:text-hazard",
+  // For use on an ink block, where primary's black-on-black would vanish. Full
+  // inversion is impossible against ink, so the hover goes to copper instead.
+  inverse:
+    "border-2 border-paper bg-paper text-ink hover:border-copper hover:bg-copper hover:text-paper",
 };
 
 const base =
@@ -49,7 +53,8 @@ export function ButtonLink({
   className,
   title,
 }: {
-  href: ProductHref | DocHref;
+  /** Product, docs, or the sign-in flow — the landing page links to all three. */
+  href: ProductHref | DocHref | AuthHref;
   children: React.ReactNode;
   variant?: ButtonVariant;
   className?: string;

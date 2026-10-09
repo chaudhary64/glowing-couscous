@@ -80,15 +80,16 @@ export type Guard = {
 };
 
 /**
- * Who may open what. `/doc` is absent on purpose — the write-up is public, because
- * it is the part of this project meant to be read by anyone.
+ * Who may open what. `/` and `/doc` are absent on purpose: the landing page and the
+ * feature write-ups are the public half of this project, meant to be read by anyone.
+ * The dashboard is gated at `/dashboard` so the two never share a path.
  */
 export const GUARDS: readonly Guard[] = [
   {
     id: "dashboard",
     minRank: RANK_ANY_ROLE,
     requirement: "any assigned role",
-    paths: ["/"],
+    paths: ["/dashboard"],
   },
   {
     id: "map",
@@ -172,9 +173,14 @@ export const isAuthPage = (pathname: string): boolean =>
  * Paths that never require a session. Everything not listed here is protected by
  * default — a new screen is locked until someone adds it to the matrix, which is the
  * failure direction worth having.
+ *
+ * The root is on the list because it is the landing page now, not the dashboard: a
+ * brand buyer has to be able to read the pitch without an account. The working
+ * screens all sit behind the guards above.
  */
 export const isPublicPath = (pathname: string): boolean => {
   const path = normalise(pathname);
+  if (path === "/") return true;
   if (path === "/doc" || path.startsWith("/doc/")) return true;
   return isAuthPage(path);
 };

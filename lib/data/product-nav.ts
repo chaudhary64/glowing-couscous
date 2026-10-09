@@ -20,7 +20,7 @@ export const productNav: ProductNavGroup[] = [
   {
     label: "Operations",
     items: [
-      { label: "Dashboard", href: "/", hint: "Today across the pilot" },
+      { label: "Dashboard", href: "/dashboard", hint: "Today across the pilot" },
       { label: "New intake", href: "/intake", hint: "Capture an item from a photo or voice note" },
       { label: "Valuations", href: "/valuation", hint: "Price an item and issue the EPR credit" },
       { label: "Validation queue", href: "/validation", hint: "Clear items the model could not settle" },

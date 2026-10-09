@@ -60,8 +60,12 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
       className="flex flex-col border-ink bg-ink text-paper lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto"
     >
       <div className="border-b border-paper/20 px-5 py-5 lg:px-6">
+        {/*
+          The mark points at the app's own home here, not the public landing page:
+          inside a session "home" means the dashboard, and the landing's job is done.
+        */}
         <Link
-          href="/"
+          href="/dashboard"
           className="font-display text-2xl leading-none tracking-tight text-paper"
         >
           ECO<span className="text-copper">EPR</span>
