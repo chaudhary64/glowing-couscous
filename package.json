@@ -11,9 +11,13 @@
     "db:migrate": "drizzle-kit migrate",
     "db:check": "drizzle-kit check",
     "db:studio": "drizzle-kit studio",
-    "s3:check": "node --import ./scripts/ts-paths.mjs --env-file=.env.local scripts/s3-check.mts"
+    "s3:check": "node --import ./scripts/ts-paths.mjs --env-file=.env.local scripts/s3-check.mts",
+    "pickup:setup": "bash scripts/pickup-setup.sh",
+    "pickup:seed": "node --env-file=.env.local scripts/pickup-seed.mjs",
+    "pickup:check": "node --env-file=.env.local scripts/pickup-check.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1148.0",
     "@aws-sdk/client-s3": "^3.1148.0",
     "@aws-sdk/s3-request-presigner": "^3.1148.0",
     "drizzle-orm": "^0.45.4",

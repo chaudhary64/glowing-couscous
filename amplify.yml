@@ -45,6 +45,17 @@
 # `S3_SECRET_ACCESS_KEY` for that reason and falls back to the SDK's own chain, which is
 # what would run if this compute were ever given a role. This key is the stopgap; the
 # role is the design.
+#
+# `PICKUP_API_URL` is copied for the same reason as the bucket — a server-side read at
+# request time — and it is not a secret: the smart-pickup API is private behind the
+# Cognito pool, so knowing its address buys nothing without a token. Interesting that
+# this line can name the endpoint and nothing else, while the S3 half has to carry a
+# credential through the build artifacts: that difference is the whole argument for
+# authorising the API with the identity the app already has.
+#
+# The three `PICKUP_TABLE_*` names are deliberately **not** copied. They are how the
+# feature's own check script cleans up after itself on a laptop; nothing that serves a
+# request has any business knowing how DynamoDB keys those tables.
 version: 1
 frontend:
   phases:
@@ -53,7 +64,7 @@ frontend:
         - npm ci --cache .npm --prefer-offline
     build:
       commands:
-        - env | grep -E '^(COGNITO_REGION|COGNITO_USER_POOL_ID|COGNITO_CLIENT_ID|COGNITO_ISSUER|AZURE_OPENAI_ENDPOINT|AZURE_OPENAI_API_KEY|AZURE_OPENAI_DEPLOYMENT|AZURE_SPEECH_REGION|AZURE_SPEECH_KEY|S3_BUCKET|S3_REGION|S3_PREFIX|S3_ACCESS_KEY_ID|S3_SECRET_ACCESS_KEY)=' >> .env.production
+        - env | grep -E '^(COGNITO_REGION|COGNITO_USER_POOL_ID|COGNITO_CLIENT_ID|COGNITO_ISSUER|AZURE_OPENAI_ENDPOINT|AZURE_OPENAI_API_KEY|AZURE_OPENAI_DEPLOYMENT|AZURE_SPEECH_REGION|AZURE_SPEECH_KEY|S3_BUCKET|S3_REGION|S3_PREFIX|S3_ACCESS_KEY_ID|S3_SECRET_ACCESS_KEY|PICKUP_API_URL)=' >> .env.production
         - npm run build
   artifacts:
     baseDirectory: .next
