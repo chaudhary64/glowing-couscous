@@ -21,6 +21,11 @@ import type { EvidenceAsset } from "@/lib/types";
  * because "the archive is not configured" (503) and "that key is not one this archive
  * writes" (400) are different problems with different fixes, and a screen that folded
  * both into "could not load" would send an operator to debug the wrong one.
+ *
+ * Each row also names the submission the object produced, when there is one. That string
+ * is the id the priced result carries, which is the id the operator is holding when they
+ * come looking — so the answer to "what is this photograph" is also the answer to "which
+ * valuation is it behind". A row with no submission says so rather than leaving a gap.
  */
 type Reading =
   | { state: "loading" }
@@ -122,6 +127,15 @@ export function EvidenceViewer({ assets }: { assets: EvidenceAsset[] }) {
                   sha256 {shortDigest(asset.checksumSha256)} · archived{" "}
                   {formatTimestamp(asset.uploadedAt)} ·{" "}
                   {asset.uploaderName ?? "no uploader on record"}
+                </p>
+                <p className="mt-1 font-mono text-[11px] leading-snug text-ink-muted">
+                  {asset.submissionCode
+                    ? `submission ${asset.submissionCode}${
+                        asset.submittedAt
+                          ? ` · recorded ${formatTimestamp(asset.submittedAt)}`
+                          : ""
+                      }`
+                    : "no submission recorded"}
                 </p>
               </div>
 

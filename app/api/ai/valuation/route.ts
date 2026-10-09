@@ -1,6 +1,7 @@
 import { analyseItem } from "@/lib/ai/analyse";
 import { aiErrorResponse, authorizeUser, jsonResponse, readPayload } from "@/lib/ai/http";
 import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
+import { recordSubmission, submissionWarning } from "@/lib/s3/intakes";
 import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
 
 /**
@@ -15,6 +16,10 @@ import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
  * `media_assets` row records what that key was. A storage or database fault is
  * reported in `storage.error` / `records.error` and in the warnings; it never becomes
  * the reason a paid-for analysis is thrown away.
+ *
+ * The submission itself is recorded once the price exists — an `intakes` row carrying
+ * this request's priced id, so the evidence is reachable from the valuation rather than
+ * only from its own content hash. See `lib/s3/intakes.ts`.
  */
 
 // No segment config: a POST-only handler is dynamic by definition, and this build's
@@ -67,12 +72,32 @@ export async function POST(request: Request) {
     return aiErrorResponse(analysed.reason);
   }
 
+  const analysis = analysed.value;
   const storage = kept?.storage ?? null;
   const records = kept?.records ?? null;
-  const warnings = [...analysed.value.warnings];
+  const warnings = [...analysis.warnings];
   for (const warning of [storage ? archiveWarning(storage) : null, records ? recordWarning(records) : null]) {
     if (warning) warnings.push(warning);
   }
 
-  return jsonResponse({ ...analysed.value, warnings, storage, records });
+  // The submission row. Last, because it needs both halves of the request — the objects
+  // the archive stored and the identity the price carries — and awaited, for the reason
+  // the archive is: see the longer note in `app/api/ai/intake/route.ts`.
+  const submission = records
+    ? await recordSubmission({
+        records: records.records,
+        pricedCode: analysis.id,
+        label: analysis.identified.itemLabel,
+        massGrams: analysis.identified.massGrams,
+        extraction: {
+          model: analysis.source.model,
+          confidence: analysis.gatekeeper.confidence,
+          latencyMs: analysis.source.latencyMs,
+        },
+      })
+    : null;
+  const submissionNote = submission ? submissionWarning(submission) : null;
+  if (submissionNote) warnings.push(submissionNote);
+
+  return jsonResponse({ ...analysis, warnings, storage, records, submission });
 }

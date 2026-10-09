@@ -1,7 +1,7 @@
 import { desc, eq, inArray } from "drizzle-orm";
 
 import { database, databaseConfigured } from "@/db/client";
-import { mediaAssets, users } from "@/db/schema";
+import { intakes, mediaAssets, users } from "@/db/schema";
 import type { EvidenceAsset } from "@/lib/types";
 
 import {
@@ -9,6 +9,7 @@ import {
   type ArchiveOutcome,
   type ArchiveRequest,
   type ArchivedObject,
+  type MediaKind,
 } from "./archive";
 
 /**
@@ -65,6 +66,13 @@ export interface MediaRecord {
   id: string;
   /** True when this call created the row; false when it was already there. */
   inserted: boolean;
+  /**
+   * Photo or voice, as stored.
+   *
+   * Carried so the submission that is written next can name its primary asset — the
+   * photograph — without a second read whose answer the caller already holds.
+   */
+  kind: MediaKind;
 }
 
 export interface MediaRecordOutcome {
@@ -154,7 +162,7 @@ export async function recordArchivedObjects(
 
     const created = new Set(inserted.map((row) => row.storageKey));
     const rows = await connection.db
-      .select({ id: mediaAssets.id, storageKey: mediaAssets.storageKey })
+      .select({ id: mediaAssets.id, storageKey: mediaAssets.storageKey, kind: mediaAssets.kind })
       .from(mediaAssets)
       .where(inArray(mediaAssets.storageKey, objects.map((object) => object.key)));
 
@@ -164,6 +172,7 @@ export async function recordArchivedObjects(
         storageKey: row.storageKey,
         id: row.id,
         inserted: created.has(row.storageKey),
+        kind: row.kind,
       })),
       error: null,
     };
@@ -234,6 +243,11 @@ export async function forgetMediaRecords(keys: string[]): Promise<number> {
  * `users` row on sign-in yet — `users.full_name` is `NOT NULL`, so provisioning is
  * genuinely a separate piece of work — and the column is nullable for exactly that
  * reason.
+ *
+ * The submission is joined in for the same reason the screen exists: an operator asking
+ * "what is this photograph" is one question, and "which submission did it produce, and
+ * what was that priced as" is the question they actually have. `intakes_code_uq` is what
+ * makes that join an index read rather than a report.
  */
 export interface MediaAssetListing {
   /** False when there is no `DATABASE_URL`: rows were never recorded, so nothing lists. */
@@ -248,6 +262,59 @@ const LIST_LIMIT_MAX = 60;
 
 const LIST_LIMIT_DEFAULT = 24;
 
+/**
+ * The columns a screen reads, defined once.
+ *
+ * The listing and the id lookup below must describe an object the same way: the same
+ * photograph reached by scrolling the archive and by pasting the id behind it has to
+ * read identically, and one column list is what keeps the two from drifting.
+ */
+const assetColumns = {
+  id: mediaAssets.id,
+  storageKey: mediaAssets.storageKey,
+  kind: mediaAssets.kind,
+  mimeType: mediaAssets.mimeType,
+  byteSize: mediaAssets.byteSize,
+  checksumSha256: mediaAssets.checksumSha256,
+  uploadedAt: mediaAssets.uploadedAt,
+  uploaderName: users.fullName,
+  // The submission this object produced, and the id it was priced under. Null for
+  // everything archived before submissions were recorded, and for the clip beside a
+  // photograph — `intakes_media_uq` links one asset per submission.
+  submissionCode: intakes.code,
+  submittedAt: intakes.submittedAt,
+};
+
+/** One row of that column set, as the driver hands it back. */
+type AssetRow = {
+  id: string;
+  storageKey: string;
+  kind: MediaKind;
+  mimeType: string | null;
+  byteSize: number | null;
+  checksumSha256: string | null;
+  uploadedAt: Date;
+  uploaderName: string | null;
+  submissionCode: string | null;
+  submittedAt: Date | null;
+};
+
+/** The row, shaped for the client viewer — the one place its timestamps become ISO. */
+function toAsset(row: AssetRow): EvidenceAsset {
+  return {
+    id: row.id,
+    storageKey: row.storageKey,
+    kind: row.kind,
+    mimeType: row.mimeType,
+    byteSize: row.byteSize,
+    checksumSha256: row.checksumSha256,
+    uploadedAt: row.uploadedAt.toISOString(),
+    uploaderName: row.uploaderName,
+    submissionCode: row.submissionCode,
+    submittedAt: row.submittedAt ? row.submittedAt.toISOString() : null,
+  };
+}
+
 export async function listRecentMediaAssets(
   limit: number = LIST_LIMIT_DEFAULT,
 ): Promise<MediaAssetListing> {
@@ -259,20 +326,16 @@ export async function listRecentMediaAssets(
 
   try {
     const rows = await connection.db
-      .select({
-        id: mediaAssets.id,
-        storageKey: mediaAssets.storageKey,
-        kind: mediaAssets.kind,
-        mimeType: mediaAssets.mimeType,
-        byteSize: mediaAssets.byteSize,
-        checksumSha256: mediaAssets.checksumSha256,
-        uploadedAt: mediaAssets.uploadedAt,
-        uploaderName: users.fullName,
-      })
+      .select(assetColumns)
       .from(mediaAssets)
       // Left, not inner: evidence with no attributed uploader is still evidence, and an
       // inner join would silently hide every row the missing provisioning affects.
       .leftJoin(users, eq(users.id, mediaAssets.uploaderUserId))
+      // Left for the same reason, one table further on: an object with no submission row
+      // is listed and says so, rather than disappearing from the archive because the join
+      // went missing. The join cannot fan out — `intakes_media_uq` makes `media_id`
+      // unique — so a row here is still one asset.
+      .leftJoin(intakes, eq(intakes.mediaId, mediaAssets.id))
       // `media_assets_uploaded_idx` covers this ordering, so the screen walks an index
       // rather than sorting the table.
       .orderBy(desc(mediaAssets.uploadedAt))
@@ -280,16 +343,7 @@ export async function listRecentMediaAssets(
 
     return {
       configured: true,
-      assets: rows.map((row) => ({
-        id: row.id,
-        storageKey: row.storageKey,
-        kind: row.kind,
-        mimeType: row.mimeType,
-        byteSize: row.byteSize,
-        checksumSha256: row.checksumSha256,
-        uploadedAt: row.uploadedAt.toISOString(),
-        uploaderName: row.uploaderName,
-      })),
+      assets: rows.map(toAsset),
       error: null,
     };
   } catch (error) {
@@ -302,5 +356,77 @@ export async function listRecentMediaAssets(
       .trim();
     console.error("[db] listing the archived media failed", message);
     return { configured: true, assets: [], error: message.slice(0, 200) };
+  }
+}
+
+/**
+ * The archive read from the other end: the object behind the id a valuation carries.
+ *
+ * `listRecentMediaAssets` answers "what was archived lately", which is the wrong
+ * question for the operator holding an id off a priced result and asking what is behind
+ * it. That id is `intakes.code` — the string every screen shows for the valuation — and
+ * `intakes_code_uq` is what makes this one indexed read rather than a scan of the
+ * submission half of the archive.
+ *
+ * Deliberately not a search: an exact id, one row, no wildcards. A lookup that guessed
+ * at near-matches would hand an operator the photograph behind somebody else's
+ * submission, which is the one mistake this screen must not make.
+ *
+ * It starts at `intakes` and joins *in* to the asset, where the listing starts at the
+ * asset and joins out. A submission cannot exist without the object it points at
+ * (`media_id` is `NOT NULL`), so the inner join here loses nothing; the listing's left
+ * joins exist because an object can outlive its submission.
+ */
+export interface MediaAssetLookup {
+  /** False when there is no `DATABASE_URL`: there is nothing to look an id up in. */
+  configured: boolean;
+  /**
+   * The archived object the submission points at, or `null` when no submission row holds
+   * that id — an answer, not a failure, and the screen says so in those words.
+   */
+  asset: EvidenceAsset | null;
+  /** `intakes.summary` — the one line the submission kept about what it was. */
+  summary: string | null;
+  /** Set when the database was configured and the read still failed. Never thrown. */
+  error: string | null;
+}
+
+/**
+ * Long enough for any id this app mints, short enough that a pasted paragraph is not a
+ * query: `intakes.code` is `text`, so nothing upstream stops a caller sending a novel.
+ */
+const LOOKUP_CODE_MAX = 120;
+
+export async function findMediaAssetBySubmissionCode(code: string): Promise<MediaAssetLookup> {
+  if (!databaseConfigured()) return { configured: false, asset: null, summary: null, error: null };
+  const connection = database();
+  if (!connection) return { configured: false, asset: null, summary: null, error: null };
+
+  const wanted = code.trim().slice(0, LOOKUP_CODE_MAX);
+  // An empty box is not a failed lookup. Reported as `configured: true` with no asset, so
+  // the screen can tell "you have not asked yet" apart from "the database is off".
+  if (!wanted) return { configured: true, asset: null, summary: null, error: null };
+
+  try {
+    const [row] = await connection.db
+      .select({ ...assetColumns, summary: intakes.summary })
+      .from(intakes)
+      .innerJoin(mediaAssets, eq(mediaAssets.id, intakes.mediaId))
+      .leftJoin(users, eq(users.id, mediaAssets.uploaderUserId))
+      .where(eq(intakes.code, wanted))
+      .limit(1);
+
+    if (!row) return { configured: true, asset: null, summary: null, error: null };
+    return { configured: true, asset: toAsset(row), summary: row.summary, error: null };
+  } catch (error) {
+    // The inner cause, for the same reason the listing reports it: Drizzle wraps a driver
+    // failure in the whole statement plus its parameters, and the part worth reading —
+    // "connect ETIMEDOUT" — is one level down in `cause`.
+    const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : null;
+    const message = (cause ?? (error instanceof Error ? error.message : String(error)))
+      .replace(/\s+/g, " ")
+      .trim();
+    console.error("[db] looking the archived media up by submission id failed", message);
+    return { configured: true, asset: null, summary: null, error: message.slice(0, 200) };
   }
 }

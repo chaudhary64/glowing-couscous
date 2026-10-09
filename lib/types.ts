@@ -353,6 +353,19 @@ export interface EvidenceAsset {
   /** The content-addressed S3 key, and the only string the read API will sign. */
   storageKey: string;
   kind: InputMode;
+  /**
+   * The submission this object produced, as `intakes.code` holds it: for a live
+   * submission that is the id the priced result carries (`LIVE-2026-…`), which is the
+   * same string every screen shows for that valuation, so an operator can look the
+   * evidence up by an id they already have.
+   *
+   * Null for an object archived before submissions were recorded, for a clip submitted
+   * beside a photograph (`intakes.media_id` is unique — one asset per submission), and
+   * for a request whose analysis failed and so was never priced.
+   */
+  submissionCode: string | null;
+  /** When the submission was recorded, ISO. Null wherever `submissionCode` is. */
+  submittedAt: string | null;
   mimeType: string | null;
   byteSize: number | null;
   checksumSha256: string | null;

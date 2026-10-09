@@ -21,16 +21,21 @@
  *   8. the uploader's Cognito subject resolves through `users.cognito_sub`
  *   9. an unreachable database is reported in seconds rather than thrown, and does not
  *      stop the bytes being archived; two simultaneous identical submissions are one row
- *  10. a presigned read returns the exact bytes, is bounded in both directions, expires,
+ *  10. an `intakes` row is written under the id the price carries, pointing at the object
+ *      the archive wrote; re-recording is one row; the evidence listing carries the
+ *      submission and an id looks that object back up; the `restrict` foreign key refuses
+ *      to let the object be deleted out from under it; and a second object under a taken id
+ *      is reported, not mis-joined
+ *  11. a presigned read returns the exact bytes, is bounded in both directions, expires,
  *      and refuses a key this archive could not have written
- *  11. the credential cannot write outside the `media/` prefix it was scoped to
- *  12. with no bucket configured the module degrades instead of throwing, which is
+ *  12. the credential cannot write outside the `media/` prefix it was scoped to
+ *  13. with no bucket configured the module degrades instead of throwing, which is
  *      what keeps the AI routes working on a laptop with no AWS credentials
  *
- * It writes five small probe objects, one row per object, and one throwaway `users`
- * row, and removes all of it before exiting — including when it stops early, which is
- * what the crash handler below is for. Nothing else in the bucket or the table is read,
- * written or removed.
+ * It writes seven small probe objects, one `media_assets` row per object, one `intakes`
+ * row, and one throwaway `users` row, and removes all of it before exiting — including
+ * when it stops early, which is what the crash handler below is for. Nothing else in the
+ * bucket or either table is read, written or removed.
  *
  * The database half is the same bargain as the S3 half: it is optional, and with no
  * `DATABASE_URL` it reports that the recording is switched off rather than failing.
@@ -50,7 +55,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { closeDatabase, database } from "../db/client.ts";
-import { mediaAssets, users } from "../db/schema/index.ts";
+import { intakes, mediaAssets, users } from "../db/schema/index.ts";
 import {
   archiveClient,
   archiveConfigured,
@@ -60,9 +65,12 @@ import {
   mediaKey,
   presignRead,
 } from "../lib/s3/archive.ts";
+import { forgetSubmissions, recordSubmission } from "../lib/s3/intakes.ts";
 import {
   archiveAndRecord,
+  findMediaAssetBySubmissionCode,
   forgetMediaRecords,
+  listRecentMediaAssets,
   recordArchivedObjects,
 } from "../lib/s3/media-assets.ts";
 
@@ -79,6 +87,15 @@ const cleanup: { key: string }[] = [];
 
 /** Set when the row half runs, so cleanup can remove the throwaway `users` row too. */
 let userProbeSub: string | null = null;
+
+/**
+ * Ids of the `intakes` rows this run recorded, captured as they are written.
+ *
+ * Captured rather than re-derived at cleanup time, because a query that looks the rows
+ * up through the media rows it has just deleted can only ever return nothing: the check
+ * for "nothing was left behind" has to be able to fail.
+ */
+const probeSubmissionIds: string[] = [];
 
 /**
  * The connection string this process started with.
@@ -115,13 +132,24 @@ async function runCleanup(): Promise<void> {
 
   const probeKeys = cleanup.map(({ key }) => key);
   if (db && probeKeys.length > 0) {
+    // The submissions go first, and this order is not a preference: `intakes.media_id` is
+    // a `restrict` foreign key, so the database itself refuses to remove an object while a
+    // submission points at it. That constraint is the point — it is what stops the
+    // evidence a decision was taken on from being deleted out from under it — and a
+    // cleanup that ignored it would either fail or have to weaken it.
+    const submissions = await forgetSubmissions(probeKeys);
     const forgotten = await forgetMediaRecords(probeKeys);
     const remaining = await db.db
       .select({ id: mediaAssets.id })
       .from(mediaAssets)
       .where(inArray(mediaAssets.storageKey, probeKeys));
-    console.log(`${forgotten} probe row(s) removed`);
+    console.log(`${submissions} probe submission(s) and ${forgotten} probe row(s) removed`);
     check("no probe row is left behind", remaining.length === 0, `${remaining.length} left`);
+    const leftSubmissions =
+      probeSubmissionIds.length > 0
+        ? await db.db.select({ id: intakes.id }).from(intakes).where(inArray(intakes.id, probeSubmissionIds))
+        : [];
+    check("no probe submission is left behind", leftSubmissions.length === 0, `${leftSubmissions.length} left`);
   }
 
   // The probe user goes last, and only its own row: the table it was inserted into is
@@ -420,6 +448,220 @@ if (db) {
     atOnce.filter((result) => result.records?.records[0]?.inserted === true).length === 1,
     atOnce.map((result) => String(result.records?.records[0]?.inserted)).join(" / "),
   );
+
+  /* ------------- 7. the submission that ties an object to the price it produced ----- */
+  // The join this row exists for. Everything above proves the object is archived and
+  // described; this proves it can be found *from* the submission that priced it.
+  console.log("\n--- recording the submission behind an object ---");
+
+  /**
+   * A submission id nothing else in the table holds.
+   *
+   * Shaped like a live one (`LIVE-2026-<4 digits>`, derived from the submission's own
+   * label, brand and mass) but probed for, because a run that crashed in the past could
+   * have left the same four digits behind and this check must not fail on somebody else's
+   * row — that is what cleanup is for, not what a passing check is for.
+   */
+  let probeCode = `LIVE-2026-${String(Date.now() % 10_000).padStart(4, "0")}`;
+  for (let step = 0; step < 10; step += 1) {
+    const clash = await db.db.select({ id: intakes.id }).from(intakes).where(eq(intakes.code, probeCode));
+    if (clash.length === 0) break;
+    probeCode = `LIVE-2026-${String((Number(probeCode.slice(-4)) + 1) % 10_000).padStart(4, "0")}`;
+  }
+
+  const PROBE_F = Buffer.from("ecoepr archive probe F — the object a submission is recorded against");
+  const forSubmission = await archiveAndRecord(
+    [{ kind: "photo", media: { mimeType: "image/jpeg", dataBase64: PROBE_F.toString("base64") } }],
+    { uploaderCognitoSub: probeSub },
+  );
+  const submissionKey = forSubmission.storage.objects[0]?.key;
+  if (submissionKey) cleanup.push({ key: submissionKey });
+
+  const submission = await recordSubmission({
+    records: forSubmission.records?.records ?? [],
+    pricedCode: probeCode,
+    label: "Probe board",
+    // 1500, not 1450: the assertion below is about the sentence the row stores, and
+    // 1.45 kg formats to "1.4 kg" through `formatMass`'s one decimal place. A probe that
+    // has to explain its own arithmetic is a worse probe.
+    massGrams: 1500,
+    extraction: { model: "probe:model", confidence: 0.9, latencyMs: 1234 },
+  });
+  if (submission.submission) probeSubmissionIds.push(submission.submission.id);
+
+  check(
+    "the submission row is written for a priced request",
+    submission.configured && submission.submission !== null && submission.error === null,
+    submission.error ?? "",
+  );
+  check(
+    "...and it points at the object the archive just wrote",
+    submission.submission?.storageKey === submissionKey,
+    String(submission.submission?.storageKey),
+  );
+  check(
+    "...under the id the price carries, so it is found by an id already on screen",
+    submission.submission?.code === probeCode,
+    String(submission.submission?.code),
+  );
+
+  const submissionRows = await db.db
+    .select({
+      code: intakes.code,
+      mode: intakes.mode,
+      summary: intakes.summary,
+      collectorId: intakes.collectorId,
+      submittedAt: intakes.submittedAt,
+      model: intakes.extractionModel,
+      confidence: intakes.extractionConfidence,
+      latencyMs: intakes.extractionLatencyMs,
+    })
+    .from(intakes)
+    .where(eq(intakes.code, probeCode));
+  const submissionRow = submissionRows[0];
+  check("the row is in the intakes table, by that id", submissionRow !== undefined, `${submissionRows.length} row(s)`);
+  check("the row records the mode of the object it points at", submissionRow?.mode === "photo", String(submissionRow?.mode));
+  check(
+    "the row records one line about what the submission was",
+    submissionRow?.summary === "Probe board, 1.5 kg",
+    String(submissionRow?.summary),
+  );
+  check(
+    "the row records how it was read, which is what those three columns are for",
+    submissionRow?.model === "probe:model" &&
+      submissionRow?.confidence === "0.900" &&
+      submissionRow?.latencyMs === 1234,
+    `${submissionRow?.model} / ${submissionRow?.confidence} / ${submissionRow?.latencyMs}`,
+  );
+  check("the row is timestamped as a submission", submissionRow?.submittedAt instanceof Date, String(submissionRow?.submittedAt));
+  // Null is the honest answer, not a gap: the request carries an operator's session and
+  // says nothing at all about whose material it is. See `lib/s3/intakes.ts`.
+  check(
+    "no collector is invented for a submission that knows of none",
+    submissionRow?.collectorId === null,
+    String(submissionRow?.collectorId),
+  );
+
+  // The retry case, the same one the media row has: same bytes, same key, same submission.
+  const resubmitted = await recordSubmission({
+    records: forSubmission.records?.records ?? [],
+    pricedCode: probeCode,
+    label: "Probe board",
+    massGrams: 1500,
+  });
+  check(
+    "re-recording the same submission inserts nothing and reports the existing row",
+    resubmitted.submission !== null && resubmitted.submission.created === false,
+    `created=${resubmitted.submission?.created}`,
+  );
+  const doubled = await db.db.select({ id: intakes.id }).from(intakes).where(eq(intakes.code, probeCode));
+  check("the unique index held: one submission, not two", doubled.length === 1, `${doubled.length} rows`);
+
+  // The reader's path, exactly as the evidence screen takes it: the listing carries the
+  // submission per object. Without it the archive is a bucket of digests.
+  const listing = await listRecentMediaAssets(60);
+  const listed = listing.assets.find((asset) => asset.storageKey === submissionKey);
+  check(
+    "the evidence listing joins the submission onto its object",
+    listed?.submissionCode === probeCode,
+    String(listed?.submissionCode),
+  );
+  check(
+    "...and carries when it was recorded",
+    typeof listed?.submittedAt === "string",
+    String(listed?.submittedAt),
+  );
+
+  // The lookup the evidence screen offers from here on: an operator holding an id off a
+  // priced result pastes it and gets the object behind it. The same read the page takes,
+  // entered from the other end of the join — one indexed read on `intakes_code_uq`.
+  const found = await findMediaAssetBySubmissionCode(probeCode);
+  check(
+    "the id a valuation carries resolves to the object behind it",
+    found.asset?.storageKey === submissionKey,
+    String(found.asset?.storageKey),
+  );
+  check(
+    "...and carries the one line the submission kept about what it was",
+    found.summary === "Probe board, 1.5 kg",
+    String(found.summary),
+  );
+  check(
+    "...and describes the object the way the listing does, so both reads agree",
+    found.asset !== null && listed !== undefined && found.asset.id === listed.id,
+    `${found.asset?.id} / ${listed?.id}`,
+  );
+  // An id nothing holds is an answer, not an error: the screen says "nothing is archived
+  // under that id" and the operator retypes it. Six digits, where every id this app mints
+  // ends in four, so the probe cannot collide with a real one.
+  const unknownId = await findMediaAssetBySubmissionCode(`LIVE-2026-${String(Date.now()).slice(-6)}`);
+  check(
+    "an id nothing holds resolves to nothing rather than an error",
+    unknownId.configured && unknownId.asset === null && unknownId.error === null,
+    unknownId.error ?? "no error",
+  );
+
+  // The constraint, not a convention, is what keeps evidence attached: the object cannot
+  // simply be deleted while a submission points at it.
+  let refused = false;
+  try {
+    await forgetMediaRecords(submissionKey ? [submissionKey] : []);
+  } catch {
+    refused = true;
+  }
+  check("the object cannot be deleted while a submission points at it", refused);
+  const stillThere = submissionKey
+    ? await db.db.select({ id: mediaAssets.id }).from(mediaAssets).where(eq(mediaAssets.storageKey, submissionKey))
+    : [];
+  check("...so the evidence it protects is still in place", stillThere.length === 1, `${stillThere.length} row(s)`);
+
+  // Two identical items priced twice carry the same id — the serial is derived from the
+  // label, brand and mass — so a second object is archived, listed and reported as
+  // unjoined rather than being given a row that would point at somebody else's evidence.
+  const PROBE_G = Buffer.from("ecoepr archive probe G — a second object under a taken submission id");
+  const secondObject = await archiveAndRecord(
+    [{ kind: "photo", media: { mimeType: "image/jpeg", dataBase64: PROBE_G.toString("base64") } }],
+    { uploaderCognitoSub: probeSub },
+  );
+  const secondKey = secondObject.storage.objects[0]?.key;
+  if (secondKey) cleanup.push({ key: secondKey });
+  const taken = await recordSubmission({
+    records: secondObject.records?.records ?? [],
+    pricedCode: probeCode,
+    label: "Probe board",
+    massGrams: 1500,
+  });
+  check(
+    "a second object under a taken submission id is reported, not silently mis-joined",
+    taken.submission === null && taken.error !== null,
+    (taken.error ?? "no error").slice(0, 80),
+  );
+  check(
+    "...and its own row is still archived, so the refusal cost nothing",
+    secondKey !== undefined && secondObject.records?.records[0]?.inserted === true,
+    String(secondKey),
+  );
+
+  // And the posture the other halves have: switched off is not broken.
+  delete process.env.DATABASE_URL;
+  const noDatabase = await recordSubmission({
+    records: forSubmission.records?.records ?? [],
+    pricedCode: probeCode,
+    label: "Probe board",
+    massGrams: 1500,
+  });
+  check("with no DATABASE_URL the submission reports configured: false", noDatabase.configured === false);
+  check(
+    "...and records nothing without calling it an error",
+    noDatabase.error === null && noDatabase.submission === null,
+  );
+  const noDatabaseLookup = await findMediaAssetBySubmissionCode(probeCode);
+  check(
+    "with no DATABASE_URL the id lookup reports configured: false",
+    noDatabaseLookup.configured === false && noDatabaseLookup.asset === null && noDatabaseLookup.error === null,
+    noDatabaseLookup.error ?? "",
+  );
+  if (savedDatabaseUrl) process.env.DATABASE_URL = savedDatabaseUrl;
 } else {
   console.log(
     "  No DATABASE_URL, so there is no table to check against. This is the same posture the\n" +
@@ -427,7 +669,7 @@ if (db) {
   );
 }
 
-/* ------------------------------------------------- 7. a signed read of it */
+/* ------------------------------------------------- 8. a signed read of it */
 console.log("\n--- reading an archived object back through a presigned URL ---");
 const signed = await presignRead(object.key);
 check("presignRead() signs a key this archive writes", signed.ok, signed.ok ? "" : signed.reason);
@@ -524,7 +766,7 @@ check(
   `HTTP ${stale.status}`,
 );
 
-/* ------------------------------------------- 8. the credential is really scoped */
+/* ------------------------------------------- 9. the credential is really scoped */
 console.log("\n--- the credential against a key outside the prefix ---");
 let outsideAllowed = true;
 let outsideReason = "";
@@ -546,7 +788,7 @@ if (outsideAllowed) {
   await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: "s3-check-outside-prefix.txt" }));
 }
 
-/* ------------------------------------------------- 9. degrade without a bucket */
+/* ------------------------------------------------ 10. degrade without a bucket */
 console.log("\n--- with the archive switched off ---");
 const savedBucket = process.env.S3_BUCKET;
 const savedRegion = process.env.S3_REGION;
@@ -565,7 +807,7 @@ check("an unconfigured archive does not throw, so the route still answers", true
 if (savedBucket) process.env.S3_BUCKET = savedBucket;
 if (savedRegion) process.env.S3_REGION = savedRegion;
 
-/* ------------------------------------------------------------- 10. clean up */
+/* ------------------------------------------------------------- 11. clean up */
 console.log("\n--- cleanup ---");
 await runCleanup();
 

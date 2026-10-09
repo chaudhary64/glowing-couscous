@@ -1,6 +1,7 @@
 import { analyseIntake } from "@/lib/ai/analyse";
 import { aiErrorResponse, authorizeUser, jsonResponse, readPayload } from "@/lib/ai/http";
 import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
+import { recordSubmission, submissionWarning } from "@/lib/s3/intakes";
 import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
 
 /**
@@ -20,6 +21,10 @@ import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
  * was. See `lib/s3/archive.ts` for why the keys are content-addressed and why a
  * storage fault is reported rather than thrown, and `lib/s3/media-assets.ts` for why
  * the row is written after the bytes and never gates them.
+ *
+ * Once the price exists, the same request writes an `intakes` row joining the priced
+ * result to the object it came from, so the archive can be read *from* a valuation
+ * rather than only by its content hash. See `lib/s3/intakes.ts`.
  */
 
 export async function POST(request: Request) {
@@ -80,6 +85,7 @@ export async function POST(request: Request) {
     return aiErrorResponse(analysed.reason);
   }
 
+  const analysis = analysed.value.analysis;
   const storage = kept?.storage ?? null;
   const records = kept?.records ?? null;
   const warnings = [...analysed.value.warnings];
@@ -87,5 +93,33 @@ export async function POST(request: Request) {
     if (warning) warnings.push(warning);
   }
 
-  return jsonResponse({ ...analysed.value, warnings, storage, records });
+  /**
+   * The submission row, written last because it is the only step that needs both halves
+   * of the request at once: the objects the archive stored, and the identity the price
+   * carries.
+   *
+   * Which is also why a request whose analysis failed gets none — `intakes.code` *is*
+   * that identity, so there would be nothing to record and nothing an operator could
+   * look it up by. The bytes and their `media_assets` rows stay either way. Awaited
+   * before the response, like the archive, because this host can cut off work still in
+   * flight when the reply is written.
+   */
+  const submission =
+    records && analysis
+      ? await recordSubmission({
+          records: records.records,
+          pricedCode: analysis.id,
+          label: analysis.identified.itemLabel,
+          massGrams: analysis.identified.massGrams,
+          extraction: {
+            model: analysis.source.model,
+            confidence: analysis.gatekeeper.confidence,
+            latencyMs: analysis.source.latencyMs,
+          },
+        })
+      : null;
+  const submissionNote = submission ? submissionWarning(submission) : null;
+  if (submissionNote) warnings.push(submissionNote);
+
+  return jsonResponse({ ...analysed.value, warnings, storage, records, submission });
 }
