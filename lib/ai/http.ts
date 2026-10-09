@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { AiCallError, AiUnavailableError, type AiMediaPart } from "@/lib/ai/gemini";
+import { AiCallError, AiUnavailableError, type AiMediaPart } from "@/lib/ai/foundry";
 import { AiProposalInvalidError } from "@/lib/ai/analyse";
 import { isSameOriginRequest } from "@/lib/auth/form";
 import { getCurrentUser } from "@/lib/auth/dal";
@@ -19,17 +19,14 @@ import type { AuthUser } from "@/lib/auth/token";
  */
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
-const AUDIO_TYPES = [
-  "audio/webm",
-  "audio/ogg",
-  "audio/wav",
-  "audio/x-wav",
-  "audio/mpeg",
-  "audio/mp3",
-  "audio/mp4",
-  "audio/aac",
-  "audio/flac",
-];
+/**
+ * audio is transcribed by Azure Speech, whose short-audio endpoint reads 16 kHz mono
+ * PCM WAV and nothing else. The capture screen re-encodes whatever the browser recorded
+ * (WebM) or the collector attached into exactly that shape before the request leaves,
+ * so this is a real constraint on the wire rather than a narrowing that would silently
+ * drop a usable clip.
+ */
+const AUDIO_TYPES = ["audio/wav", "audio/x-wav", "audio/wave"];
 
 /**
  * Base64 characters, not binary bytes: 4 MB of base64 is about 3 MB of a file.
@@ -277,8 +274,9 @@ function readMediaPart(
  * key that is not accepted (401/403), a model id that has been retired (404), and a
  * model that is merely busy (429/503).
  *
- * The status decides, never the message: Google reports both a rate-limited model and
- * an exhausted balance with the same word, `RESOURCE_EXHAUSTED`.
+ * The status decides, never the message, because the same status word can mean
+ * different things across providers and the message is prose the operator cannot act
+ * on.
  */
 export function aiCallFailureCode(status: number | undefined): string {
   switch (status) {

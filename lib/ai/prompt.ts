@@ -55,7 +55,7 @@ Hard rules, in order of importance:
 
 export const INTAKE_SYSTEM_INSTRUCTION = `${ITEM_SYSTEM_INSTRUCTION}
 
-One addition for this call: the collector's own words are part of the answer. Return a \`transcript\` for any voice note you are given, with the verbatim Hindi (Devanagari, not romanised), an English translation, and the word count. Return \`fields\` as three to six short labelled facts a collector would recognise and could correct on screen — item class, brand, condition, unit count, hazard, weight cue, pickup zone. Mark each field's \`source\` as photo or voice, honestly: a fact typed in a description is not something you saw. If you are given no voice note, return null for the transcript. Do not correct or tidy the collector's speech into formal Hindi; the register is the point.`;
+One addition for this call: the collector's own words are part of the answer. When a speech recogniser's transcript of the Hindi voice note is provided below, echo it verbatim as \`transcript.text\` — never rewrite it, translate it in place, or tidy it — with an accurate English \`translation\` and the \`words\` count. When no transcript is provided, return null for the transcript. Return \`fields\` as three to six short labelled facts a collector would recognise and could correct on screen — item class, brand, condition, unit count, hazard, weight cue, pickup zone. Mark each field's \`source\` as photo or voice, honestly: a fact that came from the transcript is voice, and what you read in a photograph is photo.`;
 
 export interface ItemPromptOptions {
   /** Free text the collector sent alongside any media. */
@@ -66,6 +66,12 @@ export interface ItemPromptOptions {
   hasPhoto?: boolean;
   /** Whether the reply must also carry transcript and fields. */
   intake?: boolean;
+  /**
+   * Verbatim Hindi transcript from the speech recogniser, when a voice note was sent.
+   * The model echoes it rather than producing it, because the recogniser — not the
+   * language model — is what actually heard the audio.
+   */
+  transcript?: string;
 }
 
 export function itemPrompt(options: ItemPromptOptions = {}): string {
@@ -103,11 +109,18 @@ ${REJECT_RULE_CODES.filter((code) => code !== "none").join(", ")}`);
       `The collector declares a total mass of ${options.declaredMassGrams} g. If your own estimate differs from that by more than 30%, say so in notes and explain why.`,
     );
   }
+  if (options.transcript?.trim()) {
+    evidence.push(
+      `The collector recorded a Hindi voice note; the speech recogniser transcribed it, verbatim:\n"""${options.transcript.trim()}"""\nTreat this as the collector's own words and echo it unchanged as the transcript text.`,
+    );
+  }
   blocks.push(`EVIDENCE:\n${evidence.join("\n\n")}`);
 
   if (options.intake) {
     blocks.push(
-      `Also return \`transcript\` (null when no voice note was attached) and \`fields\` as described.`,
+      options.transcript?.trim()
+        ? `Return \`transcript\` echoing the transcript above verbatim (text, translation, words) and \`fields\` as described.`
+        : `Return \`transcript\` as null — no voice note was transcribed — and \`fields\` as described.`,
     );
   }
 
@@ -121,56 +134,63 @@ ${REJECT_RULE_CODES.filter((code) => code !== "none").join(", ")}`);
 /* --------------------------------------------------------------- schemas */
 
 const materialSchema = {
-  type: "OBJECT",
+  type: "object",
   properties: {
-    id: { type: "STRING", enum: materialIds },
-    name: { type: "STRING" },
-    massGrams: { type: "NUMBER" },
+    id: { type: "string", enum: materialIds },
+    name: { type: "string" },
+    massGrams: { type: "number" },
   },
   required: ["id", "name", "massGrams"],
+  additionalProperties: false,
 } as const;
 
 const gatekeeperSchema = {
-  type: "OBJECT",
+  type: "object",
   properties: {
-    verdict: { type: "STRING", enum: ["verified", "rejected", "review"] },
-    confidence: { type: "NUMBER" },
-    matchedClass: { type: "STRING" },
-    reason: { type: "STRING" },
-    ruleCode: { type: "STRING", enum: [...REJECT_RULE_CODES] },
+    verdict: { type: "string", enum: ["verified", "rejected", "review"] },
+    confidence: { type: "number" },
+    matchedClass: { type: "string" },
+    reason: { type: "string" },
+    ruleCode: { type: "string", enum: [...REJECT_RULE_CODES] },
     signals: {
-      type: "ARRAY",
+      type: "array",
       items: {
-        type: "OBJECT",
+        type: "object",
         properties: {
-          label: { type: "STRING" },
-          value: { type: "STRING" },
+          label: { type: "string" },
+          value: { type: "string" },
         },
         required: ["label", "value"],
+        additionalProperties: false,
       },
     },
   },
   required: ["verdict", "confidence", "matchedClass", "reason", "ruleCode", "signals"],
+  additionalProperties: false,
 } as const;
 
 /**
- * Gemini's `responseSchema` dialect (an OpenAPI subset). Declaring it here rather
- * than in the provider keeps the contract next to the prompt that explains it.
+ * JSON Schema for the reply, in the dialect Microsoft Foundry reads.
+ *
+ * Declaring it here rather than in the provider keeps the contract next to the prompt
+ * that explains it. The provider carries it into the system message and the reply is
+ * parsed against the closed vocabulary afterwards; the schema shapes the answer, and
+ * the parser is what makes it safe to price.
  */
 export function itemResponseSchema(
   options: { intake?: boolean } = {},
 ): Record<string, unknown> {
   const properties: Record<string, unknown> = {
-    itemClass: { type: "STRING", enum: itemClassCodes },
-    itemLabel: { type: "STRING" },
-    brand: { type: "STRING" },
-    condition: { type: "STRING", enum: ["working", "dead", "damaged"] },
-    unitCount: { type: "INTEGER" },
-    stateCode: { type: "STRING" },
-    hazards: { type: "ARRAY", items: { type: "STRING" } },
-    materials: { type: "ARRAY", items: materialSchema },
+    itemClass: { type: "string", enum: itemClassCodes },
+    itemLabel: { type: "string" },
+    brand: { type: "string" },
+    condition: { type: "string", enum: ["working", "dead", "damaged"] },
+    unitCount: { type: "integer" },
+    stateCode: { type: "string" },
+    hazards: { type: "array", items: { type: "string" } },
+    materials: { type: "array", items: materialSchema },
     gatekeeper: gatekeeperSchema,
-    notes: { type: "STRING" },
+    notes: { type: "string" },
   };
   const required = [
     "itemClass",
@@ -187,31 +207,34 @@ export function itemResponseSchema(
 
   if (options.intake) {
     properties.fields = {
-      type: "ARRAY",
+      type: "array",
       items: {
-        type: "OBJECT",
+        type: "object",
         properties: {
-          label: { type: "STRING" },
-          value: { type: "STRING" },
-          confidence: { type: "NUMBER" },
-          source: { type: "STRING", enum: ["photo", "voice"] },
+          label: { type: "string" },
+          value: { type: "string" },
+          confidence: { type: "number" },
+          source: { type: "string", enum: ["photo", "voice"] },
         },
         required: ["label", "value", "confidence", "source"],
+        additionalProperties: false,
       },
     };
+    // Null, not an empty object, when no voice note was attached: the parser reads a
+    // missing transcript as null, and the screen shows no card rather than a blank one.
     properties.transcript = {
-      type: "OBJECT",
-      nullable: true,
+      type: ["object", "null"],
       properties: {
-        language: { type: "STRING" },
-        text: { type: "STRING" },
-        translation: { type: "STRING" },
-        words: { type: "INTEGER" },
+        language: { type: "string" },
+        text: { type: "string" },
+        translation: { type: "string" },
+        words: { type: "integer" },
       },
       required: ["language", "text", "translation", "words"],
+      additionalProperties: false,
     };
     required.push("fields", "transcript");
   }
 
-  return { type: "OBJECT", properties, required };
+  return { type: "object", properties, required };
 }

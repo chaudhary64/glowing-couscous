@@ -59,7 +59,7 @@ export const activityFeed: ActivityEvent[] = [
     kind: "valuation",
     subject: "ECO-2026-0434 priced",
     detail: "Printer power supply · ₹226 gross, ₹106 net, 320 g copper",
-    actor: "Gemini 3.5 Flash Lite",
+    actor: "Microsoft Foundry",
     href: "/valuation",
   },
   {

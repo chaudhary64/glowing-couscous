@@ -93,7 +93,7 @@ instead, because the compute does not move with it.
 **The static key is a deployment artifact.** `amplify.yml` copies `S3_ACCESS_KEY_ID` and
 `S3_SECRET_ACCESS_KEY` into `.env.production` because Amplify's running SSR compute gets
 none of the app's environment variables — the same limitation that file already
-documents for `GEMINI_API_KEY`. That means the key is readable by anyone who can read the
+documents for `AZURE_OPENAI_API_KEY`. That means the key is readable by anyone who can read the
 deployment artifacts. The design answer is already in the code: `lib/s3/archive.ts` reads
 these two names if they are present and otherwise lets the SDK resolve its own chain, so
 the day the compute is given an IAM role (`computeRoleArn`, currently unset) both lines

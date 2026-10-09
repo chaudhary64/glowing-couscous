@@ -23,7 +23,7 @@ export const features: Feature[] = [
     pageJob:
       "Turn what a kabadiwala already has — a phone and a description — into structured item data.",
     status: "core",
-    aws: ["Gemini (multimodal: photo + audio)", "Server-side rate card"],
+    aws: ["Microsoft Foundry (multimodal: photo + audio)", "Server-side rate card"],
     proof:
       "The differentiator. Vernacular voice is what makes 1.5M informal collectors addressable, and no incumbent EPR tooling reads Hindi speech.",
   },
@@ -39,7 +39,7 @@ export const features: Feature[] = [
     pageJob:
       "Return a defensible rupee figure the collector accepts and the brand can book.",
     status: "core",
-    aws: ["Gemini (multimodal)", "Server-side rate card"],
+    aws: ["Microsoft Foundry (multimodal)", "Server-side rate card"],
     proof:
       "This is the product. Every other capability exists to move a valued item through the pipeline, or to keep that valuation honest.",
   },
@@ -55,7 +55,7 @@ export const features: Feature[] = [
     pageJob:
       "Decide valid or invalid on every upload, and explain the decision.",
     status: "core",
-    aws: ["Gemini (vision)", "Reject rules R-01–R-04"],
+    aws: ["Microsoft Foundry (vision)", "Reject rules R-01–R-04"],
     proof:
       "Credits are simulated, so the payout is gameable by definition. Precision, F1 and ROC-AUC are the evidence that it is not.",
   },

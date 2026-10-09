@@ -76,7 +76,7 @@ export interface ProposalIntake extends ProposalItem {
 
 /** Which model actually answered, so the screen can say so instead of implying. */
 export interface AiSource {
-  provider: "gemini";
+  provider: "foundry";
   model: string;
   /** Seconds of server work for the whole request, model plus pricing. */
   latencyMs: number;

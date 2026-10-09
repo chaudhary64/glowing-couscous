@@ -13,7 +13,8 @@ import {
   type ItemClassCode,
 } from "@/lib/data/rate-card";
 import { formatInr, formatMass } from "@/lib/format";
-import { getAiProvider, type AiMediaPart } from "@/lib/ai/gemini";
+import { getAiProvider, type AiMediaPart } from "@/lib/ai/foundry";
+import { transcribeHindi } from "@/lib/ai/transcribe";
 import { parseIntakeProposal, parseItemProposal } from "@/lib/ai/parse";
 import {
   INTAKE_SYSTEM_INSTRUCTION,
@@ -316,7 +317,7 @@ export async function analyseItem(input: AnalyseItemInput): Promise<AiAnalysis> 
   return priceProposal(
     parsed.value,
     {
-      provider: "gemini",
+      provider: "foundry",
       model: call.model,
       latencyMs: Date.now() - started,
       calledAt: istStamp(),
@@ -327,8 +328,14 @@ export async function analyseItem(input: AnalyseItemInput): Promise<AiAnalysis> 
 }
 
 /**
- * The intake pass: the same identification, plus what the collector said. One
- * round trip, because this runs while somebody is standing in a lane.
+ * The intake pass: the same identification, plus what the collector said.
+ *
+ * Two calls, not one, on purpose. The model's vision deployment cannot read audio, and
+ * the subscription cannot host an audio-capable one, so the Hindi voice note is
+ * transcribed by the speech recogniser first and the transcript is handed to the model
+ * as the collector's own words. The recogniser returns `null` for silence, which is what
+ * keeps a silent recording from becoming a confident transcript of an item nobody
+ * mentioned.
  */
 export async function analyseIntake(
   input: AnalyseIntakeInput,
@@ -337,32 +344,51 @@ export async function analyseIntake(
   const provider = getAiProvider();
   const media = input.media ?? [];
 
+  const audio = media.find((part) => part.mimeType.startsWith("audio/"));
+  const images = media.filter((part) => !part.mimeType.startsWith("audio/"));
+
+  // Speech to text first. `null` means the clip held no speech — silence is a
+  // legitimate answer, and the model is asked for no transcript in that case.
+  const transcript = audio ? await transcribeHindi(audio) : null;
+
+  const warnings: string[] = [];
+  if (audio && !transcript) {
+    warnings.push(
+      "A voice note was attached but no speech was recognised in it, so nothing was transcribed.",
+    );
+  }
+
   const call = await provider.generate({
     systemInstruction: INTAKE_SYSTEM_INSTRUCTION,
     prompt: itemPrompt({
       note: input.note,
-      hasPhoto: hasImage(media),
+      hasPhoto: hasImage(images),
       intake: true,
+      transcript: transcript?.text,
     }),
-    media,
+    media: images,
     schema: itemResponseSchema({ intake: true }),
     temperature: 0.3,
   });
 
-  const defaultMode = hasImage(media) ? "photo" : "voice";
+  const defaultMode = hasImage(images) ? "photo" : "voice";
   const parsed = parseIntakeProposal(call.text, defaultMode);
   if (!parsed.ok) throw new AiProposalInvalidError(parsed.errors);
 
-  const warnings = [...parsed.warnings];
+  warnings.push(...parsed.warnings);
   if (call.fallbackFrom) {
     warnings.push(
       `${call.fallbackFrom} was at capacity, so ${call.model} answered instead.`,
     );
   }
+
+  // The recogniser's text is the verbatim transcript — it is what the collector said.
+  // The model only supplies the English translation and the word count, and its own
+  // echo of the text is never trusted over the recogniser's.
   let voiceNote: VoiceNote | null = null;
-  if (parsed.value.transcript) {
-    const transcript = parsed.value.transcript;
-    const words = transcript.words || transcript.text.split(/\s+/).length;
+  if (transcript) {
+    const spoken = parsed.value.transcript;
+    const words = spoken?.words || transcript.text.split(/\s+/).length;
     let durationSeconds = input.durationSeconds ?? 0;
     if (durationSeconds <= 0) {
       // Hindi speech runs near 2.5 words a second. When the browser could not tell
@@ -377,15 +403,13 @@ export async function analyseIntake(
       language: transcript.language,
       durationSeconds,
       transcript: transcript.text,
-      translation: transcript.translation,
+      translation: spoken?.translation ?? "",
       words,
     };
-  } else if (hasAudio(media)) {
-    warnings.push("Audio was attached but no transcript came back; nothing was transcribed.");
   }
 
   const source: AiSource = {
-    provider: "gemini",
+    provider: "foundry",
     model: call.model,
     latencyMs: Date.now() - started,
     calledAt: istStamp(),

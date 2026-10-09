@@ -12,13 +12,13 @@ import type { IntakeSample, ResolvedItemSummary } from "@/lib/types";
 const pipeline: { step: string; service: string; detail: string }[] = [
   {
     step: "Read the upload",
-    service: "Google Gemini · multimodal",
+    service: "Microsoft Foundry · multimodal",
     detail:
       "One call takes the photograph and the Hindi audio together. Nothing is transcribed by a separate service first.",
   },
   {
     step: "Contract to fields",
-    service: "Gemini response schema",
+    service: "Foundry response schema",
     detail:
       "The reply is constrained to a typed shape, so every field arrives with its own confidence and its source.",
   },

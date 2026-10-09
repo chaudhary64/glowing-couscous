@@ -46,7 +46,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
  *    app's own scoped key, so evidence is reachable from the product for minutes at
  *    a time without the archive ever being world-readable.
  *
- * This module deliberately does not import `AiMediaPart` from `lib/ai/gemini`: the
+ * This module deliberately does not import `AiMediaPart` from `lib/ai/foundry`: the
  * input shape is structural, so storage stays independent of whichever provider is
  * answering.
  */
@@ -322,7 +322,7 @@ function decode(media: ArchiveMediaInput): Buffer {
  * How long one object write may take before it is abandoned.
  *
  * Not a preference: Amplify Hosting cuts a server-rendered request off at around
- * thirty seconds, and `lib/ai/gemini.ts` deliberately spends up to 26 of them on
+ * thirty seconds, and `lib/ai/foundry.ts` deliberately spends up to 26 of them on
  * the model. Two uploads run beside that call rather than after it, so the ceiling
  * on their wait is what keeps the whole request inside the host's limit — storage
  * must not be the thing that turns a working analysis into a bare 504.

@@ -81,7 +81,7 @@ export type InputMode = "photo" | "voice";
 export interface VoiceNote {
   language: string;
   durationSeconds: number;
-  /** Verbatim Hindi transcript as the audio model returned it (Gemini, native audio). */
+  /** Verbatim Hindi transcript as the speech recogniser returned it (Azure Speech, hi-IN). */
   transcript: string;
   translation: string;
   words: number;

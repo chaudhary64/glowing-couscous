@@ -38,7 +38,7 @@ function resolvedEntry(sample: IntakeSample): [string, ResolvedItemSummary] {
 /** What each upload sets in motion, in the order it runs. */
 const pipeline: { service: string; detail: string }[] = [
   {
-    service: "Gemini · multimodal",
+    service: "Microsoft Foundry · multimodal",
     detail: "One call reads the photograph and any Hindi audio together.",
   },
   {

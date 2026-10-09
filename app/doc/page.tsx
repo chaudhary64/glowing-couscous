@@ -216,10 +216,10 @@ export default function DocIndexPage() {
                 The model calls
               </p>
               <p className="mt-1 text-sm leading-relaxed text-ink-soft">
-                A plain fetch against the Gemini REST API — no SDK sits between the
-                app and the model, which is why moving back to Bedrock is one file.
-                Every reply is shaped by a response schema and parsed, never
-                trusted.
+                A plain fetch against Microsoft Foundry, which exposes an
+                OpenAI-compatible chat completions API — no SDK sits between the app
+                and the model, so swapping providers stays a one-file change. Every
+                reply is shaped by a response schema and parsed, never trusted.
               </p>
             </div>
             <div className="border-t border-rule pt-4">
@@ -231,7 +231,7 @@ export default function DocIndexPage() {
                   "Next.js 16 · Amplify SSR",
                   "Amazon Cognito",
                   "PostgreSQL 16 on RDS",
-                  "Gemini (multimodal: photo + audio)",
+                  "Microsoft Foundry (multimodal: photo + audio)",
                   "Drizzle ORM",
                   "Tailwind CSS 4",
                 ].map((service) => (

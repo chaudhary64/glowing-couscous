@@ -128,7 +128,7 @@ const COPY: Record<LiveMode, { caption: string; action: string; body: string }> 
   intake: {
     caption: "Live intake",
     action: "Read this intake",
-    body: "A photo, a voice note in Hindi, or both. The audio is read directly — no separate speech service — so the transcript, the extracted fields and the price come back together.",
+    body: "A photo, a voice note in Hindi, or both. The voice note is transcribed first (Hindi, Azure Speech), then the photograph and the transcript are read together — the extracted fields and the price come back with it.",
   },
   gatekeeper: {
     caption: "Live gatekeeper",
@@ -152,23 +152,110 @@ async function readFile(file: File): Promise<Media> {
   };
 }
 
-/** Recording length, measured off the blob rather than inferred server-side. */
-function measureAudio(blob: Blob): Promise<number> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(blob);
-    const audio = document.createElement("audio");
-    audio.preload = "metadata";
-    audio.onloadedmetadata = () => {
-      const seconds = Number.isFinite(audio.duration) ? audio.duration : 0;
-      URL.revokeObjectURL(url);
-      resolve(seconds);
-    };
-    audio.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(0);
-    };
-    audio.src = url;
-  });
+/**
+ * Microsoft Foundry reads WAV or MP3 audio and nothing else, while a browser records
+ * WebM. Rather than send a container the model refuses, the clip is decoded with the
+ * browser's own audio decoder and re-encoded as 16 kHz mono PCM WAV — small enough to
+ * fit the request budget and the shape speech models actually want. Decoding also
+ * measures the real duration, so the length on screen is measured, not inferred.
+ */
+async function decodeMono(
+  source: Blob,
+): Promise<{ samples: Float32Array; sampleRate: number } | null> {
+  const AudioCtx =
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioCtx) return null;
+  let decoded: AudioBuffer;
+  try {
+    // `slice(0)` because Safari detaches the buffer handed to `decodeAudioData`.
+    const bytes = await source.arrayBuffer();
+    const ctx = new AudioCtx();
+    decoded = await ctx.decodeAudioData(bytes.slice(0));
+    await ctx.close();
+  } catch {
+    return null;
+  }
+
+  const targetRate = 16_000;
+  const OfflineCtx =
+    window.OfflineAudioContext ??
+    (window as unknown as { webkitOfflineAudioContext?: typeof OfflineAudioContext })
+      .webkitOfflineAudioContext;
+  if (OfflineCtx) {
+    try {
+      const frames = Math.max(1, Math.ceil(decoded.duration * targetRate));
+      const offline = new OfflineCtx(1, frames, targetRate);
+      const node = offline.createBufferSource();
+      node.buffer = decoded;
+      node.connect(offline.destination);
+      node.start();
+      const rendered = await offline.startRendering();
+      return { samples: rendered.getChannelData(0), sampleRate: targetRate };
+    } catch {
+      // Fall through to a straight downmix rather than failing the upload.
+    }
+  }
+
+  const channels = decoded.numberOfChannels;
+  const out = new Float32Array(decoded.length);
+  for (let channel = 0; channel < channels; channel += 1) {
+    const data = decoded.getChannelData(channel);
+    for (let i = 0; i < data.length; i += 1) out[i] += data[i] / channels;
+  }
+  return { samples: out, sampleRate: decoded.sampleRate };
+}
+
+/** 16-bit PCM WAV, mono — the smallest container every speech path accepts. */
+function encodeWav(samples: Float32Array, sampleRate: number): Uint8Array {
+  const bytes = new Uint8Array(44 + samples.length * 2);
+  const view = new DataView(bytes.buffer);
+  const ascii = (offset: number, text: string) => {
+    for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i));
+  };
+  ascii(0, "RIFF");
+  view.setUint32(4, 36 + samples.length * 2, true);
+  ascii(8, "WAVE");
+  ascii(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  ascii(36, "data");
+  view.setUint32(40, samples.length * 2, true);
+  let offset = 44;
+  for (let i = 0; i < samples.length; i += 1) {
+    const clamped = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+    offset += 2;
+  }
+  return bytes;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+/** Decode any browser-readable clip and hand back WAV ready for the request. */
+async function audioToMedia(
+  source: Blob,
+  label: string,
+): Promise<{ media: Media; seconds: number } | null> {
+  const decoded = await decodeMono(source);
+  if (!decoded) return null;
+  const wav = encodeWav(decoded.samples, decoded.sampleRate);
+  return {
+    media: { mimeType: "audio/wav", dataBase64: bytesToBase64(wav), label },
+    seconds: decoded.samples.length / decoded.sampleRate,
+  };
 }
 
 export function LiveAnalysis({ mode }: { mode: LiveMode }) {
@@ -231,8 +318,17 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
       return;
     }
     setFailure(null);
-    setAudio(await readFile(file));
-    setAudioSeconds(await measureAudio(file));
+    const converted = await audioToMedia(file, file.name || "clip");
+    if (!converted) {
+      setFailure({
+        code: "unsupported_media",
+        message:
+          "That audio could not be decoded in this browser. Record the note instead, or attach a WAV or MP3 clip.",
+      });
+      return;
+    }
+    setAudio(converted.media);
+    setAudioSeconds(converted.seconds);
   }
 
   async function toggleRecording() {
@@ -266,11 +362,17 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
           });
           return;
         }
-        const file = new File([blob], "voice-note.webm", {
-          type: blob.type || "audio/webm",
-        });
-        setAudio(await readFile(file));
-        setAudioSeconds(await measureAudio(blob));
+        const converted = await audioToMedia(blob, "voice-note.wav");
+        if (!converted) {
+          setFailure({
+            code: "unsupported_media",
+            message:
+              "That recording could not be decoded. Try again, or attach a WAV or MP3 clip.",
+          });
+          return;
+        }
+        setAudio(converted.media);
+        setAudioSeconds(converted.seconds);
       };
       recorder.current = active;
       active.start();
@@ -420,7 +522,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
                   </span>
                 </>
               ) : (
-                "The browser reads the audio directly, so nothing is transcribed twice."
+                "WAV, 16 kHz mono. A recording is re-encoded here and transcribed server-side."
               )}
             </p>
           </Surface>
@@ -508,7 +610,7 @@ function Provenance({ source, warnings }: { source: AiAnalysis["source"]; warnin
   return (
     <div className="flex flex-col gap-2 border-t border-rule pt-3">
       <p className="flex flex-wrap items-center gap-2">
-        <Badge tone="ink">Gemini · {source.model}</Badge>
+        <Badge tone="ink">Foundry · {source.model}</Badge>
         <Badge tone="neutral">{(source.latencyMs / 1000).toFixed(1)} s</Badge>
         <Badge tone="neutral">{source.inputs.join(" + ")}</Badge>
         <span className="font-mono text-[11px] text-ink-muted">{source.calledAt}</span>
@@ -670,7 +772,7 @@ function IntakeResult({ result }: { result: AiIntakeResult }) {
       {result.voiceNote ? (
         <VoiceNoteCard
           voiceNote={result.voiceNote}
-          engine={`Gemini · ${result.source.model}`}
+          engine="Azure Speech · hi-IN"
         />
       ) : null}
 
@@ -680,7 +782,7 @@ function IntakeResult({ result }: { result: AiIntakeResult }) {
           caption="Every field carries the confidence that matters more than the value"
         />
         <p className="mt-4 flex flex-wrap items-center gap-2 border-t border-rule pt-3">
-          <Badge tone="ink">Gemini · {result.source.model}</Badge>
+          <Badge tone="ink">Foundry · {result.source.model}</Badge>
           <Badge tone="neutral">{(result.source.latencyMs / 1000).toFixed(1)} s</Badge>
           <span className="text-[12px] leading-snug text-ink-muted">
             Each field says whether it came from the photo or the voice note.

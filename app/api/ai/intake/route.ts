@@ -6,8 +6,8 @@ import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
 /**
  * POST /api/ai/intake — a photo, a Hindi voice note, or both, in one round trip.
  *
- * This is the multi-modal path: the audio is understood directly by the model
- * rather than being sent to a separate speech-to-text service first, so the
+ * This is the multi-modal path: the Hindi audio is transcribed by Azure Speech first,
+ * and the verbatim transcript is read by the model alongside the photograph, so the
  * transcript and the item it describes come back together. The response carries the
  * extracted fields the collector can correct, the transcript in Devanagari with its
  * translation, and the priced item the same submission resolves to — because the

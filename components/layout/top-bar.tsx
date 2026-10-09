@@ -1,7 +1,7 @@
 /**
  * Strip across the top of the documentation.
  *
- * The list is the stack that actually serves these pages — Gemini for the model
+ * The list is the stack that actually serves these pages — Microsoft Foundry for the model
  * calls, Cognito for identity, Postgres on RDS, Amplify's SSR compute to run it.
  * Lambda, API Gateway, DynamoDB and OpenSearch were in the first proposal and were
  * never built: this app ships no function, gateway or queue table of its own, and the
@@ -13,7 +13,7 @@
  * about the build order, not about the product, so it belongs in the priority
  * ladder under `/doc` rather than in every page's header.
  */
-const stack = ["Gemini", "Cognito", "RDS Postgres", "Amplify SSR"];
+const stack = ["Foundry", "Cognito", "RDS Postgres", "Amplify SSR"];
 
 export function TopBar() {
   return (
