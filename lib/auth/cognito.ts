@@ -90,7 +90,15 @@ async function call<T>(operation: CognitoOperation, body: Record<string, unknown
         "",
     ).split(":")[0];
     const message = (payload as { message?: string }).message;
-    throw new AuthError(CODE_MAP[type] ?? "server", message);
+    const code = CODE_MAP[type] ?? "server";
+    // `server` is also what an unrecognised type becomes, and the two are worth telling
+    // apart in a log even though the form shows one sentence for both. A provider error
+    // this table does not know — a changed flow, a client secret turned on — is a bug
+    // here, not a user mistake, and it is otherwise invisible from the outside.
+    if (code === "server") {
+      console.error(`[auth] ${operation} failed with an unmapped error: ${type || response.status}`);
+    }
+    throw new AuthError(code, message);
   }
 
   return payload as T;

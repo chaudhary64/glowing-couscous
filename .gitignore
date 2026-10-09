@@ -45,3 +45,11 @@ next-env.d.ts
 # freebuff (local agent state)
 .freebuff
 freebuff
+
+# local log captures from Amplify/Cognito debugging — dumps of CloudWatch and the
+# Amplify build output. Useful while diagnosing, never part of the app.
+amplog*.json
+amplog*.err
+buildlog.json
+buildlog.err
+dev.log

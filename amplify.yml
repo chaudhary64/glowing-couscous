@@ -1,0 +1,43 @@
+# Amplify Hosting build specification.
+#
+# Why this file exists at all — the app works on a laptop without it.
+#
+# Amplify Hosting hands the environment variables from its app settings to the *build*
+# container only. Its running SSR compute deliberately gets none of them, so a
+# `process.env.COGNITO_*` read at request time finds nothing and `lib/auth/config.ts`
+# reports the pool as unconfigured — sign-in answers "something went wrong on our side"
+# while the same code signs in fine locally. It is a documented limitation of the
+# service, not a mistake in the app:
+#   https://docs.aws.amazon.com/amplify/latest/userguide/ssr-environment-variables.html
+#
+# The supported workaround is to write the variables the *server* half needs into
+# `.env.production` before the build, which Next.js then also reads when the app serves
+# traffic.
+#
+# Only the four server-side names are copied, and never a secret: anything written here
+# becomes part of the deployment artifacts, which the AWS page warns are readable by
+# anyone with access to them. `DATABASE_URL` and `GEMINI_API_KEY` are deliberately left
+# out — the serving code reads neither from this file's variables today, and both carry
+# credentials that should not be copied onto disk in a deployment.
+#
+# The public half the browser needs (`NEXT_PUBLIC_COGNITO_*`) still reaches the build the
+# normal way. It is also referenced statically in `lib/auth/config.ts`, so the auth
+# config has a build-time fallback even if this step is ever dropped.
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci
+    build:
+      commands:
+        - env | grep -E '^(COGNITO_REGION|COGNITO_USER_POOL_ID|COGNITO_CLIENT_ID|COGNITO_ISSUER)=' >> .env.production
+        - npm run build
+  artifacts:
+    baseDirectory: .next
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
+      - .next/cache/**/*
