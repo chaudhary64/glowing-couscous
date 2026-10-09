@@ -1,6 +1,7 @@
 import { analyseItem } from "@/lib/ai/analyse";
 import { aiErrorResponse, authorizeUser, jsonResponse, readPayload } from "@/lib/ai/http";
 import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
+import { recordPricedItem, pricedRecordWarning } from "@/lib/records/items";
 import { recordSubmission, submissionWarning } from "@/lib/s3/intakes";
 import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
 
@@ -94,6 +95,16 @@ export async function POST(request: Request) {
   const submissionNote = submission ? submissionWarning(submission) : null;
   if (submissionNote) warnings.push(submissionNote);
 
+  // The priced record — item, assay, price, verdict — written under the submission it
+  // came from. A refusal is recorded like any other: the queue's "already refused" list
+  // is a query over exactly these rows, so "show me what you turned away" has an answer.
+  const priced = await recordPricedItem({
+    intakeId: submission?.submission?.id ?? null,
+    analysis,
+  });
+  const pricedNote = pricedRecordWarning(priced);
+  if (pricedNote) warnings.push(pricedNote);
+
   const creditable = analysis.gatekeeper.verdict !== "rejected";
   return jsonResponse({
       id: analysis.id,
@@ -120,5 +131,6 @@ export async function POST(request: Request) {
       storage,
       records,
       submission,
+      priced,
     });
 }

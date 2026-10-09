@@ -1,6 +1,7 @@
 import { analyseItem } from "@/lib/ai/analyse";
 import { aiErrorResponse, authorizeUser, jsonResponse, readPayload } from "@/lib/ai/http";
 import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
+import { recordPricedItem, pricedRecordWarning } from "@/lib/records/items";
 import { recordSubmission, submissionWarning } from "@/lib/s3/intakes";
 import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
 
@@ -99,5 +100,18 @@ export async function POST(request: Request) {
   const submissionNote = submission ? submissionWarning(submission) : null;
   if (submissionNote) warnings.push(submissionNote);
 
-  return jsonResponse({ ...analysis, warnings, storage, records, submission });
+  /**
+   * The priced record: the item, its assay, the price and the verdict, written once the
+   * submission row exists to hang them off. `lib/records/items.ts` argues the ordering;
+   * what matters here is that a failed analysis writes none of it — there is no price to
+   * record — and that none of it can make this request fail after the model has answered.
+   */
+  const priced = await recordPricedItem({
+    intakeId: submission?.submission?.id ?? null,
+    analysis,
+  });
+  const pricedNote = pricedRecordWarning(priced);
+  if (pricedNote) warnings.push(pricedNote);
+
+  return jsonResponse({ ...analysis, warnings, storage, records, submission, priced });
 }

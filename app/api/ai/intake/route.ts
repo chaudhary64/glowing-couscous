@@ -1,6 +1,7 @@
 import { analyseIntake } from "@/lib/ai/analyse";
 import { aiErrorResponse, authorizeUser, jsonResponse, readPayload } from "@/lib/ai/http";
 import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
+import { recordPricedItem, pricedRecordWarning } from "@/lib/records/items";
 import { recordSubmission, submissionWarning } from "@/lib/s3/intakes";
 import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
 
@@ -121,5 +122,23 @@ export async function POST(request: Request) {
   const submissionNote = submission ? submissionWarning(submission) : null;
   if (submissionNote) warnings.push(submissionNote);
 
-  return jsonResponse({ ...analysed.value, warnings, storage, records, submission });
+  /**
+   * The priced record, with the parsed fields this route and only this route produces.
+   *
+   * `intake_fields` is what makes the intake screen's own claim true — "the parsed record
+   * is kept before valuation" — and it is written here rather than anywhere else because
+   * the field list with its per-field source and confidence exists only on this pass.
+   */
+  const priced =
+    records && analysis
+      ? await recordPricedItem({
+          intakeId: submission?.submission?.id ?? null,
+          analysis,
+          fields: analysed.value.fields,
+        })
+      : null;
+  const pricedNote = priced ? pricedRecordWarning(priced) : null;
+  if (pricedNote) warnings.push(pricedNote);
+
+  return jsonResponse({ ...analysed.value, warnings, storage, records, submission, priced });
 }

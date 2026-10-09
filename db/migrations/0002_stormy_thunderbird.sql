@@ -1,0 +1,1 @@
+ALTER TABLE "items" ALTER COLUMN "collector_id" DROP NOT NULL;

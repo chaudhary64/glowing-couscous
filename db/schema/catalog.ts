@@ -61,9 +61,18 @@ export const items = pgTable(
       .notNull()
       .references(() => intakes.id, { onDelete: "cascade" }),
 
-    collectorId: uuid("collector_id")
-      .notNull()
-      .references(() => collectors.id, { onDelete: "cascade" }),
+    /**
+     * Who is paid for this item. Nullable since `0002_stormy_thunderbird.sql`,
+     * for the same reason `intakes.collector_id` is: the request that prices an item
+     * arrives with an operator's session and a photograph, and says nothing about whose
+     * material it is. The choice is between refusing the price — losing the only link
+     * from a kept evidence trail to the money it was worth — and recording it with the
+     * person unknown. Provisioning a collector at submission time is the job that closes
+     * this, and `collectors.user_id` is the column that will connect the two.
+     */
+    collectorId: uuid("collector_id").references(() => collectors.id, {
+      onDelete: "cascade",
+    }),
 
     /**
      * The waste stream this item was classified into (PCB, battery, CRT glass…).

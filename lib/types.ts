@@ -336,6 +336,158 @@ export interface Channel {
   blockers: string[];
 }
 
+/* ---------------------------------------------------------- stored records */
+
+/**
+ * The priced item a database row holds, as the screens read it.
+ *
+ * These types are the contract between `lib/records` and the pages, the way the
+ * fixture types above are the contract between `lib/data` and the pages. The shapes
+ * are deliberately the same where the two overlap (`materials`, `valuation`,
+ * `gatekeeper`), so a screen renders a stored price and a sample price the same way
+ * and the reader can tell which is which from where the row came from, not from its
+ * shape.
+ */
+
+/** A valuation row: the money, and where the rate behind it came from. */
+export interface StoredValuation {
+  grossValue: number;
+  handlingFee: number;
+  netToCollector: number;
+  eprCreditInr: number;
+  /**
+   * The note id, or null: it belongs to an `epr_credit_notes` row, which is the money
+   * half of the schema and has no writer yet. A screen says the note is not on file
+   * rather than printing an id nothing can be looked up by.
+   */
+  eprCreditNote: string | null;
+  rateBasis: string;
+  /** ISO, or null when the card in force carried no expiry. */
+  validUntil: string | null;
+  summary: string | null;
+  /** The model that produced the assay the price was computed from. */
+  model: string | null;
+  computedAt: string;
+}
+
+/** The compact form of a stored item, for a table row or a feed line. */
+export interface StoredItemSummary {
+  /** `items.code` — the id the priced result carried, and the one on screen. */
+  id: string;
+  /** `intakes.code` of the submission it resolved from, when the join resolves. */
+  intakeCode: string | null;
+  label: string;
+  category: string;
+  /** Null when the plate was unread — never "Unread" stored as a brand. */
+  brand: string | null;
+  condition: ItemCondition;
+  massGrams: number;
+  /** The latest verdict, or null when the item has none recorded. */
+  verdict: Verdict | null;
+  confidence: number | null;
+  netToCollector: number | null;
+  eprCreditInr: number | null;
+  eprCreditNote: string | null;
+  /** ISO — when the item row was written. */
+  storedAt: string;
+}
+
+/** The three ways a held item leaves the validation queue, as the enum spells them. */
+export type StoredDecisionKind =
+  | "approved_recyclable"
+  | "sent_to_reuse"
+  | "rejected_non_ewaste";
+
+/** One human decision over a gatekeeper verdict. Only approval releases money. */
+export interface StoredDecision {
+  id: string;
+  itemCode: string;
+  itemLabel: string;
+  decision: StoredDecisionKind;
+  reason: string | null;
+  decidedAt: string;
+  /** `users.full_name` where the decider resolved; null where no row exists yet. */
+  decidedByName: string | null;
+  undoneAt: string | null;
+  /** What the decision releases, when the item carried a valuation. */
+  netToCollector: number | null;
+}
+
+/** A stored item with everything the valuation workspace needs to render it. */
+export interface StoredItem extends StoredItemSummary {
+  materials: MaterialLine[];
+  hazards: string[];
+  valuation: StoredValuation | null;
+  gatekeeper: GatekeeperVerdict | null;
+  /** The latest decision that has not been undone, when one was taken. */
+  decision: StoredDecision | null;
+}
+
+/** One submission, joined to what it was priced as. */
+export interface StoredIntake {
+  /** `intakes.code` — the identity the priced result carries. */
+  id: string;
+  summary: string | null;
+  mode: InputMode;
+  submittedAt: string;
+  model: string | null;
+  confidence: number | null;
+  latencyMs: number | null;
+  /** The parsed record, as `intake_fields` holds it. Empty when none was kept. */
+  fields: ExtractedField[];
+  item: StoredItemSummary | null;
+}
+
+/**
+ * One line of the operator-facing activity feed, built from stored rows.
+ *
+ * Deliberately not `ActivityEvent`: that type carries pre-formatted strings a fixture
+ * authored. These rows are shaped from an instant, so the screen renders a real clock.
+ */
+export interface StoredEvent {
+  id: string;
+  at: string;
+  kind: ActivityKind;
+  subject: string;
+  detail: string;
+  actor: string;
+  href: ProductHref;
+}
+
+/**
+ * Every count the dashboard shows, each one a query.
+ *
+ * `null` on a ratio means "no rows to take a share of", which is a different thing
+ * from zero and has to be rendered differently.
+ */
+export interface StoredCounts {
+  intakesToday: number;
+  intakesTotal: number;
+  voiceShare: number | null;
+  medianLatencySeconds: number | null;
+  itemsPriced: number;
+  hazardousItems: number;
+  verified: number;
+  held: number;
+  rejected: number;
+  awaitingDecision: number;
+  decidedToday: number;
+  /** Net promised to collectors on cleared items — a promise, not a payout. */
+  netPayableInr: number;
+  eprCreditInr: number;
+}
+
+/**
+ * Every read in `lib/records` answers with this wrapper, so a screen can say whether
+ * the database is absent, broken, or simply empty — three states that look identical
+ * if a read answers with a bare array. Same posture as `lib/s3/*`.
+ */
+export interface RecordsResult<T> {
+  configured: boolean;
+  error: string | null;
+  rows: T[];
+}
+
 /* --------------------------------------------------------------- evidence */
 
 /**
