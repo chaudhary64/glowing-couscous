@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveAnalysis } from "@/components/features/ai/live-analysis";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Panel, Surface } from "@/components/ui/card";
@@ -72,6 +73,8 @@ export default async function ValuationsPage() {
           </>
         }
       />
+
+      <LiveAnalysis mode="valuation" />
 
       <StatGrid columns={4}>
         <Stat

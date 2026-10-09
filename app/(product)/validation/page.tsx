@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveAnalysis } from "@/components/features/ai/live-analysis";
 import { MetricPanel } from "@/components/features/gatekeeper/metric-panel";
 import { RejectRules } from "@/components/features/gatekeeper/reject-rules";
 import { DecisionQueue } from "@/components/features/product/validation/decision-queue";
@@ -95,6 +96,8 @@ export default async function ValidationQueuePage() {
           </div>
         }
       />
+
+      <LiveAnalysis mode="gatekeeper" />
 
       <StatGrid columns={4}>
         <Stat

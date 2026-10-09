@@ -72,7 +72,7 @@ export type InputMode = "photo" | "voice";
 export interface VoiceNote {
   language: string;
   durationSeconds: number;
-  /** Verbatim Hindi transcript as returned by Amazon Transcribe. */
+  /** Verbatim Hindi transcript as the audio model returned it (Gemini, native audio). */
   transcript: string;
   translation: string;
   words: number;
@@ -133,6 +133,12 @@ export interface GatekeeperVerdict {
   confidence: number;
   modelVersion: string;
   checkedAt: string;
+  /**
+   * Reject rule that fired, when one did — R-01 not e-waste, R-02 duplicate hash,
+   * R-03 working device, R-04 battery swelling. Absent when nothing was triggered,
+   * which is the normal case for a verified item.
+   */
+  ruleCode?: string;
   /** Classification the item was matched against. */
   matchedClass: string;
   reason: string;

@@ -1,95 +1,97 @@
-import { lineValue } from "@/lib/format";
+import {
+  RATE_BASIS,
+  RATE_VALID_UNTIL,
+  eprCreditFor,
+  handlingFeeFor,
+  itemMass,
+  material,
+  priceMaterials,
+  type ItemClassCode,
+} from "@/lib/data/rate-card";
 import type { EwasteItem, MaterialLine, Valuation } from "@/lib/types";
 
 /**
  * Sample inventory with fixed assay results.
  *
- * Values are hardcoded, but the arithmetic is not: `price()` derives the gross
- * value from the material lines with the same helper the receipt uses, so the
- * on-screen subtotal can never drift from the line items. Item mass is the exact
- * sum of its lines.
+ * Values are fixed, but the arithmetic is not: the material lines are built from
+ * the rate card in `lib/data/rate-card.ts`, and `priceFor` derives gross value
+ * from those lines with the same helper the receipt and the live AI path use, so
+ * the on-screen subtotal can never drift from the line items. Item mass is the
+ * exact sum of its lines.
+ *
+ * The credit note ids are authored per record on purpose — this is the sample
+ * audit trail a reviewer checks against, not something computed on the fly.
  */
 
-type ValuationSeed = Pick<
-  Valuation,
-  "handlingFee" | "eprCreditInr" | "eprCreditNote" | "rateBasis" | "validUntil"
->;
-
-function price(materials: MaterialLine[], seed: ValuationSeed): Valuation {
-  const grossValue = materials.reduce(
-    (sum, line) => sum + lineValue(line.massGrams, line.ratePerKg),
-    0,
-  );
-
-  return {
-    grossValue,
-    handlingFee: seed.handlingFee,
-    netToCollector: grossValue - seed.handlingFee,
-    eprCreditInr: seed.eprCreditInr,
-    eprCreditNote: seed.eprCreditNote,
-    rateBasis: seed.rateBasis,
-    validUntil: seed.validUntil,
-  };
+/**
+ * Price an item through the class schedule. `creditOverride` exists for the one
+ * sample that shows a credit it then withholds under R-03 (working equipment):
+ * the screen has to display what the item would have earned.
+ */
+function priceFor(
+  code: ItemClassCode,
+  materials: MaterialLine[],
+  eprCreditNote: string,
+  creditOverride?: number,
+): Valuation {
+  return priceMaterials(materials, {
+    handlingFee: handlingFeeFor(code),
+    eprCreditInr: creditOverride ?? eprCreditFor(code, true),
+    eprCreditNote,
+    rateBasis: RATE_BASIS,
+    validUntil: RATE_VALID_UNTIL,
+  });
 }
-
-function itemMass(materials: MaterialLine[]): number {
-  return Number(
-    materials.reduce((sum, line) => sum + line.massGrams, 0).toFixed(2),
-  );
-}
-
-const rateBasis = "EcoEPR rate card · IMD benchmark, 2026-Q3 · Mumbai zone";
-const validUntil = "09 Nov 2026, 23:59 IST";
 
 const mainboardMaterials: MaterialLine[] = [
-  { id: "cu", name: "Copper traces", symbol: "Cu", category: "base", massGrams: 148, ratePerKg: 540, handling: "Smelter recovered" },
-  { id: "au", name: "Gold plating", symbol: "Au", category: "precious", massGrams: 0.32, ratePerKg: 5842000, handling: "Refinery assay" },
-  { id: "ag", name: "Silver contacts", symbol: "Ag", category: "precious", massGrams: 1.4, ratePerKg: 92000, handling: "Refinery assay" },
-  { id: "pd", name: "Palladium traces", symbol: "Pd", category: "precious", massGrams: 0.09, ratePerKg: 2750000, handling: "Refinery assay" },
-  { id: "pb", name: "Lead solder", symbol: "Pb", category: "hazardous", massGrams: 96, ratePerKg: 0, handling: "No value · disposal cost" },
-  { id: "resin", name: "Fibre-reinforced resin", symbol: "—", category: "inert", massGrams: 166, ratePerKg: 0, handling: "Landfill, permitted" },
+  material("cu", "Copper traces", 148),
+  material("au", "Gold plating", 0.32),
+  material("ag", "Silver contacts", 1.4),
+  material("pd", "Palladium traces", 0.09),
+  material("pb", "Lead solder", 96),
+  material("resin", "Fibre-reinforced resin", 166),
 ];
 
 const batteryMaterials: MaterialLine[] = [
-  { id: "co", name: "Cobalt (cathode)", symbol: "Co", category: "base", massGrams: 62, ratePerKg: 2850, handling: "Hydromet recovery" },
-  { id: "ni", name: "Nickel", symbol: "Ni", category: "base", massGrams: 24, ratePerKg: 1620, handling: "Hydromet recovery" },
-  { id: "steel", name: "Steel casing", symbol: "Fe", category: "base", massGrams: 118, ratePerKg: 48, handling: "Scrap steel" },
-  { id: "li", name: "Lithium (reactive)", symbol: "Li", category: "hazardous", massGrams: 18, ratePerKg: 0, handling: "Discharge before transport" },
-  { id: "electrolyte", name: "Electrolyte residue", symbol: "—", category: "hazardous", massGrams: 34, ratePerKg: 0, handling: "Sealed containment" },
-  { id: "plastic", name: "Separator plastics", symbol: "—", category: "inert", massGrams: 12, ratePerKg: 0, handling: "Landfill, permitted" },
+  material("co", "Cobalt (cathode)", 62),
+  material("ni", "Nickel", 24),
+  material("steel", "Steel casing", 118),
+  material("li", "Lithium (reactive)", 18),
+  material("electrolyte", "Electrolyte residue", 34),
+  material("plastic", "Separator plastics", 12, "Landfill, permitted"),
 ];
 
 const crtMaterials: MaterialLine[] = [
-  { id: "cu", name: "Deflection coils (copper)", symbol: "Cu", category: "base", massGrams: 620, ratePerKg: 540, handling: "Smelter recovered" },
-  { id: "fe", name: "Steel chassis", symbol: "Fe", category: "base", massGrams: 2400, ratePerKg: 42, handling: "Scrap steel" },
-  { id: "al", name: "Aluminium heat sink", symbol: "Al", category: "base", massGrams: 380, ratePerKg: 165, handling: "Scrap aluminium" },
-  { id: "pb-glass", name: "Leaded funnel glass", symbol: "Pb", category: "hazardous", massGrams: 1900, ratePerKg: 0, handling: "Glass-to-glass, licensed" },
-  { id: "glass", name: "Barium/strontium panel glass", symbol: "—", category: "inert", massGrams: 8700, ratePerKg: 0, handling: "Licensed glass line" },
-  { id: "plastic", name: "ABS housing", symbol: "—", category: "inert", massGrams: 200, ratePerKg: 0, handling: "Plastics recycle" },
+  material("cu", "Deflection coils (copper)", 620),
+  material("fe", "Steel chassis", 2400),
+  material("al", "Aluminium heat sink", 380),
+  material("pb-glass", "Leaded funnel glass", 1900),
+  material("glass", "Barium/strontium panel glass", 8700, "Licensed glass line"),
+  material("plastic", "ABS housing", 200),
 ];
 
 const psuMaterials: MaterialLine[] = [
-  { id: "cu", name: "Copper windings", symbol: "Cu", category: "base", massGrams: 320, ratePerKg: 540, handling: "Smelter recovered" },
-  { id: "fe", name: "Transformer steel", symbol: "Fe", category: "base", massGrams: 780, ratePerKg: 42, handling: "Scrap steel" },
-  { id: "al", name: "Aluminium housing", symbol: "Al", category: "base", massGrams: 120, ratePerKg: 165, handling: "Scrap aluminium" },
-  { id: "caps", name: "Electrolytic capacitors", symbol: "—", category: "hazardous", massGrams: 30, ratePerKg: 0, handling: "Puncture-free containment" },
-  { id: "plastic", name: "PCB + plastics", symbol: "—", category: "inert", massGrams: 200, ratePerKg: 0, handling: "Board line, licensed" },
+  material("cu", "Copper windings", 320),
+  material("fe", "Transformer steel", 780),
+  material("al", "Aluminium housing", 120),
+  material("caps", "Electrolytic capacitors", 30),
+  material("plastic", "PCB + plastics", 200, "Board line, licensed"),
 ];
 
 const phoneMaterials: MaterialLine[] = [
-  { id: "au", name: "Gold bonding wire", symbol: "Au", category: "precious", massGrams: 0.03, ratePerKg: 5842000, handling: "Refinery assay" },
-  { id: "ag", name: "Silver paste", symbol: "Ag", category: "precious", massGrams: 0.24, ratePerKg: 92000, handling: "Refinery assay" },
-  { id: "cu", name: "Copper traces", symbol: "Cu", category: "base", massGrams: 22, ratePerKg: 540, handling: "Smelter recovered" },
-  { id: "al", name: "Aluminium frame", symbol: "Al", category: "base", massGrams: 14, ratePerKg: 165, handling: "Scrap aluminium" },
-  { id: "fe", name: "Steel fasteners", symbol: "Fe", category: "base", massGrams: 24, ratePerKg: 42, handling: "Scrap steel" },
-  { id: "li", name: "Lithium cell", symbol: "Li", category: "hazardous", massGrams: 8, ratePerKg: 0, handling: "Discharge before transport" },
-  { id: "cell", name: "Battery pack housing", symbol: "—", category: "hazardous", massGrams: 34, ratePerKg: 0, handling: "Swell check required" },
-  { id: "glass", name: "Cover glass", symbol: "—", category: "inert", massGrams: 46, ratePerKg: 0, handling: "Permitted glass" },
-  { id: "plastic", name: "Polycarbonate shell", symbol: "—", category: "inert", massGrams: 30, ratePerKg: 0, handling: "Plastics recycle" },
+  material("au", "Gold bonding wire", 0.03),
+  material("ag", "Silver paste", 0.24),
+  material("cu", "Copper traces", 22),
+  material("al", "Aluminium frame", 14),
+  material("fe", "Steel fasteners", 24),
+  material("li", "Lithium cell", 8),
+  material("cell", "Battery pack housing", 34),
+  material("glass", "Cover glass", 46),
+  material("plastic", "Polycarbonate shell", 30),
 ];
 
 const bottleMaterials: MaterialLine[] = [
-  { id: "pet", name: "PET resin", symbol: "—", category: "inert", massGrams: 42, ratePerKg: 0, handling: "Not an e-waste stream" },
+  material("pet", "PET resin", 42),
 ];
 
 export const items: EwasteItem[] = [
@@ -103,13 +105,7 @@ export const items: EwasteItem[] = [
     city: "Mumbai",
     hazards: ["Lead solder above 0.1% w/w", "Beryllium in some connector alloys"],
     materials: mainboardMaterials,
-    valuation: price(mainboardMaterials, {
-      handlingFee: 240,
-      eprCreditInr: 2450,
-      eprCreditNote: "EPR-2026-0431-MH",
-      rateBasis,
-      validUntil,
-    }),
+    valuation: priceFor("board_it", mainboardMaterials, "EPR-2026-0431-MH"),
     gatekeeper: {
       verdict: "verified",
       confidence: 0.97,
@@ -136,18 +132,13 @@ export const items: EwasteItem[] = [
     city: "Mumbai",
     hazards: ["Swelling detected — thermal runaway risk", "Lithium metal reactive in air"],
     materials: batteryMaterials,
-    valuation: price(batteryMaterials, {
-      handlingFee: 180,
-      eprCreditInr: 3200,
-      eprCreditNote: "EPR-2026-0432-MH",
-      rateBasis,
-      validUntil,
-    }),
+    valuation: priceFor("battery_li", batteryMaterials, "EPR-2026-0432-MH"),
     gatekeeper: {
       verdict: "verified",
       confidence: 0.93,
       modelVersion: "eco-gate v0.4",
       checkedAt: "09 Oct 2026, 14:26 IST",
+      ruleCode: "R-04",
       matchedClass: "E-waste · Class E5 batteries",
       reason:
         "Cell stack and pouch geometry match a lithium-ion pack. Swelling flags it as hazardous, which forces a licensed battery route.",
@@ -169,13 +160,7 @@ export const items: EwasteItem[] = [
     city: "Pune",
     hazards: ["Leaded funnel glass, 1.9 kg", "Intact vacuum tube"],
     materials: crtMaterials,
-    valuation: price(crtMaterials, {
-      handlingFee: 320,
-      eprCreditInr: 1850,
-      eprCreditNote: "EPR-2026-0433-MH",
-      rateBasis,
-      validUntil,
-    }),
+    valuation: priceFor("display_crt", crtMaterials, "EPR-2026-0433-MH"),
     gatekeeper: {
       verdict: "review",
       confidence: 0.68,
@@ -202,13 +187,7 @@ export const items: EwasteItem[] = [
     city: "Pune",
     hazards: ["Charged capacitors — discharge before dismantling"],
     materials: psuMaterials,
-    valuation: price(psuMaterials, {
-      handlingFee: 120,
-      eprCreditInr: 940,
-      eprCreditNote: "EPR-2026-0434-MH",
-      rateBasis,
-      validUntil,
-    }),
+    valuation: priceFor("component_psu", psuMaterials, "EPR-2026-0434-MH"),
     gatekeeper: {
       verdict: "verified",
       confidence: 0.91,
@@ -235,18 +214,18 @@ export const items: EwasteItem[] = [
     city: "Thane",
     hazards: ["Do not shred a functioning handset"],
     materials: phoneMaterials,
-    valuation: price(phoneMaterials, {
-      handlingFee: 60,
-      eprCreditInr: 310,
-      eprCreditNote: "withheld — no material credit",
-      rateBasis,
-      validUntil,
-    }),
+    valuation: priceFor(
+      "handset",
+      phoneMaterials,
+      "withheld — no material credit",
+      310,
+    ),
     gatekeeper: {
       verdict: "rejected",
       confidence: 0.86,
       modelVersion: "eco-gate v0.4",
       checkedAt: "09 Oct 2026, 14:40 IST",
+      ruleCode: "R-03",
       matchedClass: "Refurbishment candidate",
       reason:
         "Device powers on and clears the refurbishment screen. Working units must enter reuse, not the shredding stream, so no material credit is issued.",
@@ -268,18 +247,13 @@ export const items: EwasteItem[] = [
     city: "Mumbai",
     hazards: [],
     materials: bottleMaterials,
-    valuation: price(bottleMaterials, {
-      handlingFee: 0,
-      eprCreditInr: 0,
-      eprCreditNote: "not issued — item rejected",
-      rateBasis,
-      validUntil,
-    }),
+    valuation: priceFor("not_ewaste", bottleMaterials, "not issued — item rejected"),
     gatekeeper: {
       verdict: "rejected",
       confidence: 0.99,
       modelVersion: "eco-gate v0.4",
       checkedAt: "09 Oct 2026, 14:44 IST",
+      ruleCode: "R-01",
       matchedClass: "Not e-waste",
       reason:
         "No circuit, metal, cell or connector signature. This is the fraud case the gatekeeper exists to stop: it would otherwise earn a credit note.",

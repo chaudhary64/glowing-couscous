@@ -51,7 +51,7 @@ export const mediaAssets = pgTable(
     checksumSha256: text("checksum_sha256"),
 
     /* --- voice --- */
-    /** BCP-47 tag Amazon Transcribe was asked for, e.g. hi-IN. */
+    /** BCP-47 tag the audio model was asked for, e.g. hi-IN. */
     language: text("language"),
     durationSeconds: integer("duration_seconds"),
     /** Verbatim machine transcript. Evidence: never edited, never translated in place. */

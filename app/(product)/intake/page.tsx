@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveAnalysis } from "@/components/features/ai/live-analysis";
 import { IntakeConsole } from "@/components/features/intake/intake-console";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
@@ -37,20 +38,23 @@ function resolvedEntry(sample: IntakeSample): [string, ResolvedItemSummary] {
 /** What each upload sets in motion, in the order it runs. */
 const pipeline: { service: string; detail: string }[] = [
   {
-    service: "Amazon Transcribe",
-    detail: "Hindi and regional audio becomes a transcript first.",
+    service: "Gemini · multimodal",
+    detail: "One call reads the photograph and any Hindi audio together.",
   },
   {
-    service: "Amazon Bedrock (vision)",
-    detail: "Vision plus the transcript yield item class, brand and condition.",
+    service: "Rate card",
+    detail:
+      "Material fractions are priced on the server. The model names materials and masses; it never quotes a rupee figure.",
   },
   {
-    service: "Lambda",
-    detail: "Output is coerced into typed fields, each with its own confidence.",
+    service: "Gatekeeper",
+    detail:
+      "The same pass returns the valid/invalid decision, the rule that fired and why.",
   },
   {
-    service: "DynamoDB",
-    detail: "The record is written before valuation, so nothing is priced off thin air.",
+    service: "Audit trail",
+    detail:
+      "The parsed record is kept before valuation, so nothing is priced off thin air.",
   },
 ];
 
@@ -71,6 +75,8 @@ export default async function IntakePage() {
           </ButtonLink>
         }
       />
+
+      <LiveAnalysis mode="intake" />
 
       <StatGrid columns={4}>
         <Stat

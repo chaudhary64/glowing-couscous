@@ -8,7 +8,19 @@ import type { VoiceNote } from "@/lib/types";
  * describes an item in Hindi, not in a category dropdown, and that sentence is the
  * evidence the whole pipeline rests on.
  */
-export function VoiceNoteCard({ voiceNote }: { voiceNote: VoiceNote }) {
+/**
+ * `engine` names whatever actually produced the transcript. It is a prop rather
+ * than a constant because the answer changed once already: the pipeline reads the
+ * audio directly now, so a hardcoded service name would have quietly become a
+ * false claim on the screen.
+ */
+export function VoiceNoteCard({
+  voiceNote,
+  engine = "Gemini · native audio",
+}: {
+  voiceNote: VoiceNote;
+  engine?: string;
+}) {
   return (
     <Panel eyebrow="Speech to text" title="What the collector said">
       <Surface tone="inset" className="border-l-4 border-l-copper px-4 py-3.5">
@@ -28,7 +40,7 @@ export function VoiceNoteCard({ voiceNote }: { voiceNote: VoiceNote }) {
       </FieldList>
 
       <p className="mt-4 flex flex-wrap items-center gap-2 border-t border-rule pt-3">
-        <Badge tone="copper">Amazon Transcribe</Badge>
+        <Badge tone="copper">{engine}</Badge>
         <span className="text-[12px] leading-snug text-ink-muted">
           No typing, no category sheet, no literacy requirement.
         </span>
