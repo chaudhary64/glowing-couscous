@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { ROLES } from "@/lib/auth/roles";
+import { ROLES, roleLabel } from "@/lib/auth/roles";
+import { getSession } from "@/lib/auth/session";
 
 /**
  * The frame around sign in, sign up, confirmation and the refusal screen.
@@ -11,15 +12,17 @@ import { ROLES } from "@/lib/auth/roles";
  * reporting is who holds what: Cognito holds the password, Postgres holds the role.
  * That is also the shortest honest answer to "why do I have to sign in at all".
  */
-export function AuthShell({
-  children,
-  /** Overrides the strip's left-hand text, e.g. on the refusal screen. */
-  status,
-}: {
-  children: React.ReactNode;
-  status?: string;
-}) {
+export async function AuthShell({ children }: { children: React.ReactNode }) {
   const roleCount = Object.keys(ROLES).length;
+
+  /*
+    The strip reports the session rather than assuming there isn't one. Three of the four
+    screens in this group are unreachable while signed in — the proxy sees to that — but
+    `/no-access` is only reachable while signed in, and it used to sit under a strip
+    reading "Not signed in" directly above a line reading "Signed in as…".
+  */
+  const user = await getSession();
+  const status = user ? `Signed in · ${roleLabel(user.role)}` : "Not signed in";
 
   return (
     // `min-h-dvh`, not `min-h-full`: the confirmation screen is short, and a
@@ -84,7 +87,7 @@ export function AuthShell({
         <div className="sticky top-0 z-10 border-b border-rule bg-paper/95 backdrop-blur supports-[backdrop-filter]:bg-paper/80">
           <div className="mx-auto flex w-full max-w-xl flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5 sm:px-8">
             <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
-              {status ?? "Not signed in"}
+              {status}
             </span>
             <span className="ml-auto inline-flex items-center gap-2 border border-review/40 bg-review-tint px-2 py-0.5">
               <span aria-hidden className="size-1.5 bg-review" />
