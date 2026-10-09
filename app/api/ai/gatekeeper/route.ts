@@ -1,10 +1,7 @@
 import { analyseItem } from "@/lib/ai/analyse";
-import { aiErrorResponse, authorize, jsonResponse, readPayload } from "@/lib/ai/http";
-import {
-  archiveMediaParts,
-  archiveRequests,
-  archiveWarning,
-} from "@/lib/s3/archive";
+import { aiErrorResponse, authorizeUser, jsonResponse, readPayload } from "@/lib/ai/http";
+import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
+import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
 
 /**
  * POST /api/ai/gatekeeper — the same pass as valuation, answered as a decision.
@@ -19,14 +16,16 @@ import {
  * a decision to refuse a credit is exactly the one an operator gets asked to
  * justify: "show me the photograph you turned away" should have an answer that is
  * not a shrug, and it should be the same answer for a held item as for a credited
- * one.
+ * one. A `media_assets` row goes with each object, which is what lets that question
+ * be answered from the database rather than from a bucket listing.
  */
 
 export async function POST(request: Request) {
   // Guarded as the screen is guarded: the only caller is the validation queue, so
-  // this is the `/validation` capability.
-  const denied = await authorize(request, "/validation");
-  if (denied) return denied;
+  // this is the `/validation` capability. The user comes back out of the guard because
+  // the archive is signed with their Cognito subject.
+  const access = await authorizeUser(request, "/validation");
+  if (!access.ok) return access.denied;
 
   let body: unknown;
   try {
@@ -48,14 +47,30 @@ export async function POST(request: Request) {
       note: parsed.payload.note,
       declaredMassGrams: parsed.payload.declaredMassGrams,
     }),
-    archiveMediaParts(archiveRequests(parsed.payload)),
+    archiveAndRecord(archiveRequests(parsed.payload), {
+      uploaderCognitoSub: access.user.sub,
+    }),
   ]);
 
-  if (analysed.status === "rejected") return aiErrorResponse(analysed.reason);
+  if (analysed.status === "rejected") {
+    // Same as the intake route: a failed analysis still leaves the bytes and the row
+    // behind, so the refusal cannot be told later without the evidence for it.
+    if (archived.status === "fulfilled" && archived.value.storage.objects.length > 0) {
+      console.error(
+        `[s3] kept ${archived.value.storage.objects.length} object(s) for a request the analysis failed`,
+      );
+    }
+    return aiErrorResponse(analysed.reason);
+  }
 
   const analysis = analysed.value;
-  const storage = archived.status === "fulfilled" ? archived.value : null;
-  const warning = storage ? archiveWarning(storage) : null;
+  const kept = archived.status === "fulfilled" ? archived.value : null;
+  const storage = kept?.storage ?? null;
+  const records = kept?.records ?? null;
+  const warnings = [...analysis.warnings];
+  for (const warning of [storage ? archiveWarning(storage) : null, records ? recordWarning(records) : null]) {
+    if (warning) warnings.push(warning);
+  }
 
   const creditable = analysis.gatekeeper.verdict !== "rejected";
   return jsonResponse({
@@ -78,8 +93,9 @@ export async function POST(request: Request) {
       creditNote: analysis.valuation.eprCreditNote,
       massGrams: analysis.identified.massGrams,
       hazardous: analysis.identified.hazardous,
-      warnings: warning ? [...analysis.warnings, warning] : analysis.warnings,
+      warnings,
       source: analysis.source,
       storage,
+      records,
     });
 }

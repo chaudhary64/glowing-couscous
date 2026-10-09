@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
  * The media archive: where the photograph or voice note that produced a valuation
@@ -14,7 +15,7 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
  * on that column is only meaningful if a key is derived from the file rather than
  * invented per submission.
  *
- * Four decisions carry the rest of this file:
+ * Five decisions carry the rest of this file:
  *
  * 1. **Content-addressed keys.** The key is the SHA-256 of the bytes, so the same
  *    photograph submitted twice is one object, not two, and the unique index on
@@ -39,6 +40,11 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
  *    reported in the response and in the server log; it does not throw away a
  *    model call that already cost money, and it does not pretend the archive is
  *    configured when it is not. The caller gets the truth either way.
+ *
+ * 5. **Reading is a signed URL, never a public object.** The bucket stays private
+ *    and nothing here changes that. A `GetObject` is presigned on demand with the
+ *    app's own scoped key, so evidence is reachable from the product for minutes at
+ *    a time without the archive ever being world-readable.
  *
  * This module deliberately does not import `AiMediaPart` from `lib/ai/gemini`: the
  * input shape is structural, so storage stays independent of whichever provider is
@@ -71,6 +77,39 @@ export interface ArchivedObject {
   checksumSha256: string;
 }
 
+export interface ArchivedObject {
+  kind: MediaKind;
+  bucket: string;
+  /** `media/<sha256[0:2]>/<sha256>.<ext>` — see `mediaKey`. */
+  key: string;
+  mimeType: string;
+  byteSize: number;
+  /** Lowercase hex, the value the `media_assets.checksum_sha256` column expects. */
+  checksumSha256: string;
+}
+
+/**
+ * A time-limited read for one archived object.
+ *
+ * Minted, never stored: the URL is a signature over a bucket, a key and an expiry, so
+ * it contains nothing secret and is worthless once the clock passes `expiresAt`. That
+ * is why it belongs in a response rather than in a row — the same object read tomorrow
+ * wants a different URL, and a table of them would be a table of expired capabilities.
+ */
+export interface ArchiveRead {
+  key: string;
+  url: string;
+  /** How long the signature is valid for, counted from the moment it was minted. */
+  expiresInSeconds: number;
+  /** ISO timestamp, for a caller that wants to show or log the deadline. */
+  expiresAt: string;
+}
+
+/** Why a read could not be signed — the two reasons a caller answers differently. */
+export type PresignResult =
+  | { ok: true; url: string; expiresInSeconds: number; expiresAt: string }
+  | { ok: false; reason: "unconfigured" | "invalid_key" };
+
 export interface ArchiveOutcome {
   /** False when the bucket or region is unset: the archive is off, not broken. */
   configured: boolean;
@@ -90,6 +129,14 @@ export interface ArchiveOutcome {
    */
   credentialSource: CredentialSource;
   objects: ArchivedObject[];
+  /**
+   * Reads for the objects that were just written, signed as the response was built.
+   *
+   * Present so the evidence behind a valuation is reachable the moment it exists,
+   * without a second round trip and without the caller knowing how the archive is
+   * configured. Empty when the archive is off or every write failed.
+   */
+  readUrls: ArchiveRead[];
   /**
    * Set when the archive was configured and a write still failed. Never thrown:
    * the caller has a model result in hand by the time it reads this, and losing
@@ -239,6 +286,26 @@ export function mediaKey(prefix: string, checksumHex: string, mimeType: string):
 }
 
 /**
+ * Whether a string is a key this archive could have written.
+ *
+ * Exact rather than permissive, and used to decide what may be signed for reading. A
+ * caller can only ever name an object the app itself produced — two hex characters, a
+ * 64-character digest, a known extension, under the configured prefix — so a read
+ * request cannot be used to walk the bucket (no `..`, no absolute key, no other
+ * prefix), and it cannot be used to probe for objects whose names are guessable but
+ * not content-addressed.
+ *
+ * This is also the shape `EcoEPRMediaArchive` in IAM grants `s3:GetObject` on, so the
+ * check agrees with the policy instead of being a second, looser rule.
+ */
+export function isArchiveKey(key: unknown, prefix: string = DEFAULT_PREFIX): boolean {
+  if (typeof key !== "string") return false;
+  if (key.length === 0 || key.length > 200) return false;
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escaped}/[0-9a-f]{2}/[0-9a-f]{64}\\.[a-z0-9]{1,5}$`).test(key);
+}
+
+/**
  * Base64 to bytes, rejecting anything that decodes to nothing. `readPayload` has
  * already checked the alphabet and the size, so this is a last guard against
  * archiving an empty object under a checksum of empty bytes.
@@ -263,6 +330,91 @@ function decode(media: ArchiveMediaInput): Buffer {
 const PUT_TIMEOUT_MS = 8_000;
 
 /**
+ * How long a signed read stays valid.
+ *
+ * Bounded at both ends when a caller asks for something else. Five minutes covers a
+ * screen fetching an image and a reviewer opening it in a new tab; it is deliberately
+ * short of the seven days SigV4 would allow, because this URL is a bearer capability
+ * for private evidence and the only thing limiting its abuse is how soon it dies.
+ */
+const READ_URL_TTL_SECONDS = 300;
+const MIN_READ_URL_TTL_SECONDS = 30;
+const MAX_READ_URL_TTL_SECONDS = 3_600;
+
+/** Presign one `GetObject` with this archive's own client and config. */
+async function signRead(
+  client: S3Client,
+  config: ArchiveConfig,
+  key: string,
+  expiresInSeconds: number,
+): Promise<{ url: string; expiresAt: string }> {
+  const url = await getSignedUrl(
+    client,
+    new GetObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      // Evidence is looked at, not downloaded into a directory the app does not control.
+      ResponseContentDisposition: "inline",
+    }),
+    { expiresIn: expiresInSeconds },
+  );
+  return { url, expiresAt: new Date(Date.now() + expiresInSeconds * 1000).toISOString() };
+}
+
+/**
+ * A signed read for a key this archive could have written.
+ *
+ * Returns rather than throws, because the two refusals mean different things to a
+ * caller: no configuration is a 503 (the feature is off), a key of the wrong shape is
+ * a 400 (the request is wrong). Both are ordinary answers here.
+ *
+ * Signing is local — no request goes to S3 — so this says the URL *is valid*, not that
+ * the object *exists*. A signature over a key that was never written still produces a
+ * URL, and its GET answers 403/404, which is the honest outcome for a caller who
+ * invented a digest.
+ */
+export async function presignRead(
+  key: unknown,
+  expiresInSeconds: number = READ_URL_TTL_SECONDS,
+): Promise<PresignResult> {
+  const config = archiveConfig();
+  if (!config) return { ok: false, reason: "unconfigured" };
+  if (!isArchiveKey(key, config.prefix)) return { ok: false, reason: "invalid_key" };
+
+  const seconds = Math.min(
+    Math.max(Math.round(expiresInSeconds), MIN_READ_URL_TTL_SECONDS),
+    MAX_READ_URL_TTL_SECONDS,
+  );
+  const { url, expiresAt } = await signRead(clientFor(config), config, key as string, seconds);
+  return { ok: true, url, expiresInSeconds: seconds, expiresAt };
+}
+
+/** Reads for a batch of objects, skipping any that could not be signed. */
+async function readUrlsFor(
+  client: S3Client,
+  config: ArchiveConfig,
+  objects: ArchivedObject[],
+): Promise<ArchiveRead[]> {
+  const signed = await Promise.all(
+    objects.map(async (object): Promise<ArchiveRead | null> => {
+      try {
+        const { url, expiresAt } = await signRead(client, config, object.key, READ_URL_TTL_SECONDS);
+        return { key: object.key, url, expiresInSeconds: READ_URL_TTL_SECONDS, expiresAt };
+      } catch (error) {
+        // The bytes are stored; only the read of them could not be signed. That is worth
+        // a log line and not worth failing a request that has an answer in hand.
+        console.error(
+          "[s3] signing a read for a stored object failed",
+          error instanceof Error ? error.message : String(error),
+        );
+        return null;
+      }
+    }),
+  );
+  return signed.filter((read): read is ArchiveRead => read !== null);
+}
+
+/**
  * Archive every part of one request, in parallel, without ever rejecting.
  *
  * An unconfigured archive is not an error: it returns `configured: false` with no
@@ -272,10 +424,24 @@ const PUT_TIMEOUT_MS = 8_000;
 export async function archiveMediaParts(requests: ArchiveRequest[]): Promise<ArchiveOutcome> {
   const config = archiveConfig();
   if (!config) {
-    return { configured: false, bucket: null, credentialSource: credentialSource(), objects: [], error: null };
+    return {
+      configured: false,
+      bucket: null,
+      credentialSource: credentialSource(),
+      objects: [],
+      readUrls: [],
+      error: null,
+    };
   }
   if (requests.length === 0) {
-    return { configured: true, bucket: config.bucket, credentialSource: credentialSource(), objects: [], error: null };
+    return {
+      configured: true,
+      bucket: config.bucket,
+      credentialSource: credentialSource(),
+      objects: [],
+      readUrls: [],
+      error: null,
+    };
   }
 
   const client = clientFor(config);
@@ -343,6 +509,7 @@ export async function archiveMediaParts(requests: ArchiveRequest[]): Promise<Arc
     bucket: config.bucket,
     credentialSource: credentialSource(),
     objects,
+    readUrls: await readUrlsFor(client, config, objects),
     error: failures.length > 0 ? failures.join("; ") : null,
   };
 }

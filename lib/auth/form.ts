@@ -64,7 +64,7 @@ function requestHosts(request: Request): string[] {
 }
 
 /**
- * Whether a POST looks like it came from this site.
+ * Whether a request looks like it came from this site.
  *
  * The session cookie is `SameSite=Lax`, which already keeps a cross-site
  * cookie-bearing POST from being sent at all. Sign-in and sign-up have no cookie yet,
@@ -73,8 +73,13 @@ function requestHosts(request: Request): string[] {
  * page script; `Origin` is the cross-check for clients that send it. A request with
  * neither is not a browser form post — it is curl, or a health check — and is allowed
  * so the flow stays drivable from a terminal.
+ *
+ * The method is deliberately not part of the test. A cross-site `GET` that carries a
+ * session is the same problem as a cross-site `POST` — an `<img>` on someone else's
+ * page can spend a signed read just as easily as a script can spend a model call — so
+ * `isSameOriginPost` below is this function under the name its original callers know.
  */
-export function isSameOriginPost(request: Request): boolean {
+export function isSameOriginRequest(request: Request): boolean {
   if (request.headers.get("sec-fetch-site") === "cross-site") return false;
 
   const origin = request.headers.get("origin");
@@ -86,6 +91,9 @@ export function isSameOriginPost(request: Request): boolean {
     return false;
   }
 }
+
+/** The same check, under the name the auth form handlers were written against. */
+export const isSameOriginPost = isSameOriginRequest;
 
 /**
  * 303 so the browser follows with a GET: the form has been dealt with.

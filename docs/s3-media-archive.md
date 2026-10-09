@@ -143,9 +143,14 @@ match it**: a truncated upload cannot be stored as the evidence a price came fro
 All three AI routes do the same thing, and the shape matters more than the details:
 
 ```ts
+const access = await authorizeUser(request, "/intake");
+if (!access.ok) return access.denied;
+
 const [analysed, archived] = await Promise.allSettled([
   analyseItem({ media, note, declaredMassGrams }),
-  archiveMediaParts(archiveRequests(parsed.payload)),
+  archiveAndRecord(archiveRequests(parsed.payload), {
+    uploaderCognitoSub: access.user.sub,
+  }),
 ]);
 ```
 
@@ -168,7 +173,76 @@ whole claim is that a valuation is defensible.
 price exactly as before, return `storage.configured: false`, and raise no warning — the
 route is not broken, the archive is simply not switched on. That is the same posture
 `aiConfigured()` takes for the model, and it is why the demo still runs on a laptop with
-no AWS credentials at all.
+no AWS credentials at all. The same is true of the database half: no `DATABASE_URL` means
+`records.configured: false`, no rows, and no complaint.
+
+The response carries three things a screen can use: `storage` (what was written, and
+where — including `readUrls`, see below), `records` (the `media_assets` rows, with their
+ids, and whether this call created them), and `warnings`, which holds one plain sentence
+per half that did not work.
+
+## Reading the evidence back
+
+An archive nobody can read is a bucket with extra steps, so retrieval is part of the
+same integration and has two halves.
+
+### The row
+
+One `media_assets` row per object, written after the bytes and never gating them:
+
+| Column | Value |
+|---|---|
+| `storage_key` | the content-addressed key. **Unique**, so a resubmission is one row |
+| `kind` | `photo` or `voice` — the same `intake_mode` enum the schema already had |
+| `mime_type`, `byte_size`, `checksum_sha256` | what the bytes were, and the digest the key was derived from |
+| `uploader_user_id` | the session's Cognito subject, resolved through `users.cognito_sub`, or `null` when no user row exists yet |
+| `uploaded_at` | now, because the object is in S3 by the time this runs |
+
+Idempotence comes from the unique index rather than from application logic: the insert is
+`ON CONFLICT DO NOTHING`, so the same photograph submitted twice is one object *and* one
+row, and a retry whose response was lost cannot manufacture a second row claiming a
+second upload. A failure here is reported in `records.error` and in the warnings — the
+object stays, because a row that pointed at an object which was never written would be a
+lie the database tells forever.
+
+The join to a person is real but one step short: the column wants a `users.id` and a
+fresh Cognito account has no such row, because nothing in the app *provisions* users yet.
+So attribution is `null` today for a new account and resolves the moment those rows
+exist — `npm run s3:check` proves both branches by creating one.
+
+### The read
+
+```
+GET /api/media/read?key=media/<two hex>/<sha256>.<ext>
+```
+
+Returns `{ key, url, expiresInSeconds, expiresAt }`, where `url` is a `GetObject`
+presigned with the app's own `media/*`-scoped key. Four decisions, each a choice between
+two reasonable designs:
+
+- **Guarded as a submission is, not as the bucket is.** The authority is `/intake` —
+  operator or above — because these bytes are a collector's photograph and voice note. A
+  read-only viewer account is refused. The session is required and the request must be
+  same-origin: a cross-site `<img>` can spend a signed read as easily as a script can
+  spend a model call.
+- **The key is validated by shape, never looked up in the database.** Only
+  `media/<2 hex>/<sha256>.<ext>` under the configured prefix can be signed, so the route
+  cannot be used to walk the bucket or to probe for guessable names. It is deliberately
+  not a `media_assets` lookup: requiring the row would make an object unreadable whenever
+  the row write failed, turning the database into a gate on evidence that exists.
+- **Signing is local, so a signature is not an existence check.** A well-formed key whose
+  object was never written still produces a URL, and its `GET` answers 403/404 from S3.
+- **JSON, not a `302`.** A redirect would put a signed URL into browser history and into
+  any log that records `Location`. The caller decides where the URL goes.
+
+Expiry is bounded from both ends — 30 seconds to one hour, five minutes by default —
+because the URL is a bearer capability for private evidence and its only brake is how soon
+it dies. The archive also returns one of these per object it writes, as `storage.readUrls`,
+so the evidence behind a valuation is reachable the moment it exists rather than after a
+second round trip.
+
+`@aws-sdk/s3-request-presigner` is the whole dependency: signing is local, S3 never signs
+anything for us.
 
 ## Configuration
 
@@ -178,6 +252,7 @@ no AWS credentials at all.
 | `S3_REGION` | with the bucket | `eu-north-1` for this bucket. `AWS_REGION` is honoured as a fallback |
 | `S3_PREFIX` | no | defaults to `media`. Changing it without changing the IAM policy revokes the app's own access |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | locally, yes | a real secret, and deliberately **not** the standard `AWS_*` names — Amplify refuses those. With neither set, the SDK's default chain decides |
+| `DATABASE_URL` | to record rows | the RDS URL. Missing means `records.configured: false`: the bytes are archived and nothing is recorded |
 
 Locally these live in `.env.local`, which is gitignored. On Amplify they must be in the
 app's environment variables **and** copied into `.env.production` by `amplify.yml`, for
@@ -200,19 +275,39 @@ environment variables at build time, and the running compute keeps the environme
 was deployed with. `npm run s3:check` against a laptop proves the code and the
 credentials; it proves nothing about a deployment nobody has rebuilt.
 
+There is a second, sharper gap on that host. Amplify's SSR compute receives **no**
+app-level environment variables at all — that is the documented limitation `amplify.yml`
+exists to work around — and `DATABASE_URL` is deliberately not among the variables that
+file copies into `.env.production`, because that file becomes part of the deployment
+artifacts and the URL carries the database password. So the honest reading of the
+deployed state is: **objects are archived, rows are not recorded**, and every response
+says so through `records.configured: false`. Closing it means either accepting the
+password in the build artifacts or moving the connection behind Secrets Manager with an
+instance role — the same missing role the archive's static key is waiting on.
+
 ## Verifying it
 
 ```bash
 npm run s3:check
 ```
 
-This is the real thing against the real bucket, not a mock: it writes two small probe
-objects, checks them, and deletes both before exiting. It asserts the configuration
-resolves, the key is content-addressed and matches a digest computed locally, S3 reports
-the object as AES-256 encrypted with the right content type and metadata, reading it back
-returns the exact bytes, identical bytes land on the identical key, different bytes do
-not, a write outside the `media/` prefix is **refused**, and an unconfigured archive
-degrades instead of throwing. It exits non-zero on the first thing that is wrong.
+This is the real thing against the real bucket **and the real database**, not a mock: it
+writes three small probe objects, records their rows, and deletes both before exiting. It
+asserts the configuration resolves, the key is content-addressed and matches a digest
+computed locally, S3 reports the object as AES-256 encrypted with the right content type
+and metadata, reading it back returns the exact bytes, identical bytes land on the
+identical key, different bytes do not, a row describes each object and re-recording is one
+row rather than two, the uploader's Cognito subject resolves through `users.cognito_sub`,
+a presigned read serves the exact bytes, its expiry is bounded at both ends and refused
+by S3 once stale, ten malformed keys are refused instead of signed, a write outside the
+`media/` prefix is **refused**, and both halves degrade instead of throwing when their
+configuration is absent. It exits non-zero on the first thing that is wrong.
+
+It is run as `node --import ./scripts/ts-paths.mjs --env-file=.env.local scripts/s3-check.mts`.
+The resolver is what lets a plain Node process import `@/db/client` and `./schema`: Node
+resolves specifiers literally, with no bundler, no `paths` and no directory index. The
+check is only worth having if it calls the modules the routes call, so the small loader is
+the price of that; it is never used by the app.
 
 By hand:
 
@@ -225,21 +320,26 @@ aws s3api head-object --bucket impact-proof-bucket --key "<key from the listing>
 
 Stated so it does not have to be discovered by reading code:
 
-- **No screen lists the archive.** The buckets and keys are real; nothing in the product
-  shows them. The response carries the key, and no UI consumes it.
-- **No presigned reads.** The bucket is private and there is no public URL, so the only
-  ways to read an object today are the AWS console, the CLI, or the SDK with these
-  credentials. A `GetObject` presigned for a few minutes is the obvious next step and
-  `@aws-sdk/s3-request-presigner` is the one import it needs.
-- **No database write.** `media_assets.storage_key` is still a column with nothing in
-  it: the response reports the key, and no code inserts the row. This is the same gap the
-  README describes for the whole schema, and wiring one table of thirty-nine would be a
-  stranger thing to do than wiring none.
+- **No screen shows any of it.** The keys, the rows and the signed reads are all real and
+  all consumed by nothing but tests: no page lists a valuation's evidence and no `src`
+  points at `/api/media/read`. The API is finished; the UI for it is not started.
+- **No user provisioning, so attribution stays `null` in practice.** Every other table is
+  still unqueried: `users` gets no row when someone signs in, which is why
+  `uploader_user_id` resolves only where a row already exists. Wiring sessions to `users`
+  is the next piece of the schema, not an S3 concern.
+- **No `intakes` either.** A submission does not yet create an `intake` row linking a
+  collector to the asset, so nothing ties an archived object to a *submission* — only to
+  its own content hash. `intakes.media_id` exists and is a `restrict` foreign key waiting
+  for that write.
 - **No lifecycle or retention policy,** and no Object Lock. Both are compliance decisions
-  rather than engineering ones.
+  rather than engineering ones, and deleting evidence on a schedule is exactly the kind of
+  thing that should not be decided by a default.
 - **No multipart upload.** A single PUT covers the sizes these routes accept. The
   platform's 6 MiB request-body ceiling is what actually bounds an upload here, and it is
   enforced in `lib/ai/http.ts` before the archive is ever reached.
+- **No role, so the key is still static.** `S3_ACCESS_KEY_ID` is a long-lived credential
+  in an environment variable. It exists only because the compute has no instance role to
+  assume; the day it has one, the explicit names can be deleted and nothing else changes.
 
 ## Rotating or removing it
 

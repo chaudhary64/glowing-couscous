@@ -16,12 +16,21 @@
  *   5. the same bytes land on the same key a second time (idempotent, so a retry
  *      cannot produce a duplicate)
  *   6. *different* bytes land on a different key
- *   7. the credential cannot write outside the `media/` prefix it was scoped to
- *   8. with no bucket configured the module degrades instead of throwing, which is
+ *   7. a row is recorded in `media_assets` for the object, its columns describe the
+ *      bytes that were written, and re-recording is one row rather than two
+ *   8. the uploader's Cognito subject resolves through `users.cognito_sub`
+ *   9. a presigned read returns the exact bytes, is bounded in both directions, expires,
+ *      and refuses a key this archive could not have written
+ *  10. the credential cannot write outside the `media/` prefix it was scoped to
+ *  11. with no bucket configured the module degrades instead of throwing, which is
  *      what keeps the AI routes working on a laptop with no AWS credentials
  *
- * It writes two small probe objects and deletes both before exiting. Nothing else in
- * the bucket is read, written or removed.
+ * It writes three small probe objects, one row per object, and one throwaway `users`
+ * row, and removes all of it before exiting. Nothing else in the bucket or the table is
+ * read, written or removed.
+ *
+ * The database half is the same bargain as the S3 half: it is optional, and with no
+ * `DATABASE_URL` it reports that the recording is switched off rather than failing.
  *
  * Run it as `npm run s3:check`, which supplies `.env.local`. On Node it relies on
  * native TypeScript stripping (Node 22.18+ / 23.6+ run `.ts` files without a flag).
@@ -34,7 +43,11 @@ import {
   GetObjectCommand,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { eq, inArray } from "drizzle-orm";
 
+import { closeDatabase, database } from "../db/client.ts";
+import { mediaAssets, users } from "../db/schema/index.ts";
 import {
   archiveClient,
   archiveConfigured,
@@ -42,7 +55,13 @@ import {
   credentialSource,
   extensionFor,
   mediaKey,
+  presignRead,
 } from "../lib/s3/archive.ts";
+import {
+  archiveAndRecord,
+  forgetMediaRecords,
+  recordArchivedObjects,
+} from "../lib/s3/media-assets.ts";
 
 let failures = 0;
 function check(label: string, ok: boolean, detail = "") {
@@ -54,6 +73,9 @@ const PROBE_A = Buffer.from("ecoepr archive probe A — a stand-in for one photo
 const PROBE_B = Buffer.from("ecoepr archive probe B — different bytes, different key");
 
 const cleanup: { key: string }[] = [];
+
+/** Set when the row half runs, so cleanup can remove the throwaway `users` row too. */
+let userProbeSub: string | null = null;
 
 /* ------------------------------------------------------------ 1. configuration */
 // The app's own client, not a second one: see the note on `archiveClient`. Anything
@@ -157,7 +179,196 @@ check("a voice note keeps its own extension", voice?.key.endsWith(".webm") === t
 check("extensionFor() maps the accepted types", extensionFor("image/png") === "png" && extensionFor("audio/ogg") === "ogg");
 check("extensionFor() does not invent an extension it does not know", extensionFor("application/zip") === "bin");
 
-/* ------------------------------------------- 6. the credential is really scoped */
+/* ------------------------- 6. the row that makes the key findable afterwards */
+console.log("\n--- recording the archive in media_assets ---");
+const db = database();
+console.log(`database: ${db ? "connected" : "(no DATABASE_URL, so this half is off)"}`);
+
+if (db) {
+  // The composition the routes actually call — archive beside the model, then record —
+  // rather than the two halves separately, so this covers the wiring too.
+  const probeSub = `s3-check-${Date.now()}`;
+  userProbeSub = probeSub;
+  const [probeUser] = await db.db
+    .insert(users)
+    .values({ cognitoSub: probeSub, fullName: "S3 check probe" })
+    .returning({ id: users.id });
+
+  const PROBE_C = Buffer.from("ecoepr archive probe C — the object behind a database row");
+  const recorded = await archiveAndRecord(
+    [{ kind: "photo", media: { mimeType: "image/jpeg", dataBase64: PROBE_C.toString("base64") } }],
+    { uploaderCognitoSub: probeSub },
+  );
+
+  const probeKey = recorded.storage.objects[0]?.key;
+  if (probeKey) cleanup.push({ key: probeKey });
+
+  check(
+    "the archive writes the object it records",
+    recorded.storage.objects.length === 1,
+    `${recorded.storage.objects.length} object(s)`,
+  );
+  check(
+    "the response carries a signed read for what it just wrote",
+    recorded.storage.readUrls.length === 1 && recorded.storage.readUrls[0]?.key === probeKey,
+    `${recorded.storage.readUrls.length} read url(s)`,
+  );
+  check(
+    "the outcome reports the recording as configured",
+    recorded.records?.configured === true && recorded.records.error === null,
+    recorded.records?.error ?? "",
+  );
+  check(
+    "exactly one row was inserted",
+    recorded.records?.records.length === 1 && recorded.records.records[0]?.inserted === true,
+    `${recorded.records?.records.length ?? 0}`,
+  );
+
+  const rows = probeKey
+    ? await db.db.select().from(mediaAssets).where(eq(mediaAssets.storageKey, probeKey)).limit(1)
+    : [];
+  const row = rows[0];
+  check("the row is in the table under its key", row !== undefined, probeKey ?? "(no key)");
+  check("the row records what kind of media it was", row?.kind === "photo", String(row?.kind));
+  check("the row records the MIME type as submitted", row?.mimeType === "image/jpeg", String(row?.mimeType));
+  check("the row records the byte size of the object", row?.byteSize === PROBE_C.length, `${row?.byteSize}`);
+  check("the row records the digest, so it agrees with the key", row?.checksumSha256 === sha256hex(PROBE_C));
+  check("the row is timestamped", row?.uploadedAt instanceof Date, String(row?.uploadedAt));
+  check(
+    "the uploader's Cognito subject resolves through users.cognito_sub",
+    row?.uploaderUserId === probeUser.id,
+    `${row?.uploaderUserId} vs ${probeUser.id}`,
+  );
+
+  // The retry case: the bytes are already there, so the row must not be doubled by a
+  // resubmission that has the same content.
+  const reRecorded = await recordArchivedObjects(recorded.storage.objects);
+  check(
+    "re-recording the same object inserts nothing and reports the existing row",
+    reRecorded.records.length === 1 && reRecorded.records[0]?.inserted === false,
+    `inserted=${reRecorded.records[0]?.inserted}`,
+  );
+  const sameKey = probeKey
+    ? await db.db
+        .select({ id: mediaAssets.id })
+        .from(mediaAssets)
+        .where(eq(mediaAssets.storageKey, probeKey))
+    : [];
+  check("the unique index held: one row, not two", sameKey.length === 1, `${sameKey.length} rows`);
+
+  // Recording must be switchable off without breaking a request, exactly as the archive
+  // and the model are.
+  const savedDatabaseUrl = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  const withoutDb = await recordArchivedObjects(recorded.storage.objects);
+  check("with no DATABASE_URL the recording reports configured: false", withoutDb.configured === false);
+  check("...and records nothing without calling it an error", withoutDb.error === null && withoutDb.records.length === 0);
+  if (savedDatabaseUrl) process.env.DATABASE_URL = savedDatabaseUrl;
+} else {
+  console.log(
+    "  No DATABASE_URL, so there is no table to check against. This is the same posture the\n" +
+      "  archive takes with no bucket: the rows are off, the request still answers.",
+  );
+}
+
+/* ------------------------------------------------- 7. a signed read of it */
+console.log("\n--- reading an archived object back through a presigned URL ---");
+const signed = await presignRead(object.key);
+check("presignRead() signs a key this archive writes", signed.ok, signed.ok ? "" : signed.reason);
+
+if (signed.ok) {
+  const url = new URL(signed.url);
+  check(
+    "the URL is a SigV4 presign for this bucket, key and expiry",
+    url.searchParams.get("X-Amz-Signature") !== null &&
+      url.searchParams.get("X-Amz-Expires") === String(signed.expiresInSeconds),
+    `${url.host} expires=${url.searchParams.get("X-Amz-Expires")}`,
+  );
+  check(
+    "the signature is scoped to the object's own path",
+    decodeURIComponent(url.pathname).endsWith(object.key),
+    url.pathname,
+  );
+
+  // The end-to-end proof: the app's own scoped credential, over the network, through a
+  // URL that carries no credentials of its own.
+  const served = await fetch(signed.url);
+  const servedBytes = Buffer.from(await served.arrayBuffer());
+  check("the signed URL serves the object", served.status === 200, `HTTP ${served.status}`);
+  check("the bytes that come back are the bytes that went in", servedBytes.equals(PROBE_A));
+  check(
+    "the object is served as it was stored",
+    served.headers.get("content-type") === "image/jpeg" &&
+      served.headers.get("content-disposition") === "inline",
+    `${served.headers.get("content-type")} / ${served.headers.get("content-disposition")}`,
+  );
+  check(
+    "the read is short-lived: five minutes by default",
+    signed.expiresInSeconds === 300,
+    `${signed.expiresInSeconds}s`,
+  );
+} else {
+  console.log("  (no signature, so the read itself cannot be exercised)");
+}
+
+// The clamp, at both ends: the floor keeps a caller from minting a URL that expires
+// before a browser can use it, the ceiling keeps a capability from outliving the work.
+const floored = await presignRead(object.key, 1);
+const capped = await presignRead(object.key, 999_999);
+check("a one-second request is raised to the 30-second floor", floored.ok && floored.expiresInSeconds === 30, `${floored.ok ? floored.expiresInSeconds : floored.reason}s`);
+check("a ten-day request is cut to the one-hour ceiling", capped.ok && capped.expiresInSeconds === 3600, `${capped.ok ? capped.expiresInSeconds : capped.reason}s`);
+
+// Anything that is not a key this archive writes is refused before it is signed, so a
+// read request cannot be used to walk the bucket or to probe for guessable names.
+const rejected = [
+  "",
+  "media",
+  "s3-check-outside-prefix.txt",
+  `other/${object.key}`,
+  `media/abc/${sha256hex(PROBE_A)}.jpg`,
+  `media/ab/${sha256hex(PROBE_A).slice(0, 63)}.jpg`,
+  `media/ab/${sha256hex(PROBE_A).toUpperCase()}.jpg`,
+  `media/ab/${sha256hex(PROBE_A)}`,
+  `media/ab/${sha256hex(PROBE_A)}.jpg/../../etc/passwd`,
+  "../media/ab/abcdef.jpg",
+];
+const signedAnyway = await Promise.all(rejected.map((key) => presignRead(key)));
+check(
+  "every key of the wrong shape is refused, not signed",
+  signedAnyway.every((result) => !result.ok && result.reason === "invalid_key"),
+  signedAnyway.map((r) => (r.ok ? "signed" : r.reason)).join(","),
+);
+
+// A signature says the URL is well-formed, not that the object exists. Worth asserting,
+// because the alternative — HEAD on every read — costs a round trip per image.
+const unwrittenKey = `media/aa/${"0".repeat(64)}.jpg`;
+const unwritten = await presignRead(unwrittenKey);
+check("a well-formed key that was never written still signs", unwritten.ok, unwritten.ok ? "" : unwritten.reason);
+if (unwritten.ok) {
+  const missing = await fetch(unwritten.url);
+  check(
+    "...and its GET is refused by S3 rather than served",
+    missing.status === 403 || missing.status === 404,
+    `HTTP ${missing.status}`,
+  );
+}
+
+// Expiry, tested for real: a signature below this module's own floor, then a wait. This
+// is S3 refusing a stale signature, not this code refusing to make one.
+const shortLived = await getSignedUrl(
+  client,
+  new GetObjectCommand({ Bucket: config.bucket, Key: object.key }),
+  { expiresIn: 1 },
+);
+await new Promise((resolve) => setTimeout(resolve, 2_500));
+const stale = await fetch(shortLived);
+check(
+  "a signature past its expiry is refused by S3",
+  stale.status === 400 || stale.status === 403,
+  `HTTP ${stale.status}`,
+);
+
+/* ------------------------------------------- 8. the credential is really scoped */
 console.log("\n--- the credential against a key outside the prefix ---");
 let outsideAllowed = true;
 let outsideReason = "";
@@ -179,7 +390,7 @@ if (outsideAllowed) {
   await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: "s3-check-outside-prefix.txt" }));
 }
 
-/* ------------------------------------------------- 7. degrade without a bucket */
+/* ------------------------------------------------- 9. degrade without a bucket */
 console.log("\n--- with the archive switched off ---");
 const savedBucket = process.env.S3_BUCKET;
 const savedRegion = process.env.S3_REGION;
@@ -198,13 +409,34 @@ check("an unconfigured archive does not throw, so the route still answers", true
 if (savedBucket) process.env.S3_BUCKET = savedBucket;
 if (savedRegion) process.env.S3_REGION = savedRegion;
 
-/* ------------------------------------------------------------- 8. clean up */
+/* ------------------------------------------------------------- 10. clean up */
 console.log("\n--- cleanup ---");
 for (const { key } of cleanup) {
   await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
   console.log(`deleted ${key}`);
 }
 console.log(`${cleanup.length} probe object(s) removed; the bucket holds nothing this check created`);
+
+const probeKeys = cleanup.map(({ key }) => key);
+if (db && probeKeys.length > 0) {
+  const forgotten = await forgetMediaRecords(probeKeys);
+  const remaining = await db.db
+    .select({ id: mediaAssets.id })
+    .from(mediaAssets)
+    .where(inArray(mediaAssets.storageKey, probeKeys));
+  console.log(`${forgotten} probe row(s) removed`);
+  check("no probe row is left behind", remaining.length === 0, `${remaining.length} left`);
+
+  // The probe user goes last, and only its own row: the table it was inserted into is
+  // shared with everything else that will ever use this database.
+  const probeUsers = await db.db
+    .delete(users)
+    .where(eq(users.cognitoSub, userProbeSub ?? ""))
+    .returning({ id: users.id });
+  console.log(`${probeUsers.length} probe user row(s) removed`);
+}
+
+await closeDatabase();
 
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);

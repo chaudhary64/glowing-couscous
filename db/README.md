@@ -3,10 +3,16 @@
 Drizzle ORM against **AWS RDS for PostgreSQL 16.15** — the `ecoepr-db` instance in
 ap-south-1. The schema is **applied**: 39 tables, 24 enum types, 70 foreign keys, and
 one migration recorded in `drizzle.__drizzle_migrations`. Migrations live in
-`db/migrations` and apply with `npm run db:migrate`. No application query is written
-yet — the screens still read the fixtures in `lib/data`.
+`db/migrations` and apply with `npm run db:migrate`. The screens still read the fixtures
+in `lib/data`, with one exception: the S3 media archive is the first and so far only
+runtime query. It writes one `media_assets` row per object it stores, through
+`db/client.ts`, and reads the key back by its unique index — see
+`docs/s3-media-archive.md`. Every other table remains unqueried, which is why the
+fixtures are still the source the UI reads.
 
 ```
+db/client.ts     the runtime connection (pg + Drizzle), shared by everything below
+
 db/schema/
   columns.ts     shared column factories — ids, timestamps, money, mass, scores
   enums.ts       24 Postgres enum types
@@ -27,6 +33,23 @@ db/schema/
 
 39 tables. Import from `@/db/schema` for the whole set, or from one module when a
 query only needs that layer.
+
+## The connection
+
+`db/client.ts` is the only place a pool is created, and it takes the same posture as the
+other integrations in this app: **no `DATABASE_URL` is not an error.** `database()`
+returns `null`, the caller reports `configured: false`, and the request still answers.
+The pool is parked on `globalThis` so a dev reload or a warm container reuses it instead
+of leaking a connection per module instance, and `connectionTimeoutMillis` is 5s because
+Amplify cuts a server-rendered request off at about thirty seconds and a hung connection
+would spend the rest of it.
+
+TLS is not configured in code: it comes from the URL, which carries `sslmode=no-verify`
+for the reason described below.
+
+That module is also imported by `npm run s3:check` under plain Node, which is why the
+scripts run with `--import ./scripts/ts-paths.mjs` — Node resolves specifiers literally,
+so without that resolver the check could not import `@/db/client` or `./schema` at all.
 
 ## Layering
 

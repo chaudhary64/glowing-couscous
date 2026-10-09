@@ -1,10 +1,7 @@
 import { analyseItem } from "@/lib/ai/analyse";
-import { aiErrorResponse, authorize, jsonResponse, readPayload } from "@/lib/ai/http";
-import {
-  archiveMediaParts,
-  archiveRequests,
-  archiveWarning,
-} from "@/lib/s3/archive";
+import { aiErrorResponse, authorizeUser, jsonResponse, readPayload } from "@/lib/ai/http";
+import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
+import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
 
 /**
  * POST /api/ai/valuation — identify, assay, price, gate. One submission in, one
@@ -14,9 +11,10 @@ import {
  * the rate card, on this side of the wire. See `lib/ai/analyse.ts` for why.
  *
  * The submitted media is archived in S3 beside the model call, so the photograph a
- * price came from is still there after the request that priced it. A storage fault
- * is reported in `storage.error` and in the warnings; it never becomes the reason a
- * paid-for analysis is thrown away.
+ * price came from is still there after the request that priced it, and a
+ * `media_assets` row records what that key was. A storage or database fault is
+ * reported in `storage.error` / `records.error` and in the warnings; it never becomes
+ * the reason a paid-for analysis is thrown away.
  */
 
 // No segment config: a POST-only handler is dynamic by definition, and this build's
@@ -24,9 +22,10 @@ import {
 
 export async function POST(request: Request) {
   // Guarded as the screen is guarded: this is the `/valuation` capability, and a
-  // session alone is not authority to run it.
-  const denied = await authorize(request, "/valuation");
-  if (denied) return denied;
+  // session alone is not authority to run it. The user comes back out of the guard
+  // because the archive is signed with their Cognito subject.
+  const access = await authorizeUser(request, "/valuation");
+  if (!access.ok) return access.denied;
 
   let body: unknown;
   try {
@@ -49,17 +48,31 @@ export async function POST(request: Request) {
       note: parsed.payload.note,
       declaredMassGrams: parsed.payload.declaredMassGrams,
     }),
-    archiveMediaParts(archiveRequests(parsed.payload)),
+    archiveAndRecord(archiveRequests(parsed.payload), {
+      uploaderCognitoSub: access.user.sub,
+    }),
   ]);
 
-  if (analysed.status === "rejected") return aiErrorResponse(analysed.reason);
+  const kept = archived.status === "fulfilled" ? archived.value : null;
 
-  const storage = archived.status === "fulfilled" ? archived.value : null;
-  const warning = storage ? archiveWarning(storage) : null;
+  if (analysed.status === "rejected") {
+    // The bytes and their rows are already written and are not rolled back: a valuation
+    // that failed still has evidence, which is the whole reason the archive runs beside
+    // the model instead of after it.
+    if (kept && kept.storage.objects.length > 0) {
+      console.error(
+        `[s3] kept ${kept.storage.objects.length} object(s) for a request the analysis failed`,
+      );
+    }
+    return aiErrorResponse(analysed.reason);
+  }
 
-  return jsonResponse({
-    ...analysed.value,
-    warnings: warning ? [...analysed.value.warnings, warning] : analysed.value.warnings,
-    storage,
-  });
+  const storage = kept?.storage ?? null;
+  const records = kept?.records ?? null;
+  const warnings = [...analysed.value.warnings];
+  for (const warning of [storage ? archiveWarning(storage) : null, records ? recordWarning(records) : null]) {
+    if (warning) warnings.push(warning);
+  }
+
+  return jsonResponse({ ...analysed.value, warnings, storage, records });
 }

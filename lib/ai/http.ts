@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 
 import { AiCallError, AiUnavailableError, type AiMediaPart } from "@/lib/ai/gemini";
 import { AiProposalInvalidError } from "@/lib/ai/analyse";
-import { isSameOriginPost } from "@/lib/auth/form";
+import { isSameOriginRequest } from "@/lib/auth/form";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { canOpen, roleLabel } from "@/lib/auth/roles";
+import type { AuthUser } from "@/lib/auth/token";
 
 /**
  * Plumbing shared by the three AI routes.
@@ -93,28 +94,72 @@ function failure(code: string, message: string, status: number, extra?: Record<s
  * describes as opening nothing — could still ask the model to work. Every one of
  * these calls spends money.
  */
-export async function authorize(
+/** The session, or the refusal to answer. See `authorizeUser`. */
+export type Access =
+  | { ok: true; user: AuthUser }
+  | { ok: false; denied: NextResponse };
+
+/**
+ * How a refusal describes the action, in the three places a sentence needs it.
+ *
+ * Three fields rather than one so that all three sentences stay grammatical: "Sign in
+ * to run a live analysis", "it cannot run an analysis", and "Running an analysis is
+ * limited to officer or above". A single phrase cannot be dropped into all three.
+ */
+export interface AccessAction {
+  /** Opens the rank refusal: "Running an analysis is limited to officer or above". */
+  subject: string;
+  /** Follows "Sign in to". */
+  signIn: string;
+  /** Follows "it cannot". */
+  refuse: string;
+}
+
+/** The wording the three AI routes have always used, so their messages do not drift. */
+const AN_ANALYSIS: AccessAction = {
+  subject: "Running an analysis",
+  signIn: "run a live analysis",
+  refuse: "run an analysis",
+};
+
+/**
+ * The session and the authority to act, or the response that explains why not.
+ *
+ * Returns the verified user rather than a boolean because the callers need more than
+ * permission: `/api/ai/*` signs the submission into `media_assets` with the uploader's
+ * Cognito subject, and reading it back a second time to find who was asking would mean
+ * verifying the same token twice. `authorize` used to return a bare `NextResponse |
+ * null`, which threw that identity away.
+ */
+export async function authorizeUser(
   request: Request,
   pathname: string,
-): Promise<NextResponse | null> {
-  if (!isSameOriginPost(request)) {
-    return failure("cross_origin", "This endpoint only accepts same-origin requests.", 403);
+  action: AccessAction = AN_ANALYSIS,
+): Promise<Access> {
+  if (!isSameOriginRequest(request)) {
+    return {
+      ok: false,
+      denied: failure("cross_origin", "This endpoint only accepts same-origin requests.", 403),
+    };
   }
   const user = await getCurrentUser();
   if (!user) {
-    return failure("unauthorized", "Sign in to run a live analysis.", 401);
+    return { ok: false, denied: failure("unauthorized", `Sign in to ${action.signIn}.`, 401) };
   }
   const verdict = canOpen(pathname, user.role);
   if (!verdict.ok) {
-    return failure(
-      "forbidden",
-      verdict.reason === "no-role"
-        ? "This account has no role yet, so it cannot run an analysis. An owner or admin grants one in the Cognito console."
-        : `Running an analysis is limited to ${verdict.guard.requirement}; this account is ${roleLabel(user.role)}.`,
-      403,
-    );
+    return {
+      ok: false,
+      denied: failure(
+        "forbidden",
+        verdict.reason === "no-role"
+          ? `This account has no role yet, so it cannot ${action.refuse}. An owner or admin grants one in the Cognito console.`
+          : `${action.subject} is limited to ${verdict.guard.requirement}; this account is ${roleLabel(user.role)}.`,
+        403,
+      ),
+    };
   }
-  return null;
+  return { ok: true, user };
 }
 
 export function readPayload(body: unknown): { ok: true; payload: AiRequestPayload } | { ok: false; response: NextResponse } {

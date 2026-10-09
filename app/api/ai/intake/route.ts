@@ -1,10 +1,7 @@
 import { analyseIntake } from "@/lib/ai/analyse";
-import { aiErrorResponse, authorize, jsonResponse, readPayload } from "@/lib/ai/http";
-import {
-  archiveMediaParts,
-  archiveRequests,
-  archiveWarning,
-} from "@/lib/s3/archive";
+import { aiErrorResponse, authorizeUser, jsonResponse, readPayload } from "@/lib/ai/http";
+import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
+import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
 
 /**
  * POST /api/ai/intake — a photo, a Hindi voice note, or both, in one round trip.
@@ -18,15 +15,18 @@ import {
  * will be paid.
  *
  * The photo and the voice note are also archived in S3 on the way through, so the
- * evidence a price was based on outlives the request that produced it. See
- * `lib/s3/archive.ts` for why the keys are content-addressed and why a storage
- * fault is reported rather than thrown.
+ * evidence a price was based on outlives the request that produced it, and a row for
+ * each object is recorded in `media_assets` so the key can be resolved back to what it
+ * was. See `lib/s3/archive.ts` for why the keys are content-addressed and why a
+ * storage fault is reported rather than thrown, and `lib/s3/media-assets.ts` for why
+ * the row is written after the bytes and never gates them.
  */
 
 export async function POST(request: Request) {
-  // Guarded as the screen is guarded: this is the `/intake` capability.
-  const denied = await authorize(request, "/intake");
-  if (denied) return denied;
+  // Guarded as the screen is guarded: this is the `/intake` capability. The user comes
+  // back out of the guard because the archive is signed with their Cognito subject.
+  const access = await authorizeUser(request, "/intake");
+  if (!access.ok) return access.denied;
 
   let body: unknown;
   try {
@@ -62,24 +62,30 @@ export async function POST(request: Request) {
    */
   const [analysed, archived] = await Promise.allSettled([
     analyse,
-    archiveMediaParts(archiveRequests(parsed.payload)),
+    archiveAndRecord(archiveRequests(parsed.payload), {
+      uploaderCognitoSub: access.user.sub,
+    }),
   ]);
 
+  const kept = archived.status === "fulfilled" ? archived.value : null;
+
   if (analysed.status === "rejected") {
-    if (archived.status === "fulfilled" && archived.value.objects.length > 0) {
+    if (kept && kept.storage.objects.length > 0) {
       console.error(
-        `[s3] kept ${archived.value.objects.length} object(s) for a request the analysis failed`,
+        `[s3] kept ${kept.storage.objects.length} object(s) for a request the analysis failed`,
       );
     }
+    // The evidence and its row are already written, and the model's refusal is what the
+    // operator needs to see; recorded by whom is in the table either way.
     return aiErrorResponse(analysed.reason);
   }
 
-  const storage = archived.status === "fulfilled" ? archived.value : null;
-  const warning = storage ? archiveWarning(storage) : null;
+  const storage = kept?.storage ?? null;
+  const records = kept?.records ?? null;
+  const warnings = [...analysed.value.warnings];
+  for (const warning of [storage ? archiveWarning(storage) : null, records ? recordWarning(records) : null]) {
+    if (warning) warnings.push(warning);
+  }
 
-  return jsonResponse({
-    ...analysed.value,
-    warnings: warning ? [...analysed.value.warnings, warning] : analysed.value.warnings,
-    storage,
-  });
+  return jsonResponse({ ...analysed.value, warnings, storage, records });
 }
