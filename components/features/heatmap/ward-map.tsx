@@ -1,3 +1,4 @@
+import { densityBand, type Band } from "@/components/features/heatmap/density-band";
 import { Dot } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 import type { Ward } from "@/lib/types";
@@ -10,22 +11,6 @@ import type { Ward } from "@/lib/types";
  * dependency cost. The honest trade-off is stated in the caption rather than
  * hidden: this is a coordinate field, not geography.
  */
-
-type Band = {
-  tone: "hazard" | "copper" | "lead";
-  label: string;
-  range: string;
-};
-
-export function densityBand(density: number): Band {
-  if (density >= 80) {
-    return { tone: "hazard", label: "High pressure", range: "80–100" };
-  }
-  if (density >= 60) {
-    return { tone: "copper", label: "Elevated", range: "60–79" };
-  }
-  return { tone: "lead", label: "Baseline", range: "0–59" };
-}
 
 /** Static class strings, because Tailwind cannot see a runtime tone value. */
 const markerClasses: Record<Band["tone"], string> = {
