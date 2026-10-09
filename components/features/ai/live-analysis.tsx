@@ -75,7 +75,12 @@ interface GatekeeperDecision {
   creditable: boolean;
   confidence: number;
   matchedClass: string;
-  ruleCode: string;
+  /**
+   * Reject rule that fired, or absent. Optional because the live path omits it for a
+   * verified item — `lib/types.ts` declares it optional and `lib/ai/analyse.ts` maps
+   * `"none"` to `undefined` — while the fixtures always carry a code.
+   */
+  ruleCode?: string;
   reason: string;
   signals: { label: string; value: string }[];
   modelVersion: string;
@@ -804,7 +809,12 @@ function DecisionResult({ decision }: { decision: GatekeeperDecision }) {
 
   return (
     <Panel
-      eyebrow={`Result · Gatekeeper${decision.ruleCode !== "none" ? ` · ${decision.ruleCode}` : ""}`}
+      eyebrow={`Result · Gatekeeper${
+        // Truthy *and* not the sentinel: an absent code has to read as no code. Comparing
+        // against `"none"` alone rendered the heading as `· undefined` on the live route,
+        // where a verified item carries no rule at all.
+        decision.ruleCode && decision.ruleCode !== "none" ? ` · ${decision.ruleCode}` : ""
+      }`}
       title={decision.subject}
       actions={<VerdictMark verdict={decision.verdict} />}
     >
