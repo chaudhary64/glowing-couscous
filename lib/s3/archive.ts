@@ -26,10 +26,14 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
  *    truncated upload is refused by the service instead of being stored as the
  *    evidence a price was computed from.
  *
- * 3. **Credentials come from the SDK's default chain, not from this file.** The
- *    bucket and region are the only things required to switch the archive on, so
- *    the day Amplify's SSR compute gets the IAM role `amplify.yml` says it still
- *    lacks, this code reads that role instead of a static key with no change here.
+ * 3. **Credentials are read from this integration's own names, then the SDK's
+ *    default chain.** The bucket and region are the only things required to switch
+ *    the archive on, and a key handed over under `S3_ACCESS_KEY_ID` /
+ *    `S3_SECRET_ACCESS_KEY` is used directly. The standard names cannot be used on
+ *    Amplify at all — the service refuses them, see `explicitCredentials` — so the
+ *    chain is what covers local work today and an instance role tomorrow, and the
+ *    day Amplify's SSR compute gets the IAM role `amplify.yml` says it still lacks,
+ *    nothing in this file changes.
  *
  * 4. **Storage never decides whether an analysis succeeds.** A failed write is
  *    reported in the response and in the server log; it does not throw away a
@@ -71,6 +75,20 @@ export interface ArchiveOutcome {
   /** False when the bucket or region is unset: the archive is off, not broken. */
   configured: boolean;
   bucket: string | null;
+  /**
+   * Which credentials the write used, by name and never by value.
+   *
+   * Reported because the two answers mean very different things. An explicit
+   * `S3_ACCESS_KEY_ID` is the key scoped to `media/*` in this one bucket. "default
+   * chain" means whatever the machine already had — on a developer's laptop that is
+   * usually the admin profile in `~/.aws/credentials`, which is why a write outside
+   * the prefix will succeed there and fail in a deployment. That happened during this
+   * integration's own testing: the keys went missing from `.env.local`, the SDK picked
+   * up the admin profile, and `s3:check` caught it by refusing to let the write
+   * through. Without this field in the response, nothing on the deployed side would
+   * have said which identity was in force.
+   */
+  credentialSource: CredentialSource;
   objects: ArchivedObject[];
   /**
    * Set when the archive was configured and a write still failed. Never thrown:
@@ -92,6 +110,36 @@ export interface ArchiveConfig {
  * app's own read and write access — the policy grants `media/*`, nothing wider.
  */
 const DEFAULT_PREFIX = "media";
+
+/**
+ * Credentials handed over under this integration's own names.
+ *
+ * Amplify Hosting refuses any environment variable beginning with `AWS` — the API
+ * answers `Environment variables cannot start with the reserved prefix "AWS"` — so
+ * `AWS_ACCESS_KEY_ID` is not a name a deployed copy of this app can be given, and an
+ * `amplify.yml` that copies it through can never match anything. These two names are
+ * what the deployment uses instead; both are optional, and with neither set the
+ * SDK's own chain decides (a shared profile locally, an instance role on compute that
+ * has one).
+ *
+ * Nothing here is logged, echoed into a response, or written into an object key — the
+ * values are handed to the SDK and nowhere else.
+ */
+function explicitCredentials(): { accessKeyId: string; secretAccessKey: string } | null {
+  const accessKeyId = process.env.S3_ACCESS_KEY_ID?.trim();
+  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY?.trim();
+  if (!accessKeyId || !secretAccessKey) return null;
+  return { accessKeyId, secretAccessKey };
+}
+
+export type CredentialSource = "S3_ACCESS_KEY_ID" | "AWS_ACCESS_KEY_ID" | "default chain";
+
+/** Which provider the process is using, never a value. Reported in the response. */
+export function credentialSource(): CredentialSource {
+  if (explicitCredentials()) return "S3_ACCESS_KEY_ID";
+  if (process.env.AWS_ACCESS_KEY_ID?.trim()) return "AWS_ACCESS_KEY_ID";
+  return "default chain";
+}
 
 export function archiveConfig(): ArchiveConfig | null {
   const bucket = process.env.S3_BUCKET?.trim();
@@ -119,13 +167,36 @@ const clientCache = globalThis as unknown as { __ecoeprS3Clients?: Map<string, S
 
 function clientFor(config: ArchiveConfig): S3Client {
   clientCache.__ecoeprS3Clients ??= new Map();
-  const cacheKey = `${config.bucket}:${config.region}`;
+  const credentials = explicitCredentials();
+  // The credential *source* is part of the key, not the values: a client built for
+  // one source must not be handed back for another, and a secret has no business
+  // being a map key.
+  const cacheKey = `${config.bucket}:${config.region}:${credentials ? "explicit" : "chain"}`;
   const existing = clientCache.__ecoeprS3Clients.get(cacheKey);
   if (existing) return existing;
 
-  const client = new S3Client({ region: config.region });
+  const client = new S3Client({
+    region: config.region,
+    ...(credentials ? { credentials } : {}),
+  });
   clientCache.__ecoeprS3Clients.set(cacheKey, client);
   return client;
+}
+
+/**
+ * The client the app itself uses, and the configuration behind it.
+ *
+ * Exported so `s3:check` can verify the identity the routes actually run as, instead of
+ * building a second client with its own idea of credentials. That difference is not
+ * academic: the first version of the check did build its own, which quietly fell back to
+ * the machine's admin profile, and it reported that the app's key could write outside
+ * its prefix when the app's key could not. A check that authenticates as something
+ * other than the thing under test is worse than no check.
+ */
+export function archiveClient(): { client: S3Client; config: ArchiveConfig } | null {
+  const config = archiveConfig();
+  if (!config) return null;
+  return { client: clientFor(config), config };
 }
 
 const EXTENSIONS: Record<string, string> = {
@@ -201,10 +272,10 @@ const PUT_TIMEOUT_MS = 8_000;
 export async function archiveMediaParts(requests: ArchiveRequest[]): Promise<ArchiveOutcome> {
   const config = archiveConfig();
   if (!config) {
-    return { configured: false, bucket: null, objects: [], error: null };
+    return { configured: false, bucket: null, credentialSource: credentialSource(), objects: [], error: null };
   }
   if (requests.length === 0) {
-    return { configured: true, bucket: config.bucket, objects: [], error: null };
+    return { configured: true, bucket: config.bucket, credentialSource: credentialSource(), objects: [], error: null };
   }
 
   const client = clientFor(config);
@@ -270,6 +341,7 @@ export async function archiveMediaParts(requests: ArchiveRequest[]): Promise<Arc
   return {
     configured: true,
     bucket: config.bucket,
+    credentialSource: credentialSource(),
     objects,
     error: failures.length > 0 ? failures.join("; ") : null,
   };

@@ -33,13 +33,13 @@ import {
   HeadObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
-  S3Client,
 } from "@aws-sdk/client-s3";
 
 import {
-  archiveConfig,
+  archiveClient,
   archiveConfigured,
   archiveMediaParts,
+  credentialSource,
   extensionFor,
   mediaKey,
 } from "../lib/s3/archive.ts";
@@ -56,20 +56,30 @@ const PROBE_B = Buffer.from("ecoepr archive probe B — different bytes, differe
 const cleanup: { key: string }[] = [];
 
 /* ------------------------------------------------------------ 1. configuration */
-const config = archiveConfig();
+// The app's own client, not a second one: see the note on `archiveClient`. Anything
+// this script does with a different identity proves nothing about the app.
+const configured = archiveClient();
+const config = configured?.config ?? null;
 console.log("--- configuration ---");
 console.log(`bucket: ${config?.bucket ?? "(unset)"}`);
 console.log(`region: ${config?.region ?? "(unset)"}`);
 console.log(`prefix: ${config?.prefix ?? "(unset)"}`);
-console.log(
-  `credentials: ${
-    process.env.AWS_ACCESS_KEY_ID ? "static key from the environment" : "none in the environment"
-  }${process.env.AWS_SESSION_TOKEN ? " + session token" : ""}`,
-);
+// Which provider is in play, never the value: `S3_ACCESS_KEY_ID` is the name this app
+// can actually be given on Amplify, `AWS_ACCESS_KEY_ID` only works off it.
+const source = credentialSource();
+console.log(`credentials: ${source}`);
+if (source === "default chain") {
+  console.log(
+    "  Note: no S3 key was found, so the SDK is using whatever this machine already has\n" +
+      "  (usually the admin profile in ~/.aws/credentials). The write outside the prefix below\n" +
+      "  will then succeed, and that failure is the point of the check: it means the app is\n" +
+      "  running with far more access than it should.",
+  );
+}
 check("the bucket and region resolve from the environment", config !== null);
-check("archiveConfigured() agrees with archiveConfig()", archiveConfigured() === (config !== null));
+check("archiveConfigured() agrees with the resolved configuration", archiveConfigured() === (config !== null));
 
-if (!config) {
+if (!configured || !config) {
   console.log(
     "\nNo S3_BUCKET/S3_REGION, so there is nothing to check against. This is also why the\n" +
       "archive is reported as `configured: false` rather than as a failure at request time.",
@@ -77,7 +87,7 @@ if (!config) {
   process.exit(failures === 0 ? 0 : 1);
 }
 
-const client = new S3Client({ region: config.region });
+const client = configured.client;
 const sha256hex = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 
 /* ------------------------------------------------------- 2. write and describe */
@@ -88,6 +98,10 @@ const first = await archiveMediaParts([
 
 check("the archive reports a configured, error-free write", first.configured && first.error === null, first.error ?? "");
 check("exactly one object was written", first.objects.length === 1, `${first.objects.length}`);
+// The source rides in every response so a deployment that has quietly fallen back to
+// some other identity is visible on the screen rather than only in a bucket listing.
+check("the outcome names the credential source", first.credentialSource === credentialSource(), String(first.credentialSource));
+check("the credential source is the scoped key, not the machine's default profile", credentialSource() === "S3_ACCESS_KEY_ID", credentialSource());
 
 const object = first.objects[0];
 if (!object) {
@@ -176,6 +190,7 @@ const off = await archiveMediaParts([
   { kind: "photo", media: { mimeType: "image/jpeg", dataBase64: PROBE_A.toString("base64") } },
 ]);
 check("an unconfigured archive reports configured: false", off.configured === false);
+check("an unconfigured archive still reports where credentials would come from", typeof off.credentialSource === "string", String(off.credentialSource));
 check("an unconfigured archive writes nothing", off.objects.length === 0);
 check("an unconfigured archive is not an error", off.error === null);
 check("an unconfigured archive does not throw, so the route still answers", true);

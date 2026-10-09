@@ -76,24 +76,41 @@ prefix and fails the run if it succeeds.
 
 ### Two honest caveats
 
-**The bucket is in `eu-north-1` while the rest of the project is in `ap-south-1`.** The
-bucket already existed in this account and was already named for this project, so
-reusing it beat creating a second, empty one. It costs latency rather than
-correctness: an upload travels from Amplify's SSR compute to Stockholm, and the model
-call in the same request is two orders of magnitude slower than that hop. Moving the
-archive to `ap-south-1` is a re-run of the creation commands with a different region,
-plus a one-line change to `S3_REGION` — but for a data-protection story that is also a
-compliance question, and India-resident evidence may well be the requirement rather than
-a preference.
+**The bucket is in `eu-north-1`, and that is where the app runs — but not where the data
+lives.** The Amplify app (`glowing-couscous`) is in `eu-north-1`, so the bucket and the
+SSR compute that writes to it are **co-located**: an upload does not cross a region on
+its way to S3, and the model call in the same request is orders of magnitude slower than
+that write. The bucket already existed in this account under a name that is this
+project's name, so reusing it beat creating a second, empty one.
 
-**The static key is a deployment artifact.** `amplify.yml` copies `AWS_ACCESS_KEY_ID` and
-`AWS_SECRET_ACCESS_KEY` into `.env.production` because Amplify's running SSR compute gets
+The open question is residency, not latency. Cognito and RDS are in `ap-south-1` on
+purpose — `db/README.md` records that user PII stays in India — while the evidence now
+lives in Stockholm. If India-resident evidence is a requirement rather than a
+preference, the bucket should move to `ap-south-1` (a re-run of the commands below with
+a different region, plus one line of `S3_REGION`), and the upload then crosses regions
+instead, because the compute does not move with it.
+
+**The static key is a deployment artifact.** `amplify.yml` copies `S3_ACCESS_KEY_ID` and
+`S3_SECRET_ACCESS_KEY` into `.env.production` because Amplify's running SSR compute gets
 none of the app's environment variables — the same limitation that file already
 documents for `GEMINI_API_KEY`. That means the key is readable by anyone who can read the
-deployment artifacts. The design answer is already in the code: `lib/s3/archive.ts`
-creates its client without credentials of its own and lets the SDK resolve the standard
-chain, so the day the compute is given an IAM role (`computeRoleArn`, currently unset)
-both of those lines can be deleted and nothing in `lib/` changes.
+deployment artifacts. The design answer is already in the code: `lib/s3/archive.ts` reads
+these two names if they are present and otherwise lets the SDK resolve its own chain, so
+the day the compute is given an IAM role (`computeRoleArn`, currently unset) both lines
+can be deleted and nothing in `lib/` changes.
+
+**They cannot be called `AWS_ACCESS_KEY_ID`.** This is not a style choice; Amplify
+refuses the name outright. Setting it answers:
+
+```
+An error occurred (BadRequestException) when calling the UpdateApp operation:
+Environment variables cannot start with the reserved prefix "AWS".
+```
+
+Any `amplify.yml` that greps for the standard pair is grepping for something that can
+never exist on this platform, which is how the `S3_*` names in `lib/s3/archive.ts` came
+to be — the first version of this integration shipped exactly that mistake and it was
+caught by trying to write the variables rather than by reading the documentation.
 
 ## What a key looks like, and why
 
@@ -160,11 +177,28 @@ no AWS credentials at all.
 | `S3_BUCKET` | to switch the archive on | the bucket. Empty or missing means off |
 | `S3_REGION` | with the bucket | `eu-north-1` for this bucket. `AWS_REGION` is honoured as a fallback |
 | `S3_PREFIX` | no | defaults to `media`. Changing it without changing the IAM policy revokes the app's own access |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | locally, yes | a real secret. Read through the SDK's default chain, so an instance role can replace them |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | locally, yes | a real secret, and deliberately **not** the standard `AWS_*` names — Amplify refuses those. With neither set, the SDK's default chain decides |
 
 Locally these live in `.env.local`, which is gitignored. On Amplify they must be in the
 app's environment variables **and** copied into `.env.production` by `amplify.yml`, for
 the reason that file explains.
+
+## Where it runs
+
+The deployment is the Amplify app `glowing-couscous` (`d1oj56ggqzeg50`) in `eu-north-1`,
+branch `main`, platform `WEB_COMPUTE`. Its app-level environment variables carry the
+pool settings, `DATABASE_URL`, the model ids and — added with this integration —
+`S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`.
+
+```bash
+aws amplify get-app --app-id d1oj56ggqzeg50 --region eu-north-1 \
+  --query 'app.environmentVariables' --output json   # names; it prints values too
+```
+
+The archive is **not** live on that deployment until it is rebuilt: Amplify applies new
+environment variables at build time, and the running compute keeps the environment it
+was deployed with. `npm run s3:check` against a laptop proves the code and the
+credentials; it proves nothing about a deployment nobody has rebuilt.
 
 ## Verifying it
 
