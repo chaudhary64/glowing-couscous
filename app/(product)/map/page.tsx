@@ -6,7 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Panel, Surface } from "@/components/ui/card";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
+import { requireAccess } from "@/lib/auth/dal";
 import { heatmapStats, hotspots, wards } from "@/lib/data/wards";
+
+export const instant = false;
 
 const limits = [
   "Positions are normalised pilot coordinates from the ward grid, not a street basemap — the place names in the table carry the geography.",
@@ -14,7 +17,9 @@ const limits = [
   "A cluster is a routing suggestion for a ward officer, never an accusation about a site or a person.",
 ];
 
-export default function HotspotMapPage() {
+export default async function HotspotMapPage() {
+  await requireAccess("/map");
+
   const topWard = wards.reduce(
     (worst, ward) => (ward.density > worst.density ? ward : worst),
     wards[0],

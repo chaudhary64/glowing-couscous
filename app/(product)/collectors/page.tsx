@@ -8,11 +8,14 @@ import { Panel, Surface } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
+import { requireAccess } from "@/lib/auth/dal";
 import { intakeStats } from "@/lib/data/intake";
 import { getItem } from "@/lib/data/inventory";
 import { collectors, pickups } from "@/lib/data/operations";
 import { formatInr } from "@/lib/format";
 import { pickupLabel, pickupTone } from "@/lib/tone";
+
+export const instant = false;
 
 /** Totals are derived from the roster, never typed twice. */
 const totalPickups = collectors.reduce((sum, entry) => sum + entry.pickups, 0);
@@ -52,7 +55,9 @@ const recentLoads = pickups.map((pickup) => ({
   item: getItem(pickup.itemId),
 }));
 
-export default function CollectorsPage() {
+export default async function CollectorsPage() {
+  await requireAccess("/collectors");
+
   return (
     <div className="flex flex-col gap-10">
       <ScreenHeader

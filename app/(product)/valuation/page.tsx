@@ -9,6 +9,7 @@ import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Receipt, type ReceiptLine } from "@/components/ui/receipt";
 import { Stamp, VerdictMark } from "@/components/ui/stamp";
 import { Stat, StatGrid } from "@/components/ui/stat";
+import { requireAccess } from "@/lib/auth/dal";
 import { focusItemId, getItem, items } from "@/lib/data/inventory";
 import { formatInr, formatMass, formatRate, lineValue } from "@/lib/format";
 import {
@@ -18,6 +19,8 @@ import {
   verdictLabel,
   verdictTone,
 } from "@/lib/tone";
+
+export const instant = false;
 
 /**
  * Queue totals, derived from the fixture so they cannot drift from the rows.
@@ -36,7 +39,9 @@ const payableTotal = cleared.reduce(
 );
 const eprTotal = cleared.reduce((sum, item) => sum + item.valuation.eprCreditInr, 0);
 
-export default function ValuationsPage() {
+export default async function ValuationsPage() {
+  await requireAccess("/valuation");
+
   const openItem = getItem(focusItemId);
 
   const receiptLines: ReceiptLine[] = openItem.materials.map((line) => {

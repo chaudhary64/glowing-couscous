@@ -9,6 +9,7 @@ import { Field, FieldList } from "@/components/ui/field-list";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stamp, VerdictMark } from "@/components/ui/stamp";
 import { Stat, StatGrid } from "@/components/ui/stat";
+import { requireAccess } from "@/lib/auth/dal";
 import { getItem } from "@/lib/data/inventory";
 import {
   blockedTotal,
@@ -19,6 +20,8 @@ import {
 } from "@/lib/data/model";
 import { formatConfidence, formatInr, formatInrCompact } from "@/lib/format";
 import type { PendingDecision, RefusedCase } from "@/lib/types";
+
+export const instant = false;
 
 /** Held records, shaped for the client queue so it never imports fixtures itself. */
 const pending: PendingDecision[] = validationQueue
@@ -64,7 +67,9 @@ const evidenceCases = [
   },
 ];
 
-export default function ValidationQueuePage() {
+export default async function ValidationQueuePage() {
+  await requireAccess("/validation");
+
   const precision = modelMetrics.find((metric) => metric.label === "Precision");
   const falseCredit = modelMetrics.find(
     (metric) => metric.label === "False-credit rate",

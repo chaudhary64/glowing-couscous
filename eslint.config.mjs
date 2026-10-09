@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local agent state, already in .gitignore. ESLint does not read that file, so
+    // the throwaway scripts kept here would otherwise fail every lint run.
+    ".freebuff/**",
   ]),
 ]);
 

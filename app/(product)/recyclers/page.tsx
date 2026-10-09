@@ -7,11 +7,16 @@ import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { RecyclerTable } from "@/components/features/pickup/recycler-table";
 import { LoadAllocation } from "@/components/features/product/recyclers/capacity-panel";
+import { requireAccess } from "@/lib/auth/dal";
 import { pickups, recyclers } from "@/lib/data/operations";
 import { formatTonnes } from "@/lib/format";
 import { isRegistered, isReusePartner, takesHazardous } from "@/lib/streams";
 
-export default function RecyclersPage() {
+export const instant = false;
+
+export default async function RecyclersPage() {
+  await requireAccess("/recyclers");
+
   const licensedForHazards = recyclers.filter(takesHazardous);
   const reusePartners = recyclers.filter(isReusePartner);
   const totalCapacity = recyclers.reduce(

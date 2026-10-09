@@ -8,6 +8,7 @@ import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { Field, FieldList } from "@/components/ui/field-list";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
+import { requireAccess } from "@/lib/auth/dal";
 import { getItem } from "@/lib/data/inventory";
 import {
   collectors,
@@ -18,6 +19,8 @@ import {
 import { formatInr, formatMass, formatPct } from "@/lib/format";
 import { pickupLabel, pickupTone } from "@/lib/tone";
 import type { Collector, EwasteItem, Recycler } from "@/lib/types";
+
+export const instant = false;
 
 function collectorOf(id: string): Collector {
   const found = collectors.find((entry) => entry.id === id);
@@ -62,7 +65,9 @@ const loadsByRecycler = recyclers.map((recycler) => ({
   loads: pickups.filter((pickup) => pickup.recyclerId === recycler.id).length,
 }));
 
-export default function PickupsPage() {
+export default async function PickupsPage() {
+  await requireAccess("/pickups");
+
   return (
     <div className="flex flex-col gap-10">
       <ScreenHeader

@@ -6,11 +6,14 @@ import { Panel, Surface } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
+import { requireAccess } from "@/lib/auth/dal";
 import { intakeSamples, intakeStats } from "@/lib/data/intake";
 import { getItem } from "@/lib/data/inventory";
 import { formatInr, formatMass, formatPct, formatTimeOfDay } from "@/lib/format";
 import { conditionTone, verdictLabel, verdictTone } from "@/lib/tone";
 import type { IntakeSample, ResolvedItemSummary } from "@/lib/types";
+
+export const instant = false;
 
 /** Built on the server so the console never reaches into the inventory fixture. */
 function resolvedEntry(sample: IntakeSample): [string, ResolvedItemSummary] {
@@ -51,7 +54,9 @@ const pipeline: { service: string; detail: string }[] = [
   },
 ];
 
-export default function IntakePage() {
+export default async function IntakePage() {
+  await requireAccess("/intake");
+
   const resolved = Object.fromEntries(intakeSamples.map(resolvedEntry));
 
   return (

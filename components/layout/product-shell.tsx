@@ -1,17 +1,35 @@
 import Link from "next/link";
 import { ProductNav } from "@/components/layout/product-nav";
+import { getCurrentUser } from "@/lib/auth/dal";
+import { roleLabel } from "@/lib/auth/roles";
 import { intakeStats } from "@/lib/data/intake";
 import { logisticsStats } from "@/lib/data/operations";
 
 /**
  * Shell for the working app. Same ink rail and square rules as the docs, but the
- * strip across the top reports the pilot's state rather than the stack, and the
- * rail is grouped by job instead of by rank.
+ * strip across the top reports the pilot's state rather than the stack, and the rail
+ * is grouped by job instead of by rank.
+ *
+ * The session is read here for one reason: the rail has to know the role to decide
+ * which links exist, and it has to name the person holding it so signing out is
+ * obvious. That read is request data, which is why `app/(product)/layout.tsx` opts the
+ * segment out of instant navigation — the docs' advice to push a session read behind a
+ * `<Suspense>` boundary applies to pages that are otherwise static, and every route in
+ * here already blocks on `requireAccess`, so a boundary would buy nothing but a flash
+ * of the wrong rail.
  */
-export function ProductShell({ children }: { children: React.ReactNode }) {
+export async function ProductShell({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
+
   return (
     <div className="flex min-h-full flex-col lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
-      <ProductNav />
+      <ProductNav
+        viewer={{
+          name: user?.name ?? user?.email ?? "Unknown account",
+          email: user?.email ?? null,
+          role: user?.role ?? null,
+        }}
+      />
 
       <div className="flex min-w-0 flex-col">
         <div className="sticky top-0 z-10 border-b border-rule bg-paper/95 backdrop-blur supports-[backdrop-filter]:bg-paper/80">
@@ -21,13 +39,34 @@ export function ProductShell({ children }: { children: React.ReactNode }) {
             </span>
             <span className="hidden h-3 w-px bg-rule sm:block" />
             <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
-              {intakeStats.today} intakes today · {logisticsStats.notesIssued} credit notes
+              {intakeStats.today} intakes today · {logisticsStats.notesIssued} credit
+              notes
             </span>
+
             <span className="ml-auto inline-flex items-center gap-2 border border-review/40 bg-review-tint px-2 py-0.5">
               <span aria-hidden className="size-1.5 bg-review" />
               <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-review">
                 Simulated data
               </span>
+            </span>
+
+            {/*
+              The rail's sign-out is desktop-only, and the rail itself is the only place
+              the role is named. On a phone the strip carries both, so nobody is stuck
+              signed in on a session they cannot end.
+            */}
+            <span className="flex items-center gap-3 lg:hidden">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
+                {roleLabel(user?.role ?? null)}
+              </span>
+              <form method="post" action="/api/auth/sign-out">
+                <button
+                  type="submit"
+                  className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink underline decoration-rule underline-offset-2 hover:decoration-copper"
+                >
+                  Sign out
+                </button>
+              </form>
             </span>
           </div>
         </div>
@@ -42,8 +81,8 @@ export function ProductShell({ children }: { children: React.ReactNode }) {
               EcoEPR · prototype
             </p>
             <p className="max-w-3xl text-[12px] leading-relaxed text-ink-muted">
-              Every figure on these screens is a fixture, not a live reading.
-              Credits are simulated, this is not a payout system, and we route to
+              Every figure on these screens is a fixture, not a live reading. Credits
+              are simulated, this is not a payout system, and we route to
               CPCB-registered recyclers rather than processing waste ourselves.{" "}
               <Link
                 href="/doc"

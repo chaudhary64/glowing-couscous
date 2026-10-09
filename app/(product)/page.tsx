@@ -6,12 +6,15 @@ import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { MeterRow } from "@/components/ui/meter";
 import { Stat, StatGrid } from "@/components/ui/stat";
+import { requireAccess } from "@/lib/auth/dal";
 import { activityFeed, activityMeta, needsAttention } from "@/lib/data/activity";
 import { intakeStats } from "@/lib/data/intake";
 import { collectors, logisticsStats, pickups } from "@/lib/data/operations";
 import { hotspots, wards } from "@/lib/data/wards";
 import { formatInr, formatPct } from "@/lib/format";
 import { activityLabel, activityTone, pickupLabel, pickupTone } from "@/lib/tone";
+
+export const instant = false;
 
 const topCollectors = [...collectors]
   .sort((a, b) => b.creditsInr - a.creditsInr)
@@ -24,7 +27,9 @@ const activePickups = pickups.filter(
   (pickup) => pickup.status !== "settled" && pickup.status !== "received",
 );
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  await requireAccess("/");
+
   return (
     <div className="flex flex-col gap-10">
       <ScreenHeader
