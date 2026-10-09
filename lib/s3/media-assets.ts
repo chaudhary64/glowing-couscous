@@ -167,9 +167,17 @@ export async function recordArchivedObjects(
       error: null,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    // The inner cause, not the wrapper. Drizzle wraps a driver failure in a message that
+    // is the whole `insert into "media_assets" (…) values (…)` statement followed by its
+    // parameters — a wall of SQL whose only useful part, "connect ETIMEDOUT" or
+    // "password authentication failed", is one level down in `cause`. That wrapper would
+    // be what an operator read in the warning sentence, so the cause is what is reported.
+    const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : null;
+    const message = (cause ?? (error instanceof Error ? error.message : String(error)))
+      .replace(/\s+/g, " ")
+      .trim();
     console.error("[db] recording the archived media failed", message);
-    return { configured: true, records: [], error: message.slice(0, 300) };
+    return { configured: true, records: [], error: message.slice(0, 200) };
   }
 }
 

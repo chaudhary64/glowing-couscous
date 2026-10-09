@@ -19,15 +19,18 @@
  *   7. a row is recorded in `media_assets` for the object, its columns describe the
  *      bytes that were written, and re-recording is one row rather than two
  *   8. the uploader's Cognito subject resolves through `users.cognito_sub`
- *   9. a presigned read returns the exact bytes, is bounded in both directions, expires,
+ *   9. an unreachable database is reported in seconds rather than thrown, and does not
+ *      stop the bytes being archived; two simultaneous identical submissions are one row
+ *  10. a presigned read returns the exact bytes, is bounded in both directions, expires,
  *      and refuses a key this archive could not have written
- *  10. the credential cannot write outside the `media/` prefix it was scoped to
- *  11. with no bucket configured the module degrades instead of throwing, which is
+ *  11. the credential cannot write outside the `media/` prefix it was scoped to
+ *  12. with no bucket configured the module degrades instead of throwing, which is
  *      what keeps the AI routes working on a laptop with no AWS credentials
  *
- * It writes three small probe objects, one row per object, and one throwaway `users`
- * row, and removes all of it before exiting. Nothing else in the bucket or the table is
- * read, written or removed.
+ * It writes five small probe objects, one row per object, and one throwaway `users`
+ * row, and removes all of it before exiting — including when it stops early, which is
+ * what the crash handler below is for. Nothing else in the bucket or the table is read,
+ * written or removed.
  *
  * The database half is the same bargain as the S3 half: it is optional, and with no
  * `DATABASE_URL` it reports that the recording is switched off rather than failing.
@@ -44,7 +47,7 @@ import {
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { closeDatabase, database } from "../db/client.ts";
 import { mediaAssets, users } from "../db/schema/index.ts";
@@ -76,6 +79,79 @@ const cleanup: { key: string }[] = [];
 
 /** Set when the row half runs, so cleanup can remove the throwaway `users` row too. */
 let userProbeSub: string | null = null;
+
+/**
+ * The connection string this process started with.
+ *
+ * Captured because the sections below deliberately point `DATABASE_URL` at an
+ * unreachable host to see what that does. If the run stops in the middle of one of those
+ * sections, cleanup would otherwise find no database and quietly remove nothing — which
+ * is how a crash leaves a probe row in a shared table. Restoring the original first makes
+ * cleanup independent of whatever the test was doing when it died.
+ */
+const ORIGINAL_DATABASE_URL = process.env.DATABASE_URL;
+
+/**
+ * Remove everything this run created, whatever happened.
+ *
+ * Called at the end of a normal run and by the handlers below on a bad one. Best effort
+ * by design: the earlier the crash, the less there is to remove, and a cleanup that
+ * throws must not mask the failure that caused it.
+ */
+async function runCleanup(): Promise<void> {
+  // First, before anything else: put the environment back, so the row cleanup below has a
+  // connection whatever the section that failed was doing.
+  if (ORIGINAL_DATABASE_URL) process.env.DATABASE_URL = ORIGINAL_DATABASE_URL;
+
+  const client = configured?.client;
+  const bucket = config?.bucket;
+  if (client && bucket) {
+    for (const { key } of cleanup) {
+      await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+      console.log(`deleted ${key}`);
+    }
+    console.log(`${cleanup.length} probe object(s) removed; the bucket holds nothing this check created`);
+  }
+
+  const probeKeys = cleanup.map(({ key }) => key);
+  if (db && probeKeys.length > 0) {
+    const forgotten = await forgetMediaRecords(probeKeys);
+    const remaining = await db.db
+      .select({ id: mediaAssets.id })
+      .from(mediaAssets)
+      .where(inArray(mediaAssets.storageKey, probeKeys));
+    console.log(`${forgotten} probe row(s) removed`);
+    check("no probe row is left behind", remaining.length === 0, `${remaining.length} left`);
+  }
+
+  // The probe user goes last, and only its own row: the table it was inserted into is
+  // shared with everything else that will ever use this database.
+  if (db && userProbeSub) {
+    const probeUsers = await db.db
+      .delete(users)
+      .where(eq(users.cognitoSub, userProbeSub))
+      .returning({ id: users.id });
+    console.log(`${probeUsers.length} probe user row(s) removed`);
+  }
+
+  await closeDatabase();
+}
+
+/**
+ * A crash must not leave probe objects in a shared bucket or probe rows in a shared
+ * database, so both are cleaned up before the process is allowed to die.
+ */
+async function crashOut(error: unknown): Promise<void> {
+  console.error(`\nThe check stopped early: ${error instanceof Error ? error.stack : String(error)}`);
+  try {
+    await runCleanup();
+  } catch (cleanupError) {
+    console.error("cleanup after the crash also failed:", cleanupError);
+  }
+  process.exit(1);
+}
+process.on("uncaughtException", (error) => void crashOut(error));
+process.on("unhandledRejection", (error) => void crashOut(error));
 
 /* ------------------------------------------------------------ 1. configuration */
 // The app's own client, not a second one: see the note on `archiveClient`. Anything
@@ -264,6 +340,86 @@ if (db) {
   check("with no DATABASE_URL the recording reports configured: false", withoutDb.configured === false);
   check("...and records nothing without calling it an error", withoutDb.error === null && withoutDb.records.length === 0);
   if (savedDatabaseUrl) process.env.DATABASE_URL = savedDatabaseUrl;
+
+  // The two deadlines on a connection, asserted by asking the server what it thinks.
+  // An unset statement_timeout is the difference between "the database is slow" being a
+  // reported failure and the platform killing the request with nothing to read.
+  const timeoutRows = (await db.db.execute(sql`show statement_timeout`)) as unknown as {
+    rows: { statement_timeout: string }[];
+  };
+  const statementTimeout = timeoutRows.rows[0]?.statement_timeout ?? "(none)";
+  check(
+    "a stalled query is bounded by a statement timeout",
+    statementTimeout !== "0" && statementTimeout !== "(none)",
+    statementTimeout,
+  );
+
+  // The other half of the degradation story: switched on but unreachable. Not the same
+  // case as unset, and the one that happens in production. The address is in a reserved
+  // range that never answers, so this is the worst version of it rather than a polite one.
+  process.env.DATABASE_URL = "postgresql://probe:probe@10.255.255.1:5432/ecoepr?sslmode=no-verify";
+  const startedAt = Date.now();
+  const unreachable = await recordArchivedObjects(recorded.storage.objects);
+  const waitedMs = Date.now() - startedAt;
+  check(
+    "an unreachable database is reported as an error, not thrown into the request",
+    unreachable.configured === true && unreachable.error !== null,
+    (unreachable.error ?? "no error").slice(0, 70),
+  );
+  check(
+    "...and it gives up in seconds rather than spending the request's whole budget",
+    waitedMs < 15_000,
+    `${waitedMs} ms`,
+  );
+
+  // The claim the route depends on: a database outage is a recording failure, not an
+  // archiving failure. The bytes are already in S3 by the time this runs.
+  const PROBE_D = Buffer.from("ecoepr archive probe D — archived while the database is down");
+  const whileDown = await archiveAndRecord([
+    { kind: "photo", media: { mimeType: "image/jpeg", dataBase64: PROBE_D.toString("base64") } },
+  ]);
+  const downKey = whileDown.storage.objects[0]?.key;
+  if (downKey) cleanup.push({ key: downKey });
+  check(
+    "a dead database does not stop the object being archived",
+    whileDown.storage.objects.length === 1 && whileDown.storage.error === null,
+    `${whileDown.storage.objects.length} object(s)`,
+  );
+  check(
+    "...while the response says plainly that the row is missing",
+    whileDown.records?.error !== null && whileDown.records !== null,
+    (whileDown.records?.error ?? "no error").slice(0, 60),
+  );
+  if (savedDatabaseUrl) process.env.DATABASE_URL = savedDatabaseUrl;
+
+  // Two collectors tapping submit at the same moment is not hypothetical, and the unique
+  // index is the only thing standing between it and a duplicate row.
+  const PROBE_E = Buffer.from("ecoepr archive probe E — two identical submissions at once");
+  const atOnce = (await Promise.all([
+    archiveAndRecord([
+      { kind: "photo", media: { mimeType: "image/jpeg", dataBase64: PROBE_E.toString("base64") } },
+    ]),
+    archiveAndRecord([
+      { kind: "photo", media: { mimeType: "image/jpeg", dataBase64: PROBE_E.toString("base64") } },
+    ]),
+  ])) as Awaited<ReturnType<typeof archiveAndRecord>>[];
+  const raceKey = atOnce[0]?.storage.objects[0]?.key;
+  if (raceKey) cleanup.push({ key: raceKey });
+  check("two identical submissions at once resolve to the same key", raceKey !== undefined && raceKey === atOnce[1]?.storage.objects[0]?.key, String(raceKey));
+  check(
+    "...and neither call fails on the unique index",
+    atOnce.every((result) => result.records?.error === null),
+    atOnce.map((result) => result.records?.error ?? "ok").join(" / "),
+  );
+  const raceRows = raceKey
+    ? await db.db.select({ id: mediaAssets.id }).from(mediaAssets).where(eq(mediaAssets.storageKey, raceKey))
+    : [];
+  check("...and the table holds one row, not two", raceRows.length === 1, `${raceRows.length} rows`);
+  check(
+    "...with exactly one of the two calls reporting the insert",
+    atOnce.filter((result) => result.records?.records[0]?.inserted === true).length === 1,
+    atOnce.map((result) => String(result.records?.records[0]?.inserted)).join(" / "),
+  );
 } else {
   console.log(
     "  No DATABASE_URL, so there is no table to check against. This is the same posture the\n" +
@@ -411,32 +567,7 @@ if (savedRegion) process.env.S3_REGION = savedRegion;
 
 /* ------------------------------------------------------------- 10. clean up */
 console.log("\n--- cleanup ---");
-for (const { key } of cleanup) {
-  await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
-  console.log(`deleted ${key}`);
-}
-console.log(`${cleanup.length} probe object(s) removed; the bucket holds nothing this check created`);
-
-const probeKeys = cleanup.map(({ key }) => key);
-if (db && probeKeys.length > 0) {
-  const forgotten = await forgetMediaRecords(probeKeys);
-  const remaining = await db.db
-    .select({ id: mediaAssets.id })
-    .from(mediaAssets)
-    .where(inArray(mediaAssets.storageKey, probeKeys));
-  console.log(`${forgotten} probe row(s) removed`);
-  check("no probe row is left behind", remaining.length === 0, `${remaining.length} left`);
-
-  // The probe user goes last, and only its own row: the table it was inserted into is
-  // shared with everything else that will ever use this database.
-  const probeUsers = await db.db
-    .delete(users)
-    .where(eq(users.cognitoSub, userProbeSub ?? ""))
-    .returning({ id: users.id });
-  console.log(`${probeUsers.length} probe user row(s) removed`);
-}
-
-await closeDatabase();
+await runCleanup();
 
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);

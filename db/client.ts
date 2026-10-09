@@ -24,11 +24,12 @@ import * as schema from "./schema";
  *    `Pool` per module instance would leak a connection per reload until Postgres
  *    refuses all of them.
  *
- * 3. **Waiting has a ceiling.** Amplify Hosting cuts a server-rendered request off at
- *    around thirty seconds, and the model call already spends up to 26 of them. A
- *    connection attempt that hangs on a dead host would spend the rest, so
- *    `connectionTimeoutMillis` below turns "the database is unreachable" into a
- *    reported failure in seconds instead of a bare 504.
+ * 3. **Waiting has a ceiling, on both halves of the wait.** Amplify Hosting cuts a
+ *    server-rendered request off at around thirty seconds, and the model call already
+ *    spends up to 26 of them. A connection attempt that hangs on a dead host, or a query
+ *    that stalls on a server which accepted the connection and then stopped answering,
+ *    would spend the rest — so `connectionTimeoutMillis` and `statement_timeout` below
+ *    turn both into a reported failure in seconds instead of a bare 504.
  *
  * This module is also imported by `npm run s3:check`, which runs under plain Node — see
  * `scripts/ts-paths.mjs` for how a bare Node process resolves `./schema` and `@/db/*`.
@@ -80,7 +81,12 @@ export function database(): { db: NodePgDatabase<typeof schema>; pool: Pool } | 
     // by widening a pool, and this app's writes are a handful of rows per request.
     max: 5,
     idleTimeoutMillis: 30_000,
+    // Reaching the server, and then waiting on it, are two different ways to hang, and
+    // both have to be bounded for the deadline on the request to mean anything. The
+    // archive does the same thing with its 8s PUT: a dependency that never answers must
+    // become a reported failure in seconds, not a 504 the operator cannot read.
     connectionTimeoutMillis: 5_000,
+    statement_timeout: 5_000,
   });
 
   // A pool that emits `error` with no listener takes the whole process down. This is
