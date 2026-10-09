@@ -113,10 +113,18 @@ export function priceMaterials(
     0,
   );
 
+  // The handling fee is a per-class tariff, so it does not shrink with the item: a
+  // light submission of a dear class can produce a gross value smaller than its own
+  // handling cost. The collector is never shown a negative offer — the shortfall is
+  // the operator's cost, not a debt owed by the person in the lane — so the floor is
+  // applied here, where the money is computed, and not on a screen. A caller that
+  // wants to say so out loud compares `grossValue` with `handlingFee`.
+  const netToCollector = Math.max(0, grossValue - seed.handlingFee);
+
   return {
     grossValue,
     handlingFee: seed.handlingFee,
-    netToCollector: grossValue - seed.handlingFee,
+    netToCollector,
     eprCreditInr: seed.eprCreditInr,
     eprCreditNote: seed.eprCreditNote,
     rateBasis: seed.rateBasis,

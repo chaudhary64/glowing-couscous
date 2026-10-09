@@ -31,6 +31,35 @@ import type { Verdict } from "@/lib/types";
 
 export type LiveMode = "valuation" | "intake" | "gatekeeper";
 
+/**
+ * Plain words for every failure code the panel can be handed, so the badge names the
+ * cause instead of echoing a machine code at whoever is standing in the lane.
+ *
+ * A key with no credits, a key that was rejected, a retired model id and a merely busy
+ * model are four different problems with four different fixes; `ai_call_failed` over all
+ * of them told the reader nothing and sent them to the wrong place. Anything not listed
+ * still falls through as its own code rather than being hidden.
+ */
+const FAILURE_LABELS: Record<string, string> = {
+  ai_unavailable: "Live analysis off",
+  ai_credits: "AI credits exhausted",
+  ai_key_rejected: "AI key rejected",
+  ai_model_missing: "AI model retired",
+  ai_at_capacity: "AI at capacity — retry",
+  ai_call_failed: "AI call failed",
+  ai_reply_invalid: "Reply not priceable",
+  ai_failed: "AI failed",
+  cross_origin: "Blocked request",
+  unauthorized: "Sign-in needed",
+  forbidden: "Not your role",
+  payload_too_large: "Upload too large",
+  unsupported_media: "Unsupported file type",
+  empty_request: "Nothing attached",
+  bad_request: "Request rejected",
+  mic_denied: "Microphone refused",
+  network: "No connection",
+};
+
 interface Media {
   mimeType: string;
   dataBase64: string;
@@ -444,7 +473,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
         {failure ? (
           <div className="mt-4 border-2 border-hazard bg-hazard-tint p-4">
             <Badge tone="hazard" solid>
-              {failure.code === "ai_unavailable" ? "Live analysis off" : failure.code}
+              {FAILURE_LABELS[failure.code] ?? failure.code}
             </Badge>
             <p className="mt-2 text-sm leading-relaxed text-ink">{failure.message}</p>
             {failure.issues?.length ? (

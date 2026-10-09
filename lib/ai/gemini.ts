@@ -59,8 +59,15 @@ export class AiCallError extends Error {
   }
 }
 
-export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
-export const DEFAULT_FALLBACK_MODEL = "gemini-2.5-flash";
+// The primary is a *lite* model on purpose: it is the cheapest id in the family and
+// therefore has the most free-tier headroom, which is what this build runs on. The
+// substitute stays a full flash, so a rate-limited primary falls back to something
+// with a separate quota bucket rather than to a second copy of the same limit.
+// Two ids that are gone: `gemini-2.5-flash` (the old substitute) now answers 404
+// "no longer available to new users", and the prepay project behind the first key was
+// out of credits, so every id failed until the key moved to a free-tier project.
+export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
+export const DEFAULT_FALLBACK_MODEL = "gemini-3.8-flash";
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /**
@@ -109,13 +116,34 @@ export function aiFallbackModel(): string {
   return configured || DEFAULT_FALLBACK_MODEL;
 }
 
-/** Capacity, not correctness: the model is busy or rate-limited, so retrying may work. */
+/**
+ * Capacity, not correctness: the model is busy or rate-limited, so asking the
+ * substitute may work.
+ *
+ * The statuses that are *not* capacity matter more than the ones that are, because
+ * Google reuses a single status word for two different problems. A project whose
+ * credits are gone answers `402` with `"status": "RESOURCE_EXHAUSTED"` — exactly the
+ * word a rate-limited model puts in a `429`. Matching on that word alone sent a key
+ * with no credits down the substitute path, where it failed the same way, and the
+ * operator was told "both models were unavailable" instead of the sentence that names
+ * the real cause. Credits and credentials belong to the key, so no other model id can
+ * rescue them: those statuses are answered immediately, with the provider's own words.
+ */
 function isCapacityFailure(error: unknown): boolean {
   if (!(error instanceof AiCallError)) return false;
+  if (
+    error.status === 401 ||
+    error.status === 402 ||
+    error.status === 403 ||
+    error.status === 404
+  ) {
+    return false;
+  }
   if (error.status === 429 || error.status === 503) return true;
-  return /high demand|overloaded|unavailable|try again later|resource.?exhausted/i.test(
-    error.message,
-  );
+  // No usable status: a timeout or a dropped connection, which the substitute may
+  // survive. Kept deliberately narrow — "unavailable" on its own also appears in
+  // bodies that mean "this key is finished", which is not a capacity problem.
+  return /high demand|overloaded|try again later|temporarily unavailable/i.test(error.message);
 }
 
 function buildParts(args: AiCallArgs, maxBytes = MAX_MEDIA_BYTES): Record<string, unknown>[] {

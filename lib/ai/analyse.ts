@@ -12,7 +12,7 @@ import {
   stableSerial,
   type ItemClassCode,
 } from "@/lib/data/rate-card";
-import { formatMass } from "@/lib/format";
+import { formatInr, formatMass } from "@/lib/format";
 import { getAiProvider, type AiMediaPart } from "@/lib/ai/gemini";
 import { parseIntakeProposal, parseItemProposal } from "@/lib/ai/parse";
 import {
@@ -235,6 +235,14 @@ export function priceProposal(
   if (lines.length === 0) {
     raised.push(
       "No material fractions were declared, so there is nothing to pay for on this submission.",
+    );
+  }
+  // The rate card floors the net at zero, so this is where the reason for that is
+  // said out loud: a floor nobody explains reads like a broken subtraction.
+  if (valuation.handlingFee > valuation.grossValue) {
+    const shortfall = valuation.handlingFee - valuation.grossValue;
+    raised.push(
+      `Handling costs ${formatInr(valuation.handlingFee)} but the declared material is worth ${formatInr(valuation.grossValue)}, so the offer is floored at ₹0. The ${formatInr(shortfall)} difference is the operator's cost, not a debt for the collector.`,
     );
   }
   if (!source.inputs.includes("photo")) {

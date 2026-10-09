@@ -224,6 +224,34 @@ function readMediaPart(
   return { ok: true, value: { mimeType, dataBase64: data } };
 }
 
+/**
+ * The code the screen turns into words, decided by the status the provider sent.
+ *
+ * One generic `ai_call_failed` hid the difference between four problems that need
+ * four different actions, so each gets its own code: a key with no credits (402), a
+ * key that is not accepted (401/403), a model id that has been retired (404), and a
+ * model that is merely busy (429/503).
+ *
+ * The status decides, never the message: Google reports both a rate-limited model and
+ * an exhausted balance with the same word, `RESOURCE_EXHAUSTED`.
+ */
+export function aiCallFailureCode(status: number | undefined): string {
+  switch (status) {
+    case 402:
+      return "ai_credits";
+    case 401:
+    case 403:
+      return "ai_key_rejected";
+    case 404:
+      return "ai_model_missing";
+    case 429:
+    case 503:
+      return "ai_at_capacity";
+    default:
+      return "ai_call_failed";
+  }
+}
+
 /** One place that turns a thrown AI error into the status the screen should show. */
 export function aiErrorResponse(error: unknown): NextResponse {
   if (error instanceof AiUnavailableError) {
@@ -238,7 +266,11 @@ export function aiErrorResponse(error: unknown): NextResponse {
     );
   }
   if (error instanceof AiCallError) {
-    return failure("ai_call_failed", error.message, error.status && error.status >= 500 ? 502 : error.status ?? 502);
+    return failure(
+      aiCallFailureCode(error.status),
+      error.message,
+      error.status && error.status >= 500 ? 502 : error.status ?? 502,
+    );
   }
   console.error("[ai] unexpected failure", error);
   return failure("ai_failed", "The analysis failed before it produced an answer.", 500);
