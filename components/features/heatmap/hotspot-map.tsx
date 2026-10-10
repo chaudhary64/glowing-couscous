@@ -40,6 +40,15 @@ const COLORS = {
   lead: "#5a6470",
 };
 
+/**
+ * The 3D view. Wards rise by pressure and sites stand as columns by detections, both
+ * from the same figures the 2D shading uses, so a flat city means no live data, never
+ * a drawing failure. Heights are in metres on a map spanning ~25 km.
+ */
+const WARD_HEIGHT_PER_PRESSURE_M = 14;
+const SITE_HEIGHT_PER_DETECTION_M = 110;
+const TILT = { pitch: 55, bearing: -18 };
+
 const STATUS_COLOR: Record<HeatmapCluster["status"], string> = {
   open: COLORS.hazard,
   van_assigned: COLORS.copper,
@@ -124,6 +133,7 @@ export function HotspotMap({
   const mapRef = useRef<MapLibreMap | null>(null);
   const onSelectRef = useRef(onSelect);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const [tilted, setTilted] = useState(false);
 
   // The map's click handler is registered once; it reads the latest callback through
   // this ref, which is updated after each render rather than during one.
@@ -195,6 +205,19 @@ export function HotspotMap({
             source: "wards",
             paint: { "line-color": COLORS.ink, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 14, 1.6], "line-opacity": 0.7 },
           });
+          // 3D: hidden until tilted. Wards first so site columns draw over them.
+          map.addLayer({
+            id: "ward-extrude",
+            type: "fill-extrusion",
+            source: "wards",
+            layout: { visibility: "none" },
+            paint: {
+              "fill-extrusion-color": ["interpolate", ["linear"], ["get", "pressure"], 0, "#d9dcd2", 50, COLORS.copper, 100, COLORS.hazard],
+              "fill-extrusion-height": ["*", ["get", "pressure"], WARD_HEIGHT_PER_PRESSURE_M],
+              "fill-extrusion-opacity": 0.78,
+              "fill-extrusion-vertical-gradient": true,
+            },
+          });
           map.addLayer({
             id: "points-heat",
             type: "heatmap",
@@ -244,6 +267,17 @@ export function HotspotMap({
             },
           });
           map.addLayer({
+            id: "cluster-extrude",
+            type: "fill-extrusion",
+            source: "clusters",
+            layout: { visibility: "none" },
+            paint: {
+              "fill-extrusion-color": ["get", "color"],
+              "fill-extrusion-height": ["*", ["get", "detections"], SITE_HEIGHT_PER_DETECTION_M],
+              "fill-extrusion-opacity": 0.92,
+            },
+          });
+          map.addLayer({
             id: "ward-letter",
             type: "symbol",
             source: "ward-labels",
@@ -290,6 +324,24 @@ export function HotspotMap({
     (map.getSource("clusters") as GeoJSONSource | undefined)?.setData(clusterFeatures(clusters));
   }, [state, points, clusters, wards]);
 
+  // 2D ↔ 3D: swap the flat shading for extrusions and tilt the camera. Rotation stays
+  // off for the user; the bearing here is a fixed, readable three-quarter view.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (state !== "ready" || !map) return;
+    const show = (id: string, on: boolean) => map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+    show("ward-extrude", tilted);
+    show("cluster-extrude", tilted);
+    show("ward-fill", !tilted);
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    map.easeTo({
+      pitch: tilted ? TILT.pitch : 0,
+      bearing: tilted ? TILT.bearing : 0,
+      duration: reduced ? 0 : 1400,
+      easing: (t) => 1 - Math.pow(1 - t, 3),
+    });
+  }, [state, tilted]);
+
   // Selection: thicken the outline, and bring the site into view — but only once the
   // selection has changed. The first render opens on the whole city, which is the
   // briefing view; flying to site #1 on load would hide the pattern the map exists for.
@@ -310,6 +362,16 @@ export function HotspotMap({
           relative }` on this element, which would beat `absolute inset-0` and collapse
           the map to zero height. */}
       <div ref={container} style={{ position: "absolute", inset: 0 }} />
+      {state === "ready" ? (
+        <button
+          type="button"
+          onClick={() => setTilted((t) => !t)}
+          aria-pressed={tilted}
+          className="absolute left-3 top-3 border-2 border-ink bg-paper-raised px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink hover:bg-ink hover:text-paper aria-pressed:bg-ink aria-pressed:text-paper"
+        >
+          {tilted ? "Flat view" : "3D view"}
+        </button>
+      ) : null}
       {state !== "ready" ? (
         <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
           <p className="max-w-xs font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
