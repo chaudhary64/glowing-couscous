@@ -3,6 +3,7 @@ import { Anton, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 import { ConsentBanner } from "@/components/layout/consent-banner";
 import { MotionObserver } from "@/components/motion/motion-observer";
+import { WorldBackdrop } from "@/components/world/world-backdrop";
 
 const anton = Anton({
   subsets: ["latin"],
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <body className="min-h-full">
+        <WorldBackdrop />
         {children}
         <MotionObserver />
         <ConsentBanner />

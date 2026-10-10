@@ -22,7 +22,7 @@ export function Stat({
   className?: string;
 }) {
   return (
-    <div className={cn("rule-light border-t-2 border-ink pt-2.5", className)}>
+    <div className={cn("glass rule-light border-t-2 border-ink bg-paper-raised/55 px-3 pb-3 pt-2.5", className)}>
       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
         {label}
       </p>

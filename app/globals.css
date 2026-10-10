@@ -72,18 +72,19 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* The ground. It sits on <html>, the root, so the 3D world (a fixed layer at z-index
+   -1, components/world) paints above it and below the page. Without WebGL this
+   gradient is what the site stands on: a dark board, lit warm from above. */
 html {
   color-scheme: dark;
-  background-color: var(--color-paper);
-}
-
-body {
-  /* The ground under the 3D world (components/world). Without WebGL this gradient is
-     what the site stands on: a dark board, lit warm from above. */
   background:
     radial-gradient(1200px 700px at 70% -10%, rgb(232 137 77 / 0.10), transparent 60%),
     radial-gradient(900px 600px at 0% 100%, rgb(72 195 138 / 0.05), transparent 60%),
     var(--color-paper);
+  background-attachment: fixed;
+}
+
+body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   /* Ledger figures must not shift column width when they change. */
@@ -805,4 +806,37 @@ body {
     inset 0 0 0 1px rgb(255 255 255 / 0.06),
     0 40px 80px -30px rgb(0 0 0 / 0.9),
     0 0 60px -20px rgb(232 137 77 / 0.25);
+}
+
+
+/* ---------------------------------------------------------------- the 3D world
+   components/world/world-backdrop.tsx: one fixed WebGL layer behind every page. It
+   fades in once the board has loaded; the veil keeps text legible over it (darker at
+   the edges and under the top bar, where headings sit). */
+.world-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1400ms var(--ease-print);
+}
+.world-backdrop[data-ready] {
+  opacity: 1;
+}
+.world-backdrop canvas {
+  display: block;
+}
+.world-veil {
+  position: absolute;
+  inset: 0;
+  /* A uniform dim (the world is scenery, the page is the subject), darker again under
+     the top bar and at the edges where headings and the rail sit. */
+  background:
+    linear-gradient(180deg, rgb(5 8 11 / 0.6) 0%, rgb(5 8 11 / 0.15) 26%, transparent 50%),
+    radial-gradient(ellipse 120% 90% at 55% 45%, transparent 40%, rgb(5 8 11 / 0.72) 100%),
+    rgb(5 8 11 / 0.32);
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-backdrop { transition: none; }
 }
