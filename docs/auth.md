@@ -60,6 +60,7 @@ nothing.
 | Hotspot map | `/map` | any role |
 | Intake | `/intake` | operator |
 | Pickups | `/pickups` | operator |
+| Handoff · gate · demo | `/handoff`, `/gate`, `/demo` | operator |
 | Collectors | `/collectors` | operator |
 | Evidence archive | `/evidence` | operator |
 | Valuations | `/valuation` | officer |

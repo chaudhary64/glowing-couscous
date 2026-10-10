@@ -57,3 +57,7 @@ amplog*.err
 buildlog.json
 buildlog.err
 dev.log
+
+# DynamoDB Local (npm run pickup:local): the jar and the demo data
+/.dynamodb
+/dynamodb-local-metadata.json

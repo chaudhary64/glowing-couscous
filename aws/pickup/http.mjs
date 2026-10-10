@@ -22,6 +22,13 @@ const PROBLEM_STATUS = {
   credit_note_not_found: 404,
   pickup_not_settleable: 409,
   no_authorized_recycler: 409,
+  // The handoff PIN. Four codes, because the gate says something different for each:
+  // "try again" (403), "get a new PIN" (410 expired, 423 locked), or "this load
+  // predates PINs" (409).
+  pin_mismatch: 403,
+  pin_expired: 410,
+  pin_locked: 423,
+  pin_not_issued: 409,
 };
 
 export function json(statusCode, body) {

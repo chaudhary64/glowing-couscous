@@ -6,9 +6,12 @@
 #   DynamoDB     three tables: the licensed-recycler directory, the loads, and the
 #                collector's credit notes
 #   Lambda       `ecoepr-smart-pickup`, deployed as source files with no dependencies
+#                `ecoepr-pickup-payout`, the same files, invoked by the pickups
+#                table's DynamoDB Stream to send the (simulated) UPI credit
 #   API Gateway  an HTTP API in front of it, every route behind the Cognito pool the
 #                app already uses, with stage-level throttling
-#   IAM          a role that can write those three tables and nothing else
+#   IAM          a role that can write those three tables and nothing else, and a
+#                payout role that can read the stream and update pickups, no more
 #
 # Region defaults to `ap-south-1`, where Cognito and RDS live: a collector's identity,
 # their load and their credit note are the same subject's data, and `db/README.md`
@@ -38,6 +41,9 @@ export MSYS_NO_PATHCONV=1
 REGION="${PICKUP_REGION:-ap-south-1}"
 FUNCTION_NAME="${PICKUP_FUNCTION:-ecoepr-smart-pickup}"
 ROLE_NAME="${PICKUP_ROLE:-ecoepr-smart-pickup-role}"
+PAYOUT_FUNCTION="${PICKUP_PAYOUT_FUNCTION:-ecoepr-pickup-payout}"
+PAYOUT_ROLE="${PICKUP_PAYOUT_ROLE:-ecoepr-pickup-payout-role}"
+PAYOUT_POLICY="${PICKUP_PAYOUT_POLICY:-EcoEPRPickupPayout}"
 POLICY_NAME="${PICKUP_POLICY:-EcoEPRSmartPickup}"
 API_NAME="${PICKUP_API_NAME:-ecoepr-pickup-api}"
 AUTHORIZER_NAME="${PICKUP_AUTHORIZER:-ecoepr-cognito}"
@@ -283,6 +289,26 @@ if [ "${PITR_FAILED:-0}" = "1" ]; then
   say "setup can be inspected, but the trail is not protected until this is fixed." >&2
 fi
 
+# ---------------------------------------------------------------- pickups stream
+
+# The payout function runs off this stream: settlement writes `payoutStatus = pending`
+# and the stream carries that change to `ecoepr-pickup-payout`. Old *and* new images,
+# because "just moved to settled" is a comparison between the two — a new image alone
+# cannot tell a fresh settlement from a later write to a settled load.
+STREAM_ENABLED="$(awsd dynamodb describe-table --table-name "$TABLE_PICKUPS" \
+  --query 'Table.StreamSpecification.StreamEnabled' --output text 2>/dev/null || true)"
+if [ "$STREAM_ENABLED" != "True" ]; then
+  awsd dynamodb update-table \
+    --table-name "$TABLE_PICKUPS" \
+    --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES >/dev/null
+  awsd dynamodb wait table-exists --table-name "$TABLE_PICKUPS"
+  say "Stream enabled:  ${TABLE_PICKUPS} (NEW_AND_OLD_IMAGES)"
+else
+  say "Stream exists:   ${TABLE_PICKUPS}"
+fi
+PICKUPS_STREAM_ARN="$(awsd dynamodb describe-table --table-name "$TABLE_PICKUPS" \
+  --query 'Table.LatestStreamArn' --output text)"
+
 # --------------------------------------------------------------------- IAM role
 
 ROLE_ARN="$(awsd iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text 2>/dev/null || true)"
@@ -352,6 +378,69 @@ awsd iam put-role-policy \
   --policy-document "file://${TMPDIR_SETUP}/policy.json" >/dev/null
 say "Inline policy:   ${POLICY_NAME} (six resources, no wildcard table)"
 
+# ------------------------------------------------------------------ payout role
+
+# A second role rather than a wider first one. The payout function reads one stream and
+# updates one table; it has no reason to read the recycler directory or write a credit
+# note, and the API function has no reason to read the stream.
+PAYOUT_ROLE_ARN="$(awsd iam get-role --role-name "$PAYOUT_ROLE" --query 'Role.Arn' --output text 2>/dev/null || true)"
+if [ -z "$PAYOUT_ROLE_ARN" ] || [ "$PAYOUT_ROLE_ARN" = "None" ]; then
+  cat > "${TMPDIR_SETUP}/trust.json" <<'JSON'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "Service": "lambda.amazonaws.com" },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+JSON
+  PAYOUT_ROLE_ARN="$(awsd iam create-role \
+    --role-name "$PAYOUT_ROLE" \
+    --description "EcoEPR pickup payout: the pickups stream, and payout fields on the pickups table" \
+    --assume-role-policy-document "file://${TMPDIR_SETUP}/trust.json" \
+    --query 'Role.Arn' --output text)"
+  say "Role created:    ${PAYOUT_ROLE}"
+else
+  say "Role exists:     ${PAYOUT_ROLE}"
+fi
+
+awsd iam attach-role-policy \
+  --role-name "$PAYOUT_ROLE" \
+  --policy-arn "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" >/dev/null
+
+cat > "${TMPDIR_SETUP}/payout-policy.json" <<JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PickupsStream",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:DescribeStream",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:ListStreams"
+      ],
+      "Resource": "${PICKUPS_STREAM_ARN}"
+    },
+    {
+      "Sid": "PayoutWrite",
+      "Effect": "Allow",
+      "Action": ["dynamodb:UpdateItem", "dynamodb:PutItem", "dynamodb:TransactWriteItems"],
+      "Resource": "arn:aws:dynamodb:${REGION}:${ACCOUNT}:table/${TABLE_PICKUPS}"
+    }
+  ]
+}
+JSON
+awsd iam put-role-policy \
+  --role-name "$PAYOUT_ROLE" \
+  --policy-name "$PAYOUT_POLICY" \
+  --policy-document "file://${TMPDIR_SETUP}/payout-policy.json" >/dev/null
+say "Inline policy:   ${PAYOUT_POLICY} (one stream, one table)"
+
 # ----------------------------------------------------------------- CloudWatch logs
 
 LOG_GROUP="/aws/lambda/${FUNCTION_NAME}"
@@ -366,6 +455,14 @@ fi
 # group gets "never expire", and a 14-day retention has to be set on an existing group.
 awsd logs put-retention-policy --log-group-name "$LOG_GROUP" --retention-in-days 14 >/dev/null
 say "Log retention:   14 days"
+
+PAYOUT_LOG_GROUP="/aws/lambda/${PAYOUT_FUNCTION}"
+if ! awsd logs describe-log-groups --log-group-name-prefix "$PAYOUT_LOG_GROUP" \
+  --query "logGroups[?logGroupName=='${PAYOUT_LOG_GROUP}'].logGroupName" --output text | grep -q .; then
+  awsd logs create-log-group --log-group-name "$PAYOUT_LOG_GROUP" >/dev/null
+  say "Log group created: ${PAYOUT_LOG_GROUP}"
+fi
+awsd logs put-retention-policy --log-group-name "$PAYOUT_LOG_GROUP" --retention-in-days 14 >/dev/null
 
 # -------------------------------------------------------------------- Lambda zip
 
@@ -440,6 +537,86 @@ fi
 
 FUNCTION_ARN="$(awsd lambda get-function --function-name "$FUNCTION_NAME" \
   --query 'Configuration.FunctionArn' --output text)"
+
+# ----------------------------------------------------------------- payout Lambda
+
+# Same zip, different entry point: `payout.handler` shares the marshaller and the
+# repository with the API, so a payout writes the trail in exactly the shape the API
+# reads it back in.
+if awsd lambda get-function --function-name "$PAYOUT_FUNCTION" >/dev/null 2>&1; then
+  say "Function exists: ${PAYOUT_FUNCTION} — updating code and configuration"
+  awsd lambda update-function-code \
+    --function-name "$PAYOUT_FUNCTION" \
+    --zip-file "fileb://${ZIP}" >/dev/null
+  awsd lambda wait function-updated --function-name "$PAYOUT_FUNCTION"
+  awsd lambda update-function-configuration \
+    --function-name "$PAYOUT_FUNCTION" \
+    --runtime "$RUNTIME" \
+    --handler "payout.handler" \
+    --timeout 30 \
+    --memory-size 128 \
+    --environment "$ENVIRONMENT" >/dev/null
+  awsd lambda wait function-updated --function-name "$PAYOUT_FUNCTION"
+else
+  # A role created a moment ago is not yet assumable by Lambda — IAM is eventually
+  # consistent — and `create-function` says so with an InvalidParameterValueException.
+  # Retried briefly rather than failed, for the same reason PITR is.
+  attempt=1
+  until awsd lambda create-function \
+    --function-name "$PAYOUT_FUNCTION" \
+    --description "Feature 4: send the collector's UPI credit when a load settles (simulated rail)" \
+    --runtime "$RUNTIME" \
+    --role "$PAYOUT_ROLE_ARN" \
+    --handler "payout.handler" \
+    --architectures arm64 \
+    --timeout 30 \
+    --memory-size 128 \
+    --zip-file "fileb://${ZIP}" \
+    --environment "$ENVIRONMENT" >/dev/null 2>"${TMPDIR_SETUP}/payout-create.err"; do
+    if [ "$attempt" -ge 10 ]; then
+      cat "${TMPDIR_SETUP}/payout-create.err" >&2
+      exit 1
+    fi
+    sleep 3
+    attempt=$((attempt + 1))
+  done
+  awsd lambda wait function-active --function-name "$PAYOUT_FUNCTION"
+  say "Function created: ${PAYOUT_FUNCTION}"
+fi
+
+# The filter keeps the function from being invoked for every write to the table — the
+# PIN counter, the event rows, the payout's own update. Only a META item that now reads
+# settled with a pending payout gets through; the handler checks the old image too.
+cat > "${TMPDIR_SETUP}/payout-filter.json" <<'JSON'
+{
+  "Filters": [
+    {
+      "Pattern": "{\"eventName\":[\"MODIFY\"],\"dynamodb\":{\"NewImage\":{\"sk\":{\"S\":[\"META\"]},\"status\":{\"S\":[\"settled\"]},\"payoutStatus\":{\"S\":[\"pending\"]}}}}"
+    }
+  ]
+}
+JSON
+
+MAPPING_ID="$(awsd lambda list-event-source-mappings \
+  --function-name "$PAYOUT_FUNCTION" \
+  --event-source-arn "$PICKUPS_STREAM_ARN" \
+  --query 'EventSourceMappings[0].UUID' --output text)"
+if [ -z "$MAPPING_ID" ] || [ "$MAPPING_ID" = "None" ]; then
+  awsd lambda create-event-source-mapping \
+    --function-name "$PAYOUT_FUNCTION" \
+    --event-source-arn "$PICKUPS_STREAM_ARN" \
+    --starting-position LATEST \
+    --batch-size 10 \
+    --maximum-retry-attempts 5 \
+    --function-response-types ReportBatchItemFailures \
+    --filter-criteria "file://${TMPDIR_SETUP}/payout-filter.json" >/dev/null
+  say "Stream trigger created: ${TABLE_PICKUPS} -> ${PAYOUT_FUNCTION}"
+else
+  awsd lambda update-event-source-mapping \
+    --uuid "$MAPPING_ID" \
+    --filter-criteria "file://${TMPDIR_SETUP}/payout-filter.json" >/dev/null
+  say "Stream trigger exists:  ${MAPPING_ID}"
+fi
 
 # --------------------------------------------------------------- API Gateway (HTTP)
 
@@ -516,6 +693,8 @@ create_route "GET /recyclers"
 create_route "POST /pickups"
 create_route "GET /pickups"
 create_route "GET /pickups/{pickupId}"
+create_route "GET /pickups/{pickupId}/events"
+create_route "POST /pickups/{pickupId}/pin"
 create_route "POST /pickups/{pickupId}/settle"
 create_route "GET /credit-notes/{pickupId}"
 
@@ -578,6 +757,7 @@ say ""
 say "Provisioned."
 say "  API URL        ${API_URL}"
 say "  Function       ${FUNCTION_NAME}"
+say "  Payout         ${PAYOUT_FUNCTION} (stream-triggered)"
 say "  Tables         ${TABLE_RECYCLERS}, ${TABLE_PICKUPS}, ${TABLE_NOTES}"
 say "  Authorizer     ${ISSUER}"
 say ""

@@ -66,3 +66,20 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ------------------------------------------------- smart pickup: UPI success */
+
+/* The overlay rises over the phone and the check stamps in after it, so the eye lands
+   on the amount once the motion has stopped. Both are off under reduced motion via the
+   rule above. */
+@keyframes handoff-upi-in {
+  from { opacity: 0; transform: translateY(12%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes handoff-upi-check {
+  0% { opacity: 0; transform: scale(0.4); }
+  70% { opacity: 1; transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+.handoff-upi { animation: handoff-upi-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.handoff-upi-check { animation: handoff-upi-check 520ms 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
