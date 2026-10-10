@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AssaySequence, type AssayFacts } from "@/components/features/landing/assay-sequence";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Panel, Surface } from "@/components/ui/card";
@@ -48,6 +49,27 @@ const receiptLines: ReceiptLine[] = item.materials.map((line) => {
     muted: value === 0,
   };
 });
+
+/** The scroll sequence's captions: the same item, the same rate card, as the receipt. */
+const assayFacts: AssayFacts = {
+  itemId: item.id,
+  itemLabel: item.label,
+  city: item.city,
+  matchedClass: item.gatekeeper.matchedClass,
+  confidence: formatPct(item.gatekeeper.confidence),
+  fractions: [...item.materials]
+    .sort((a, b) => b.massGrams - a.massGrams)
+    .map((line) => ({
+      name: /^[A-Z][a-z]?$/.test(line.symbol) ? `${line.name} (${line.symbol})` : line.name,
+      mass: formatMass(line.massGrams),
+    })),
+  totalMass: formatMass(item.massGrams),
+  lines: receiptLines.filter((line) => !line.muted),
+  gross: formatInr(item.valuation.grossValue),
+  fee: formatInr(item.valuation.handlingFee),
+  net: formatInr(item.valuation.netToCollector),
+  validUntil: item.valuation.validUntil,
+};
 
 /** A handful of real rate-card lines, so the page shows rates rather than asserting them. */
 const showcaseRates: MaterialId[] = ["cu", "al", "au", "pb", "li"];
@@ -142,6 +164,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ---------------------------------------------- the assay, in 3D */}
+      <AssaySequence facts={assayFacts} stamp={<Stamp verdict={item.gatekeeper.verdict} angle={-8} />} />
 
       {/* ------------------------------------------------------ the numbers */}
       <section className="border-b-2 border-ink bg-paper-raised">

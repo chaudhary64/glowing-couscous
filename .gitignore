@@ -63,3 +63,4 @@ dev.log
 
 # scratch for regenerating ward boundaries
 /.tmp-geo/
+/.models-src/
