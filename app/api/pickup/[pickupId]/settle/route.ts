@@ -28,5 +28,8 @@ export async function POST(request: Request, { params }: RouteContext<"/api/pick
       settledVia: "upi",
       issuedBy: access.user.email ?? undefined,
     },
+    // A wrong, locked or expired PIN is a step of the gate, not a failure: answered as
+    // 200 with the refusal in the body (see callPickupApi).
+    expected: ["pin_mismatch", "pin_locked", "pin_expired"],
   });
 }

@@ -152,7 +152,7 @@ export default function LandingPage() {
             <div className="rise-after mt-7 flex flex-wrap items-center gap-3" style={{ "--n": 2 } as React.CSSProperties}>
               <ButtonLink
                 href="/dashboard"
-                className="border-copper! bg-copper! text-paper! hover:border-paper! hover:bg-paper! hover:text-ink!"
+                className="border-copper! bg-copper! text-ink! hover:border-paper! hover:bg-paper! hover:text-ink!"
               >
                 Open the app
               </ButtonLink>

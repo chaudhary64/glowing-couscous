@@ -8,6 +8,7 @@ import * as THREE from "three";
 
 import { MODEL_URL } from "./board-model";
 import { boardMaterial } from "./board-material";
+import "@/components/world/quiet-three";
 
 /**
  * The hero: the gatekeeper sees through it.

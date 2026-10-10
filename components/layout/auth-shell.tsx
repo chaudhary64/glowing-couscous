@@ -51,7 +51,7 @@ export async function AuthShell({ children }: { children: React.ReactNode }) {
 
         <dl className="hidden flex-col gap-5 px-6 py-6 lg:flex">
           <div>
-            <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/45">
+            <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/60">
               Credentials
             </dt>
             <dd className="mt-1.5 text-[12px] leading-relaxed text-paper/70">
@@ -60,7 +60,7 @@ export async function AuthShell({ children }: { children: React.ReactNode }) {
             </dd>
           </div>
           <div>
-            <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/45">
+            <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/60">
               Authority
             </dt>
             <dd className="mt-1.5 text-[12px] leading-relaxed text-paper/70">
@@ -70,7 +70,7 @@ export async function AuthShell({ children }: { children: React.ReactNode }) {
             </dd>
           </div>
           <div>
-            <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/45">
+            <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/60">
               Session
             </dt>
             <dd className="mt-1.5 text-[12px] leading-relaxed text-paper/70">

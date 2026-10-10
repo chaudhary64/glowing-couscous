@@ -7,6 +7,7 @@ import * as THREE from "three";
 
 import { MODEL_URL } from "./board-model";
 import { boardMaterial } from "./board-material";
+import "@/components/world/quiet-three";
 import { explodeAttributes, footprint, partition } from "./board-parts";
 
 /**

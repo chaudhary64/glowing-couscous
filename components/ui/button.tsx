@@ -19,7 +19,8 @@ const variants: Record<ButtonVariant, string> = {
   // For use on an ink block, where primary's black-on-black would vanish. Full
   // inversion is impossible against ink, so the hover goes to copper instead.
   inverse:
-    "border-2 border-paper bg-paper text-ink hover:border-copper hover:bg-copper hover:text-paper",
+    // Dark type on copper (5:1); light type on copper is 3.2:1, under WCAG AA.
+    "border-2 border-paper bg-paper text-ink hover:border-copper hover:bg-copper hover:text-ink",
 };
 
 const base =

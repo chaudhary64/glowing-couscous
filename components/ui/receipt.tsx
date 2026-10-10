@@ -72,26 +72,30 @@ export function Receipt({
         {lines.map((line) => (
           // On a phone the detail drops under the label, so a long line cannot push the
           // value off the paper; from `sm` up it is the one-line ledger row.
-          <div key={line.label} className="flex flex-wrap items-baseline gap-x-2 py-1 sm:flex-nowrap">
+          // The dotted leader and the detail live inside the <dd>: a <dl> group may hold
+          // only <dt> and <dd>, so the row's flex layout continues inside the <dd>.
+          <div key={line.label} className="flex items-baseline gap-x-2 py-1">
             <dt className={cn("min-w-0", line.muted && "text-ink-muted")}>
               {line.label}
             </dt>
-            <span
-              aria-hidden
-              className="min-w-4 flex-1 translate-y-[-3px] border-b border-dotted border-rule"
-            />
-            {line.detail ? (
-              <span className="order-last w-full text-[11px] text-ink-muted sm:order-none sm:w-auto sm:shrink-0">
-                {line.detail}
+            <dd className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 sm:flex-nowrap">
+              <span
+                aria-hidden
+                className="min-w-4 flex-1 translate-y-[-3px] border-b border-dotted border-rule"
+              />
+              {line.detail ? (
+                <span className="order-last w-full text-[11px] text-ink-muted sm:order-none sm:w-auto sm:shrink-0">
+                  {line.detail}
+                </span>
+              ) : null}
+              <span
+                className={cn(
+                  "shrink-0 font-medium tabular-nums",
+                  line.muted && "text-ink-muted",
+                )}
+              >
+                {line.value}
               </span>
-            ) : null}
-            <dd
-              className={cn(
-                "shrink-0 font-medium tabular-nums",
-                line.muted && "text-ink-muted",
-              )}
-            >
-              {line.value}
             </dd>
           </div>
         ))}
@@ -104,11 +108,13 @@ export function Receipt({
             {adjustments.map((line) => (
               <div key={line.label} className="flex items-baseline gap-2 py-1">
                 <dt className="shrink-0 text-ink-muted">{line.label}</dt>
-                <span
-                  aria-hidden
-                  className="min-w-4 flex-1 translate-y-[-3px] border-b border-dotted border-rule"
-                />
-                <dd className="shrink-0 tabular-nums text-ink-soft">{line.value}</dd>
+                <dd className="flex min-w-0 flex-1 items-baseline gap-2">
+                  <span
+                    aria-hidden
+                    className="min-w-4 flex-1 translate-y-[-3px] border-b border-dotted border-rule"
+                  />
+                  <span className="shrink-0 tabular-nums text-ink-soft">{line.value}</span>
+                </dd>
               </div>
             ))}
           </dl>
@@ -135,7 +141,7 @@ export function Receipt({
       {note ? (
         <>
           <div aria-hidden className="mx-4 border-t border-dotted border-rule" />
-          <p className="px-4 py-3 text-[11px] leading-relaxed text-ink-muted">{note}</p>
+          <p className="px-4 py-3 text-[11px] leading-relaxed text-ink-soft">{note}</p>
         </>
       ) : null}
 

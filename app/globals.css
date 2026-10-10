@@ -860,28 +860,28 @@ main {
    flies, and the new one comes forward out of it. Replaces the paper tear/print
    keyframes; the transition classes (.tear, .print) are unchanged. Reduced motion
    still makes both instant (rule in the page-transitions block above). */
+/* Quick on purpose: the page is ready when it lands, and the camera flight in the world
+   behind carries the sense of travel. Transform and opacity only — a full-page blur
+   was the expensive part. */
 ::view-transition-old(.tear) {
-  animation: depth-out 380ms cubic-bezier(0.55, 0, 0.75, 0.3) both;
+  animation: depth-out 200ms cubic-bezier(0.55, 0, 0.75, 0.3) both;
 }
 ::view-transition-new(.print) {
-  animation: depth-in 640ms cubic-bezier(0.2, 0.8, 0.2, 1) 120ms both;
+  animation: depth-in 340ms cubic-bezier(0.2, 0.8, 0.2, 1) 40ms both;
 }
 @keyframes depth-out {
   to {
     opacity: 0;
-    filter: blur(4px);
-    transform: perspective(1200px) translateZ(-260px) rotateX(7deg) translateY(-24px);
+    transform: perspective(1200px) translateZ(-140px) rotateX(4deg);
   }
 }
 @keyframes depth-in {
   from {
     opacity: 0;
-    filter: blur(6px);
-    transform: perspective(1200px) translateZ(200px) rotateX(-5deg) translateY(28px);
+    transform: perspective(1200px) translateZ(110px) rotateX(-3deg) translateY(14px);
   }
   to {
     opacity: 1;
-    filter: none;
     transform: none;
   }
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import "maplibre-gl/dist/maplibre-gl.css";
 
 import { useEffect, useRef, useState } from "react";
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
@@ -205,6 +204,14 @@ export function HotspotMap({
           minZoom: 3.5,
         });
         map.touchZoomRotate.disableRotation();
+        // OpenFreeMap's dark style names a few fill patterns its sprite does not ship
+        // ("wood-pattern"); MapLibre warns for each. A transparent 1×1 stands in, which is
+        // what the style would draw for a missing pattern anyway.
+        // MapLibre 6 asks this resolver first and warns only if it supplies nothing.
+        const created = map;
+        created.setMissingStyleImageResolver((id) => {
+          if (!created.hasImage(id)) created.addImage(id, { width: 1, height: 1, data: new Uint8Array(4) });
+        });
         map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
         map.addControl(
           new maplibre.AttributionControl({
@@ -583,6 +590,10 @@ export function HotspotMap({
 
   return (
     <div className="relative aspect-[4/3] w-full border border-ink bg-paper-raised">
+      {/* MapLibre's stylesheet, linked only where a map renders (React 19 hoists it and
+          loads it once). A static import made every page that can prefetch /map preload
+          it, and the browser warned that it went unused. */}
+      <link rel="stylesheet" href={`/vendor/maplibre-gl-${MAPLIBRE_VERSION}/maplibre-gl.css`} precedence="default" />
       {/* Inline, not a class: MapLibre's stylesheet sets `.maplibregl-map { position:
           relative }` on this element, which would beat `absolute inset-0` and collapse
           the map to zero height. */}

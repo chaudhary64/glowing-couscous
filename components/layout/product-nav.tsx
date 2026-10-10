@@ -107,7 +107,7 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
         <span ref={marker} aria-hidden className="nav-marker pointer-events-none absolute inset-x-0 top-0 hidden lg:block" />
         {groups.map((group) => (
           <div key={group.label} className="lg:pt-5">
-            <p className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-paper/45 lg:block lg:px-6">
+            <p className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-paper/60 lg:block lg:px-6">
               {group.label}
             </p>
             <ul className="flex gap-px lg:mt-2 lg:flex-col lg:gap-0">
@@ -155,7 +155,7 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
       </div>
 
       <div className="mt-auto hidden border-t border-paper/20 px-6 py-5 lg:block">
-        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/45">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/60">
           Signed in
         </p>
         <p className="mt-1.5 text-[13px] font-medium leading-snug text-paper">

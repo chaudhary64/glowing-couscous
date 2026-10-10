@@ -45,8 +45,9 @@ export function DocNav() {
             aria-current={pathname === "/doc" ? "page" : undefined}
             className={[
               "flex min-w-[170px] items-start gap-3 border-b border-paper/15 px-5 py-3.5 transition-colors lg:min-w-0 lg:px-6",
+              // Active: copper glass with a lit edge, as in the product rail.
               pathname === "/doc"
-                ? "bg-paper text-ink"
+                ? "bg-[rgb(232_137_77/0.16)] text-paper shadow-[inset_3px_0_0_#e8894d]"
                 : "text-paper/80 hover:bg-paper/10 hover:text-paper",
             ].join(" ")}
           >
@@ -67,14 +68,14 @@ export function DocNav() {
                 className={[
                   "flex min-w-[190px] items-start gap-3 border-b border-paper/15 px-5 py-3.5 transition-colors lg:min-w-0 lg:px-6",
                   active
-                    ? "bg-paper text-ink"
+                    ? "bg-[rgb(232_137_77/0.16)] text-paper shadow-[inset_3px_0_0_#e8894d]"
                     : "text-paper/80 hover:bg-paper/10 hover:text-paper",
                 ].join(" ")}
               >
                 <span
                   className={[
                     "mt-0.5 font-mono text-[11px] tabular-nums",
-                    active ? "text-copper" : "text-copper/80",
+                    "text-copper",
                   ].join(" ")}
                 >
                   {String(feature.rank).padStart(2, "0")}
@@ -86,7 +87,7 @@ export function DocNav() {
                   <span
                     className={[
                       "mt-0.5 block font-mono text-[10px] uppercase tracking-[0.12em]",
-                      active ? "text-ink-muted" : "text-paper/45",
+                      "text-paper/60",
                     ].join(" ")}
                   >
                     {statusLabel[feature.status]}

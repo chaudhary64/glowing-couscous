@@ -64,11 +64,24 @@ export async function authorizePickup(request: Request, pathname: "/handoff" | "
 
 type Method = "GET" | "POST";
 
+/**
+ * Refusals that are an expected step of a flow rather than a failure — a wrong, locked or
+ * expired PIN at the gate. The browser logs every 4xx response as a console error, even
+ * one the screen handles; a route that names these here returns them as 200 with the
+ * refusal in the body (`error`), which the screens already read. The Lambda API keeps
+ * its status codes; this is only the app's own boundary.
+ */
+export type ExpectedRefusal = "pin_mismatch" | "pin_locked" | "pin_expired";
+
 export async function callPickupApi(
   user: AuthUser,
   method: Method,
   path: string,
-  { body, query }: { body?: unknown; query?: Record<string, string> } = {},
+  {
+    body,
+    query,
+    expected = [],
+  }: { body?: unknown; query?: Record<string, string>; expected?: ExpectedRefusal[] } = {},
 ): Promise<NextResponse> {
   try {
     const result = process.env.PICKUP_LOCAL === "true"
@@ -83,6 +96,10 @@ export async function callPickupApi(
         "The smart-pickup API is not configured. Set PICKUP_LOCAL=true and run `npm run pickup:local`, or set PICKUP_API_URL to the deployed API.",
         503,
       );
+    }
+    const code = (result.body as { error?: { code?: string } } | null)?.error?.code;
+    if (result.status >= 400 && code && (expected as string[]).includes(code)) {
+      return pickupJson({ ...(result.body as object), refused: true }, 200);
     }
     return pickupJson(result.body, result.status);
   } catch (error) {

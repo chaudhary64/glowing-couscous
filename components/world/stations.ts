@@ -25,17 +25,19 @@ export interface Station {
 
 const OVERVIEW: Station = { eye: [2.2, 1.5, 2.4], look: [0, 0, 0], drift: 0.08 };
 
-/** The landing page's dive: high over the board, down onto it, along the traces, past
- *  the heatsink, and back up into the dark at the close. */
+/** The landing page's flight: it opens close over the board and pulls back as you
+ *  scroll — up past the heatsink, out over the whole board, and finally high above it
+ *  with the circuit floor running off into the dark. */
 const LANDING: Station = {
   ...OVERVIEW,
+  eye: [1.05, 0.55, 1.15],
+  look: [0.1, 0.05, 0],
   drift: 0.04,
   path: [
-    { at: 0, eye: [2.2, 1.5, 2.4], look: [0, 0, 0] },
-    { at: 0.28, eye: [1.05, 0.55, 1.15], look: [0.1, 0.05, 0] },
-    { at: 0.52, eye: [-0.2, 0.34, 1.05], look: [-0.6, 0.05, -0.25] },
-    { at: 0.76, eye: [0.85, 0.62, -0.55], look: [0.05, 0.1, -0.1] },
-    { at: 1, eye: [-1.9, 2.1, -1.7], look: [0, 0, 0] },
+    { at: 0, eye: [1.05, 0.55, 1.15], look: [0.1, 0.05, 0] },
+    { at: 0.3, eye: [1.55, 0.9, 1.6], look: [0.05, 0.04, -0.05] },
+    { at: 0.65, eye: [2.3, 1.55, 2.4], look: [0, 0, 0] },
+    { at: 1, eye: [3.1, 2.6, 3.0], look: [0, 0, 0] },
   ],
 };
 

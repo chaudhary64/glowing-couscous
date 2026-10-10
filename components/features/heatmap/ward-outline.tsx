@@ -31,7 +31,9 @@ export function WardOutline() {
               className="fill-paper-raised stroke-ink"
               strokeWidth={0.8}
             >
-              <title>{ward.name} · {ward.areaKm2} km²</title>
+              {/* One string: several text children inside an SVG <title> hydrate as
+                  different text nodes than the server wrote (React #418). */}
+              <title>{`${ward.name} · ${ward.areaKm2} km²`}</title>
             </path>
             <text
               x={x(ward.centroid.longitude)}

@@ -661,6 +661,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
             <input
               ref={photoInput}
               type="file"
+              aria-label="Photo of the item"
               accept="image/jpeg,image/png,image/webp,image/heic"
               onChange={(event) => void pickPhoto(event.currentTarget)}
               disabled={running}
@@ -712,6 +713,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
               <input
                 ref={audioInput}
                 type="file"
+                aria-label="Voice note audio file (Hindi)"
                 accept="audio/webm,audio/ogg,audio/wav,audio/mpeg,audio/mp4"
                 onChange={(event) => void pickAudio(event.currentTarget)}
                 disabled={running || recording || processingAudio}

@@ -117,7 +117,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
           <div className="grid grid-cols-2 gap-6">
             {footerLinks.map((group) => (
               <nav key={group.heading} aria-label={group.heading}>
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/45">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/60">
                   {group.heading}
                 </p>
                 <ul className="mt-3 flex flex-col gap-2">
@@ -139,7 +139,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
 
         <div className="border-t border-paper/20">
           <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4 sm:px-8">
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-paper/45">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-paper/60">
               EcoEPR · Mumbai + Pune pilot · 2026
             </p>
             <Badge tone="review" className="ml-auto">

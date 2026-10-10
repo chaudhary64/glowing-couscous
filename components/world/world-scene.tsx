@@ -10,6 +10,7 @@ import { MODEL_URL } from "@/components/features/landing/board-model";
 import { boardMaterial } from "@/components/features/landing/board-material";
 
 import { alongPath, stationFor } from "./stations";
+import "./quiet-three";
 
 /**
  * The world the whole site is set in: the CC0 circuit board from the landing page,
@@ -34,6 +35,8 @@ const COPPER = new THREE.Color("#e8894d");
 /** Over-bright, so only the pulses cross bloom's threshold. */
 const HOT = COPPER.clone().multiplyScalar(4);
 const GROUND = "#05080b";
+/** Fog at a page's resting distance; the camera rig thins it as the view pulls back. */
+const FOG_DENSITY = 0.32;
 
 /** The board is about 0.5 model units across; this makes it ±1. */
 const BOARD_SPAN = 2;
@@ -63,7 +66,7 @@ export default function WorldScene({
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 0.95;
         scene.background = new THREE.Color(GROUND);
-        scene.fog = new THREE.FogExp2(GROUND, 0.32);
+        scene.fog = new THREE.FogExp2(GROUND, FOG_DENSITY);
       }}
     >
       <PerformanceMonitor
@@ -352,14 +355,16 @@ function CameraRig({ pathname, still }: { pathname: string; still: boolean }) {
     target.eye.z += Math.cos(t * 0.05) * drift * 0.6;
     target.eye.y += -pointer.current.y * 0.05 * distance;
     if (!station.path) {
-      // Scrolling dips and leans the view forward along the board, as if walking in.
-      target.eye.y -= scroll * 0.18 * distance;
-      target.forward.copy(target.look).sub(target.eye).setY(0).normalize();
-      target.eye.addScaledVector(target.forward, scroll * 0.25 * distance);
-      target.look.addScaledVector(target.forward, scroll * 0.35 * distance);
+      // Scrolling down pulls the camera back and up: the further you read, the more of
+      // the board comes into view, as if stepping back from it.
+      target.forward.copy(target.eye).sub(target.look).normalize();
+      target.eye.addScaledVector(target.forward, scroll * 0.7 * distance);
+      target.eye.y += scroll * 0.35 * distance;
     }
 
-    const lambda = 1.4;
+    // Settles a page-to-page flight in about 1.5 s: quick enough to keep up with a click,
+    // slow enough to read as travel rather than a cut.
+    const lambda = 2.2;
     const dt = Math.min(delta, 0.1);
     eye.current.set(
       THREE.MathUtils.damp(eye.current.x, target.eye.x, lambda, dt),
@@ -373,6 +378,11 @@ function CameraRig({ pathname, still }: { pathname: string; still: boolean }) {
     );
     camera.position.copy(eye.current);
     camera.lookAt(look.current);
+
+    // Thinner fog the further back the camera stands, so a zoomed-out view still shows
+    // the board instead of a wall of haze.
+    const fog = state.scene.fog as THREE.FogExp2 | null;
+    if (fog) fog.density = FOG_DENSITY * THREE.MathUtils.clamp(2.6 / eye.current.distanceTo(look.current), 0.38, 1);
   });
 
   return null;
