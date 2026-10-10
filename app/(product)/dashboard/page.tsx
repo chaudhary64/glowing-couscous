@@ -67,7 +67,7 @@ export default async function DashboardPage() {
         title="Today"
         lede={
           counts
-            ? `${counts.intakesToday} intakes today, ${counts.itemsPriced} items priced, and ${counts.awaitingDecision} waiting on a human decision. Every figure on this screen is a query over the rows the pipeline writes.`
+            ? `${counts.intakesToday} intakes today, ${counts.itemsPriced} items priced, and ${counts.awaitingDecision} waiting on a human decision. The tiles, the cards badged Counted and the activity feed are counted from the pipeline's own rows; anything badged Sample is the demo's authored data.`
             : "The pipeline writes its submissions, prices, verdicts and decisions into Postgres, and this screen counts them. With no database configured there is nothing to count, and the panels below say which figures are sample data."
         }
         actions={
