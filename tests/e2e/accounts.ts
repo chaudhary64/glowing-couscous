@@ -30,7 +30,8 @@ export const SCREENS = [
   { path: "/recyclers", minRank: 3, nav: "Recyclers", title: "Recyclers" },
 ] as const;
 
-export const stateFile = (role: RoleName) => `tests/e2e/.auth/${role}.json`;
+/** A role's saved session, or "anon": signed out, cookie prompt already answered. */
+export const stateFile = (role: RoleName | "anon") => `tests/e2e/.auth/${role}.json`;
 
 export function password(): string {
   const value = process.env.E2E_PASSWORD;

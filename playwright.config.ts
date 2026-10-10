@@ -39,6 +39,8 @@ export default defineConfig({
   outputDir: "tests/e2e/.results",
   use: {
     baseURL: BASE_URL,
+    // Signed out, with the cookie prompt already answered; specs override per role.
+    storageState: "tests/e2e/.auth/anon.json",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
