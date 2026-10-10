@@ -264,6 +264,9 @@ export function RecyclerGate({ pickupId: suggested }: { pickupId?: string | null
                         aria-label={`PIN digit ${index + 1}`}
                         inputMode="numeric"
                         autoComplete="one-time-code"
+                        // Locked while a check is in flight: the answer clears the boxes,
+                        // and digits typed before it arrives would be wiped mid-entry.
+                        disabled={busy}
                         value={digit}
                         onChange={(event) => setDigit(index, event.target.value)}
                         onKeyDown={(event) => {

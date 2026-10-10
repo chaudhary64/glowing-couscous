@@ -16,7 +16,9 @@
     "pickup:seed": "node --env-file=.env.local scripts/pickup-seed.mjs",
     "pickup:check": "node --env-file=.env.local scripts/pickup-check.mjs",
     "pickup:local": "node scripts/pickup-local.mjs",
-    "pickup:test": "node scripts/pickup-local-test.mjs"
+    "pickup:test": "node scripts/pickup-local-test.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:report": "playwright show-report tests/e2e/.report"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1148.0",
@@ -31,6 +33,7 @@
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb-streams": "^3.1149.0",
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.23.1",

@@ -61,3 +61,8 @@ dev.log
 # DynamoDB Local (npm run pickup:local): the jar and the demo data
 /.dynamodb
 /dynamodb-local-metadata.json
+
+# Playwright e2e: saved sessions, traces and the HTML report
+/tests/e2e/.auth
+/tests/e2e/.results
+/tests/e2e/.report
