@@ -6,6 +6,7 @@ import { HeroBoard } from "@/components/features/landing/hero-board";
 import { CircuitSpine } from "@/components/motion/circuit-spine";
 import { LoopTrace } from "@/components/motion/loop-trace";
 import { RateTicker } from "@/components/motion/rate-ticker";
+import { SpotlightLayer } from "@/components/motion/spotlight-layer";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Panel, Surface } from "@/components/ui/card";
@@ -119,7 +120,7 @@ export default function LandingPage() {
         is exactly this ground and nothing is missing.
       */}
       <section data-spotlight className="relative isolate overflow-hidden border-b-2 border-ink bg-ink text-paper">
-        <span aria-hidden className="spotlight-layer -z-[5]" />
+        <SpotlightLayer className="-z-[5]" />
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10 hidden bg-[linear-gradient(90deg,var(--color-ink)_0%,var(--color-ink)_34%,color-mix(in_oklab,var(--color-ink)_90%,transparent)_46%,color-mix(in_oklab,var(--color-ink)_45%,transparent)_58%,transparent_70%)] lg:block"
@@ -436,7 +437,7 @@ export default function LandingPage() {
       {/* ------------------------------------------------------------- cta */}
       {/* The board returns for the close: all X-ray now, turning slowly. */}
       <section data-node data-spotlight className="relative isolate overflow-hidden bg-ink text-paper">
-        <span aria-hidden className="spotlight-layer -z-[5]" />
+        <SpotlightLayer className="-z-[5]" />
         <HeroBoard
           mode="xray"
           className="relative h-[80vw] max-h-[420px] [mask-image:linear-gradient(180deg,transparent,#000_20%,#000_80%,transparent)] lg:absolute lg:inset-y-0 lg:right-0 lg:left-[54%] lg:-z-10 lg:h-auto lg:max-h-none lg:[mask-image:linear-gradient(90deg,transparent,#000_30%)]"

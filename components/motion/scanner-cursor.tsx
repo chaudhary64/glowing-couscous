@@ -11,14 +11,15 @@ import { useEffect, useRef } from "react";
  * - **Reticle.** Four copper corners trail the pointer with a little lag and read out
  *   its coordinates. Over a link or button they **lock on**: the corners spring out to
  *   frame the target and the readout names it.
- * - **Spotlight.** Sections marked `data-spotlight` (the dark ones) carry a hidden PCB
- *   pattern; the pointer lights a circle of it, by writing the local position into
- *   `--mx`/`--my` on that section.
  * - **Magnetic buttons.** Elements marked `data-magnetic` lean toward the pointer when
  *   it comes close, and settle back when it leaves.
  *
- * One pointer listener and one animation frame drive all three. Nothing here runs
- * before the pointer moves, which is always after hydration.
+ * One pointer listener and one animation frame drive both. This component writes only
+ * to the element it renders itself: a link or button it pulls is moved through the Web
+ * Animations API, never its `style` attribute, because the pointer can move before the
+ * page under the cursor has hydrated, and React reads any attribute write on a
+ * server-rendered element as a mismatch. (The dark sections' spotlight is
+ * `spotlight-layer.tsx`, which follows the same rule.)
  */
 
 const LOCK_SELECTOR = "a, button, [role='button']";
@@ -38,7 +39,8 @@ export function ScannerCursor() {
     let locked: Element | null = null;
     let visible = false;
     let frame = 0;
-    const magnets = new Map<HTMLElement, { x: number; y: number }>();
+    const magnets = new Map<HTMLElement, { x: number; y: number; pull: Animation }>();
+    const at = (x: number, y: number) => ({ transform: `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0)` });
 
     const label = (target: Element) =>
       (target.getAttribute("aria-label") ?? target.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 22).toUpperCase();
@@ -86,9 +88,9 @@ export function ScannerCursor() {
         const gy = near ? clamp(dy * 0.18) : 0;
         offset.x += (gx - offset.x) * 0.2;
         offset.y += (gy - offset.y) * 0.2;
-        target.style.transform = `translate3d(${offset.x.toFixed(2)}px, ${offset.y.toFixed(2)}px, 0)`;
+        (offset.pull.effect as KeyframeEffect).setKeyframes([at(offset.x, offset.y), at(offset.x, offset.y)]);
         if (!near && Math.abs(offset.x) < 0.05 && Math.abs(offset.y) < 0.05) {
-          target.style.transform = "";
+          offset.pull.cancel();
           magnets.delete(target);
         }
       });
@@ -109,19 +111,12 @@ export function ScannerCursor() {
         if (locked) el.dataset.locked = "1";
         else delete el.dataset.locked;
       }
-      // Spotlights: local coordinates for whichever dark section is under the pointer.
-      const spot = (event.target as Element | null)?.closest?.("[data-spotlight]") as HTMLElement | null;
-      if (spot) {
-        const r = spot.getBoundingClientRect();
-        spot.style.setProperty("--mx", `${event.clientX - r.left}px`);
-        spot.style.setProperty("--my", `${event.clientY - r.top}px`);
-      }
       // Magnets near the pointer join the animated set.
       document.querySelectorAll<HTMLElement>("[data-magnetic]").forEach((m) => {
         if (magnets.has(m)) return;
         const r = m.getBoundingClientRect();
         if (Math.abs(event.clientX - (r.left + r.width / 2)) < r.width / 2 + 24 && Math.abs(event.clientY - (r.top + r.height / 2)) < r.height / 2 + 24)
-          magnets.set(m, { x: 0, y: 0 });
+          magnets.set(m, { x: 0, y: 0, pull: m.animate([at(0, 0), at(0, 0)], { duration: 1, fill: "forwards" }) });
       });
     };
     const onLeave = () => {
@@ -136,7 +131,7 @@ export function ScannerCursor() {
       cancelAnimationFrame(frame);
       window.removeEventListener("pointermove", onMove);
       document.documentElement.removeEventListener("pointerleave", onLeave);
-      magnets.forEach((_, m) => (m.style.transform = ""));
+      magnets.forEach((offset) => offset.pull.cancel());
     };
   }, []);
 
