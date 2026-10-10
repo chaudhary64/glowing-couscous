@@ -11,6 +11,8 @@ import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { Field, FieldList } from "@/components/ui/field-list";
 import { Meter } from "@/components/ui/meter";
 import { Stamp, VerdictMark } from "@/components/ui/stamp";
+import { AnalysisScanner } from "./analysis-scanner";
+import { LiveWaveform } from "./live-waveform";
 import { saveConsent, useConsent } from "@/lib/consent";
 import { formatConfidence, formatInr, formatMass, formatRate, lineValue } from "@/lib/format";
 import { conditionTone, materialTone, verdictTone } from "@/lib/tone";
@@ -288,6 +290,8 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
   const [recording, setRecording] = useState(false);
   /** Seconds into the current recording, for the on-screen counter. */
   const [recordingFor, setRecordingFor] = useState(0);
+  // The live microphone stream, as state so the waveform re-renders with it.
+  const [micStream, setMicStream] = useState<MediaStream | null>(null);
   /** A clip is being decoded and re-encoded; nothing is attached yet. */
   const [processingAudio, setProcessingAudio] = useState(false);
   const [note, setNote] = useState("");
@@ -536,6 +540,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
       const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
       const active = new MediaRecorder(mic);
       stream.current = mic;
+      setMicStream(mic);
       chunks.current = [];
       active.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.current.push(event.data);
@@ -543,6 +548,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
       active.onstop = () => {
         mic.getTracks().forEach((track) => track.stop());
         if (stream.current === mic) stream.current = null;
+        setMicStream(null);
         const blob = new Blob(chunks.current, { type: active.mimeType || "audio/webm" });
         chunks.current = [];
         if (blob.size === 0) return;
@@ -710,10 +716,13 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
               />
             </div>
             {recording ? (
-              <p className="flex items-center gap-2 text-[12px] leading-snug text-ink" role="status">
-                <span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-hazard" />
-                Recording. It stops by itself at {MAX_RECORDING_SECONDS} seconds.
-              </p>
+              <div className="flex flex-col gap-2">
+                <LiveWaveform stream={micStream} />
+                <p className="flex items-center gap-2 text-[12px] leading-snug text-ink" role="status">
+                  <span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-hazard" />
+                  Recording. It stops by itself at {MAX_RECORDING_SECONDS} seconds.
+                </p>
+              </div>
             ) : processingAudio ? (
               <p className="text-[12px] leading-snug text-ink-muted" role="status">
                 Preparing the clip…
@@ -835,6 +844,8 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
           </span>
         </div>
 
+        {running ? <AnalysisScanner mode={mode} photo={photo} hasAudio={Boolean(audio)} /> : null}
+
         {askLocation ? (
           <div role="group" aria-label="Add a location" className="mt-4 border-2 border-copper bg-copper-tint p-4">
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-copper">No location yet</p>
@@ -877,14 +888,22 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
         ) : null}
       </Panel>
 
+      {/* Results arrive while on screen, so the scroll observer leaves them be; the
+          cascade below is their entrance instead (globals.css, .result-cascade). */}
       {analysis && (mode === "valuation" || mode === "intake") ? (
-        <ValuationResult analysis={analysis} />
+        <div className="result-cascade">
+          <ValuationResult analysis={analysis} />
+        </div>
       ) : null}
       {mode === "intake" && intake ? (
-        <IntakeResult result={intake} />
+        <div className="result-cascade">
+          <IntakeResult result={intake} />
+        </div>
       ) : null}
       {mode === "gatekeeper" && decision ? (
-        <DecisionResult decision={decision} />
+        <div className="result-cascade">
+          <DecisionResult decision={decision} />
+        </div>
       ) : null}
     </div>
   );
@@ -922,7 +941,11 @@ function ValuationResult({ analysis }: { analysis: AiAnalysis }) {
       <Panel
         eyebrow="Result · Identification"
         title={identified.itemLabel}
-        actions={<Stamp verdict={gatekeeper.verdict} />}
+        actions={
+          <span className="stamp-strike inline-block">
+            <Stamp verdict={gatekeeper.verdict} />
+          </span>
+        }
       >
         <FieldList columns={2}>
           <Field label="Brand" value={identified.brand} mono />
@@ -1084,6 +1107,7 @@ function IntakeResult({ result }: { result: RecordedIntake }) {
         <VoiceNoteCard
           voiceNote={result.voiceNote}
           engine="Azure Speech · hi-IN"
+          typeOut
         />
       ) : null}
 
@@ -1122,7 +1146,11 @@ function DecisionResult({ decision }: { decision: GatekeeperDecision }) {
         decision.ruleCode && decision.ruleCode !== "none" ? ` · ${decision.ruleCode}` : ""
       }`}
       title={decision.subject}
-      actions={<VerdictMark verdict={decision.verdict} />}
+      actions={
+        <span className="stamp-strike inline-block">
+          <VerdictMark verdict={decision.verdict} />
+        </span>
+      }
     >
       <div className="flex flex-wrap items-center gap-3">
         <Badge tone={verdictTone(decision.verdict)} solid>

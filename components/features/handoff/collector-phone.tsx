@@ -145,9 +145,18 @@ export function CollectorPhone({
             <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-muted">Show this PIN at the gate</p>
             <p
               aria-label={`Handoff PIN ${pin.pin.split("").join(" ")}`}
-              className={`mt-3 font-mono text-7xl font-medium tabular-nums tracking-[0.18em] ${blocked ? "text-ink-muted line-through" : "text-ink"}`}
+              className={`mt-3 flex font-mono text-7xl font-medium tabular-nums tracking-[0.18em] ${blocked ? "text-ink-muted line-through" : "text-ink"}`}
             >
-              {pin.pin}
+              {/* Keyed on the PIN, so a reissued PIN flips in again. */}
+              {pin.pin.split("").map((digit, index) => (
+                <span
+                  key={`${pin.pin}-${index}`}
+                  className="pin-digit inline-block"
+                  style={{ animationDelay: `${index * 90}ms` }}
+                >
+                  {digit}
+                </span>
+              ))}
             </p>
             {blocked ? (
               <div className="mt-4 w-full border-2 border-hazard bg-hazard-tint p-3 text-sm text-hazard">

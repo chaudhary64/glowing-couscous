@@ -394,3 +394,191 @@ body {
     background-position: 0% 0;
   }
 }
+
+/* ------------------------------------------------------ live analysis (AI wait)
+   components/features/ai/analysis-scanner.tsx: a copper beam sweeps the photograph
+   while the pipeline steps tick through; the results cascade in and the verdict is
+   struck like a rubber stamp. */
+
+.analysis-scanner {
+  animation: rise-fade 420ms var(--ease-print) both;
+}
+.analysis-scanner__grid {
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--color-copper) 22%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--color-copper) 22%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mix-blend-mode: screen;
+  opacity: 0.45;
+}
+.analysis-scanner__beam {
+  top: 0;
+  height: 22%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in oklab, var(--color-copper) 35%, transparent) 70%,
+    var(--color-copper) 98%,
+    #ffd2a8 100%
+  );
+  box-shadow: 0 6px 24px 2px color-mix(in oklab, var(--color-copper) 70%, transparent);
+  mix-blend-mode: screen;
+  animation: analysis-beam 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes analysis-beam {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(460%); }
+}
+.analysis-scanner__corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 0 solid var(--color-copper);
+  animation: analysis-corner 1.6s ease-in-out infinite;
+}
+.analysis-scanner__corner[data-c="tl"] { left: 8px; top: 8px; border-left-width: 2px; border-top-width: 2px; }
+.analysis-scanner__corner[data-c="tr"] { right: 8px; top: 8px; border-right-width: 2px; border-top-width: 2px; }
+.analysis-scanner__corner[data-c="bl"] { left: 8px; bottom: 26px; border-left-width: 2px; border-bottom-width: 2px; }
+.analysis-scanner__corner[data-c="br"] { right: 8px; bottom: 26px; border-right-width: 2px; border-bottom-width: 2px; }
+@keyframes analysis-corner {
+  50% { opacity: 0.45; }
+}
+
+.analysis-step {
+  color: color-mix(in oklab, var(--color-paper) 38%, transparent);
+  transition: color 300ms var(--ease-print);
+}
+.analysis-step__dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border: 1.5px solid currentColor;
+  transition: background-color 300ms, border-color 300ms, box-shadow 300ms;
+}
+.analysis-step[data-state="active"] { color: var(--color-paper); }
+.analysis-step[data-state="active"] .analysis-step__dot {
+  border-color: var(--color-copper);
+  background: var(--color-copper);
+  box-shadow: 0 0 10px 1px var(--color-copper);
+  animation: analysis-corner 900ms ease-in-out infinite;
+}
+.analysis-step[data-state="done"] { color: color-mix(in oklab, var(--color-paper) 75%, transparent); }
+.analysis-step[data-state="done"] .analysis-step__dot {
+  border-color: #6fbf8f;
+  background: #6fbf8f;
+}
+
+/* Results: each card rises in after the one above it. */
+.result-cascade > * > * {
+  animation: rise-fade 640ms var(--ease-print) both;
+}
+.result-cascade > * > *:nth-child(2) { animation-delay: 110ms; }
+.result-cascade > * > *:nth-child(3) { animation-delay: 220ms; }
+.result-cascade > * > *:nth-child(4) { animation-delay: 330ms; }
+.result-cascade > * > *:nth-child(5) { animation-delay: 440ms; }
+.result-cascade > * > *:nth-child(n + 6) { animation-delay: 550ms; }
+
+/* The verdict lands like a rubber stamp: oversized and faint, then down hard. */
+.stamp-strike {
+  animation: stamp-strike 520ms 380ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+  transform-origin: 60% 50%;
+}
+/* The stamp tilts itself (components/ui/stamp.tsx); the strike only adds a swing and
+   lands at no extra rotation, so the two never compound. */
+@keyframes stamp-strike {
+  0% { opacity: 0; transform: scale(2.4) rotate(-10deg); }
+  60% { opacity: 1; transform: scale(0.94) rotate(0deg); }
+  80% { transform: scale(1.03) rotate(-1deg); }
+  100% { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analysis-scanner,
+  .analysis-scanner__beam,
+  .analysis-scanner__corner,
+  .analysis-step__dot,
+  .result-cascade > * > *,
+  .stamp-strike {
+    animation: none !important;
+  }
+  .analysis-scanner__beam { display: none; }
+}
+
+/* ----------------------------------------------------- smart pickup: motion */
+
+/* The PIN flips down onto the phone one digit at a time, like a departure board. */
+.pin-digit {
+  animation: pin-flip 520ms var(--ease-print) both;
+  transform-origin: 50% 0;
+}
+@keyframes pin-flip {
+  from { opacity: 0; transform: perspective(300px) rotateX(-90deg); }
+  to { opacity: 1; transform: none; }
+}
+
+/* UPI success: the tick draws itself, and two rings ripple out behind it. */
+.upi-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid var(--color-paper);
+  animation: upi-ring 1.6s 520ms cubic-bezier(0.2, 0.8, 0.2, 1) 2 both;
+}
+@keyframes upi-ring {
+  from { opacity: 0.7; transform: scale(1); }
+  to { opacity: 0; transform: scale(2.4); }
+}
+.upi-tick {
+  stroke-dasharray: 24;
+  animation: upi-tick 420ms 640ms ease-out both;
+}
+@keyframes upi-tick {
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin-digit, .upi-ring, .upi-tick { animation: none !important; }
+  .upi-ring { display: none; }
+}
+
+/* Hotspot map: each detected site pulses in its status colour (hotspot-map.tsx). */
+.site-pulse {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: var(--pulse, var(--color-hazard));
+  border: 2px solid #f5f6f1;
+  pointer-events: none;
+}
+.site-pulse::before,
+.site-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  border: 2px solid var(--pulse, var(--color-hazard));
+  animation: site-pulse 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+.site-pulse::after { animation-delay: 1.2s; }
+@keyframes site-pulse {
+  from { opacity: 0.8; transform: scale(1); }
+  to { opacity: 0; transform: scale(3.6); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-pulse::before, .site-pulse::after { animation: none; display: none; }
+}
+
+/* TypeOut caret (components/motion/type-out.tsx). */
+.type-caret {
+  display: inline-block;
+  width: 0.5ch;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: var(--color-copper);
+  animation: type-caret 700ms steps(1, end) infinite;
+}
+@keyframes type-caret {
+  50% { opacity: 0; }
+}

@@ -540,8 +540,37 @@ export function HotspotMap({
     if (selected === firstSelection.current) return;
     firstSelection.current = undefined;
     const target = clusters.find((c) => c.code === selected);
-    if (target) map.easeTo({ center: [target.longitude, target.latitude], zoom: Math.max(map.getZoom(), 14), duration: 600 });
+    if (!target) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // A camera flight rather than a pan: it pulls back, travels and settles, so the
+    // operator keeps their bearings between two sites across the city.
+    if (reduce) map.jumpTo({ center: [target.longitude, target.latitude], zoom: Math.max(map.getZoom(), 14) });
+    else map.flyTo({ center: [target.longitude, target.latitude], zoom: Math.max(map.getZoom(), 14.5), speed: 1.1, curve: 1.5, essential: false });
   }, [state, selected, clusters]);
+
+  // A pulse on every detected site, so a hotspot reads as live rather than as a shape.
+  // HTML markers, not a repainted layer: the pulse is CSS, and costs the GPU nothing
+  // while the map is idle.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (state !== "ready" || !map) return;
+    let cancelled = false;
+    const markers: { remove: () => void }[] = [];
+    void import("maplibre-gl").then((maplibre) => {
+      if (cancelled) return;
+      for (const c of clusters) {
+        const element = document.createElement("div");
+        element.className = "site-pulse";
+        element.style.setProperty("--pulse", STATUS_COLOR[c.status]);
+        element.setAttribute("aria-hidden", "true");
+        markers.push(new maplibre.Marker({ element }).setLngLat([c.longitude, c.latitude]).addTo(map));
+      }
+    });
+    return () => {
+      cancelled = true;
+      markers.forEach((marker) => marker.remove());
+    };
+  }, [state, clusters]);
 
   return (
     <div className="relative aspect-[4/3] w-full border border-ink bg-paper-raised">

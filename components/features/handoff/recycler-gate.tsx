@@ -45,6 +45,7 @@ export function RecyclerGate({ pickupId: suggested }: { pickupId?: string | null
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
+  const pinRow = useRef<HTMLDivElement>(null);
   const pinRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const apply = useCallback((status: number, body: unknown) => {
@@ -158,6 +159,7 @@ export function RecyclerGate({ pickupId: suggested }: { pickupId?: string | null
       return;
     }
     setDigits(["", "", "", ""]);
+    shake(pinRow.current);
     pinRefs.current[0]?.focus();
     setOutcome(
       isApiError(body)
@@ -254,7 +256,7 @@ export function RecyclerGate({ pickupId: suggested }: { pickupId?: string | null
                   <legend className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
                     PIN from the collector&rsquo;s phone
                   </legend>
-                  <div className="mt-2 flex gap-2">
+                  <div ref={pinRow} className="mt-2 flex gap-2">
                     {digits.map((digit, index) => (
                       <input
                         key={index}
@@ -372,6 +374,27 @@ function GateToast({ note, paid }: { note: CreditNoteView; paid: boolean }) {
         Credit note {note.noteId} issued. {paid ? "UPI payment sent to the collector." : "Sending UPI payment…"}
       </p>
     </div>
+  );
+}
+
+/**
+ * A refused PIN shakes the boxes, the way a phone lock screen says no. Played through
+ * the Web Animations API so the inputs are never re-mounted (which would drop the
+ * focus just moved back to the first box).
+ */
+function shake(element: HTMLElement | null) {
+  if (!element || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  element.animate(
+    [
+      { transform: "translateX(0)" },
+      { transform: "translateX(-7px)" },
+      { transform: "translateX(7px)" },
+      { transform: "translateX(-5px)" },
+      { transform: "translateX(5px)" },
+      { transform: "translateX(-2px)" },
+      { transform: "translateX(0)" },
+    ],
+    { duration: 420, easing: "cubic-bezier(0.36, 0.07, 0.19, 0.97)" },
   );
 }
 

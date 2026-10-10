@@ -30,10 +30,14 @@ export function UpiOverlay({
       aria-live="assertive"
       className="handoff-upi absolute inset-0 z-20 flex flex-col items-center justify-center bg-verified px-6 text-center text-paper"
     >
-      <div className="handoff-upi-check flex size-24 items-center justify-center rounded-full border-4 border-paper">
+      <div className="relative">
+        <span aria-hidden className="upi-ring" />
+        <span aria-hidden className="upi-ring" style={{ animationDelay: "700ms" }} />
+      <div className="handoff-upi-check relative flex size-24 items-center justify-center rounded-full border-4 border-paper">
         <svg viewBox="0 0 24 24" className="size-12" fill="none" stroke="currentColor" strokeWidth={3} aria-hidden>
-          <path d="M5 12.5l4.5 4.5L19 7.5" strokeLinecap="square" />
+          <path d="M5 12.5l4.5 4.5L19 7.5" strokeLinecap="square" className="upi-tick" />
         </svg>
+      </div>
       </div>
       <p className="mt-6 font-mono text-[11px] uppercase tracking-[0.2em] text-paper/80">UPI payment</p>
       <p className="mt-1 font-display text-6xl leading-none tracking-tight">{formatPaise(amountPaise)}</p>

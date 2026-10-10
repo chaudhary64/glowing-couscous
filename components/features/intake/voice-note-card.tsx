@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Panel, Surface } from "@/components/ui/card";
 import { Field, FieldList } from "@/components/ui/field-list";
+import { TypeOut } from "@/components/motion/type-out";
 import type { VoiceNote } from "@/lib/types";
 
 /**
@@ -17,15 +18,18 @@ import type { VoiceNote } from "@/lib/types";
 export function VoiceNoteCard({
   voiceNote,
   engine = "Azure Speech · hi-IN",
+  typeOut = false,
 }: {
   voiceNote: VoiceNote;
   engine?: string;
+  /** Type a freshly returned transcript out on screen; fixtures render whole. */
+  typeOut?: boolean;
 }) {
   return (
     <Panel eyebrow="Speech to text" title="What the collector said">
       <Surface tone="inset" className="border-l-4 border-l-copper px-4 py-3.5">
         <p lang="hi" className="text-lg leading-relaxed text-ink">
-          {voiceNote.transcript}
+          {typeOut ? <TypeOut text={voiceNote.transcript} /> : voiceNote.transcript}
         </p>
       </Surface>
 
