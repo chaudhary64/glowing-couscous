@@ -47,7 +47,14 @@ function onWideChange(notify: () => void) {
   return () => query.removeEventListener("change", notify);
 }
 
-export function HeroBoard({ className }: { className?: string }) {
+export function HeroBoard({
+  className,
+  mode = "scan",
+}: {
+  className?: string;
+  /** "scan": the hero's crossing line. "xray": the closing shot, all schematic, turning. */
+  mode?: "scan" | "xray";
+}) {
   const holder = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(true);
   const [ready, setReady] = useState(false);
@@ -67,7 +74,7 @@ export function HeroBoard({ className }: { className?: string }) {
     <div ref={holder} aria-hidden className={cn("pointer-events-none", className)}>
       {webgl ? (
         <div className={cn("absolute inset-0 transition-opacity duration-[1400ms] ease-out", ready ? "opacity-100" : "opacity-0")}>
-          <HeroScene live={!reduced} active={active} compact={!wide} onReady={() => setReady(true)} />
+          <HeroScene live={!reduced} active={active} compact={!wide} mode={mode} onReady={() => setReady(true)} />
         </div>
       ) : null}
     </div>

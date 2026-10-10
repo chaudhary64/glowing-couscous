@@ -1,3 +1,5 @@
+import { ViewTransition } from "react";
+
 import { ProductShell } from "@/components/layout/product-shell";
 
 /**
@@ -7,6 +9,13 @@ import { ProductShell } from "@/components/layout/product-shell";
  */
 export const instant = false;
 
+// Crossing into this section swaps the whole layout, and React only animates a
+// <ViewTransition> that is the outermost thing added or removed, so the shell itself
+// carries the tear. Moves within the section are the template's.
 export default function ProductLayout({ children }: LayoutProps<"/">) {
-  return <ProductShell>{children}</ProductShell>;
+  return (
+    <ViewTransition enter="print" exit="tear" default="none">
+      <ProductShell>{children}</ProductShell>
+    </ViewTransition>
+  );
 }

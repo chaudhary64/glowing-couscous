@@ -57,7 +57,15 @@ function lineAt(t: number): number {
   return TO - (TO - FROM) * smooth(p / PHASES[3]);
 }
 
-function XrayBoard({ live, pointer }: { live: boolean; pointer: RefObject<{ x: number; y: number }> }) {
+function XrayBoard({
+  live,
+  pointer,
+  mode,
+}: {
+  live: boolean;
+  pointer: RefObject<{ x: number; y: number }>;
+  mode: "scan" | "xray";
+}) {
   const { scene } = useGLTF(MODEL_URL);
   const { gl, invalidate } = useThree();
   const group = useRef<THREE.Group>(null);
@@ -112,7 +120,8 @@ function XrayBoard({ live, pointer }: { live: boolean; pointer: RefObject<{ x: n
   useEffect(() => invalidate(), [object, invalidate]);
 
   useFrame(({ clock }, delta) => {
-    const x = live ? lineAt(clock.elapsedTime) : 0.02;
+    // X-ray mode parks the line past the far edge: everything is behind it.
+    const x = mode === "xray" ? 10 : live ? lineAt(clock.elapsedTime) : 0.02;
     planes.ahead.setComponents(1, 0, 0, -x);
     planes.behind.setComponents(-1, 0, 0, x);
     if (beam.current) {
@@ -125,7 +134,8 @@ function XrayBoard({ live, pointer }: { live: boolean; pointer: RefObject<{ x: n
     if (!g) return;
     const p = pointer.current ?? { x: 0, y: 0 };
     const k = live ? 1 - Math.exp(-delta * 3) : 1;
-    g.rotation.y += (-0.42 + p.x * 0.1 - g.rotation.y) * k;
+    const turn = mode === "xray" && live ? clock.elapsedTime * 0.12 : 0;
+    g.rotation.y += (-0.42 + turn + p.x * 0.1 - g.rotation.y) * k;
     g.rotation.x += (p.y * 0.04 - g.rotation.x) * k;
   });
 
@@ -184,8 +194,10 @@ export default function HeroScene({
   live,
   active,
   compact = false,
+  mode = "scan",
   onReady,
 }: {
+  mode?: "scan" | "xray";
   /** Portrait phone framing and a lighter render. */
   compact?: boolean;
   /** False under reduced motion: one still frame. */
@@ -234,7 +246,7 @@ export default function HeroScene({
         <Lightformer form="rect" intensity={0.6} color="#8fa6b8" position={[-3, 0.8, 1]} rotation={[0, Math.PI / 2, 0]} scale={[3, 1, 1]} />
       </Environment>
       <Suspense fallback={null}>
-        <XrayBoard live={live} pointer={pointer} />
+        <XrayBoard live={live} pointer={pointer} mode={mode} />
       </Suspense>
       <EffectComposer multisampling={compact ? 0 : 4}>
         <Bloom mipmapBlur intensity={1.15} luminanceThreshold={1} luminanceSmoothing={0.15} radius={0.7} />

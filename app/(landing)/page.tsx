@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { AssaySequence, type AssayFacts } from "@/components/features/landing/assay-sequence";
 import { HeroBoard } from "@/components/features/landing/hero-board";
+import { LoopTrace } from "@/components/motion/loop-trace";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Panel, Surface } from "@/components/ui/card";
@@ -239,9 +240,9 @@ export default function LandingPage() {
             note="A brand carries an EPR obligation from CPCB and no reliable way to prove it was met. Three things break between the doorstep and the compliance file."
           />
 
-          <ul className="mt-6 grid gap-px border border-rule bg-rule md:grid-cols-3">
+          <ul data-motion="rows" className="mt-6 grid gap-px border border-rule bg-rule md:grid-cols-3">
             {gaps.map((gap) => (
-              <li key={gap.title} className="flex flex-col bg-paper-raised p-5">
+              <li key={gap.title} className="trace-card flex flex-col bg-paper-raised p-5">
                 <span aria-hidden className="size-2.5 bg-copper" />
                 <h3 className="mt-3 font-display text-lg uppercase leading-tight tracking-tight">
                   {gap.title}
@@ -270,7 +271,8 @@ export default function LandingPage() {
             note="Numbered because it is a real sequence: nothing is promised to the collector until step 03 clears the item."
           />
 
-          <ol className="mt-6 grid gap-px border border-rule bg-rule md:grid-cols-2 lg:grid-cols-4">
+          <LoopTrace className="mt-6">
+          <ol className="grid gap-px border border-rule bg-rule md:grid-cols-2 lg:grid-cols-4">
             {coreLoop.map((feature, index) => (
               <li key={feature.slug} className="flex flex-col bg-paper-raised p-5">
                 <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-copper">
@@ -291,6 +293,7 @@ export default function LandingPage() {
               </li>
             ))}
           </ol>
+          </LoopTrace>
 
           <p className="mt-4 text-[12px] leading-relaxed text-ink-muted">
             The gatekeeper sits after valuation and before anything is promised to a
@@ -359,7 +362,7 @@ export default function LandingPage() {
                       <TH className="hidden sm:table-cell">Handling</TH>
                     </TR>
                   </THead>
-                  <TBody>
+                  <TBody data-motion="rows">
                     {showcaseRates.map((id) => {
                       const line = RATE_CARD[id];
                       return (
@@ -402,7 +405,7 @@ export default function LandingPage() {
       <section className="border-b-2 border-ink bg-paper-raised">
         <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
           <Panel eyebrow="Honesty clause" title="What we are not claiming">
-            <ul className="flex flex-col gap-3">
+            <ul data-motion="rows" className="flex flex-col gap-3">
               {claims.map((claim) => (
                 <li key={claim} className="flex gap-3 text-sm leading-relaxed">
                   <span aria-hidden className="mt-2 size-2 shrink-0 bg-copper" />
@@ -415,15 +418,20 @@ export default function LandingPage() {
       </section>
 
       {/* ------------------------------------------------------------- cta */}
-      <section className="bg-ink text-paper">
-        <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 lg:py-16">
+      {/* The board returns for the close: all X-ray now, turning slowly. */}
+      <section className="relative isolate overflow-hidden bg-ink text-paper">
+        <HeroBoard
+          mode="xray"
+          className="relative h-[80vw] max-h-[420px] [mask-image:linear-gradient(180deg,transparent,#000_20%,#000_80%,transparent)] lg:absolute lg:inset-y-0 lg:right-0 lg:left-[54%] lg:-z-10 lg:h-auto lg:max-h-none lg:[mask-image:linear-gradient(90deg,transparent,#000_30%)]"
+        />
+        <div className="relative mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 lg:py-28">
           <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-copper">
             Start here
           </p>
-          <h2 className="mt-3 max-w-3xl font-display text-4xl uppercase leading-[0.95] tracking-tight sm:text-5xl">
+          <h2 data-motion="scan" className="mt-3 max-w-3xl font-display text-4xl uppercase leading-[0.95] tracking-tight sm:text-5xl">
             Open the working screens.
           </h2>
-          <p className="mt-4 max-w-2xl text-base leading-relaxed text-paper/70">
+          <p className="mt-4 max-w-xl text-base leading-relaxed text-paper/70">
             Intake, valuation, the gatekeeper and pickup routing all run against a live
             multimodal model. Sign in with a demo account to work the queue, or read the
             write-ups first — they are public.

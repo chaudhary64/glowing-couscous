@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Anton, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
+import { MotionObserver } from "@/components/motion/motion-observer";
 
 const anton = Anton({
   subsets: ["latin"],
@@ -39,7 +40,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${anton.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {children}
+        <MotionObserver />
+      </body>
     </html>
   );
 }
