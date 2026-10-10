@@ -128,8 +128,8 @@ export default async function ValuationsPage({
         actions={
           <>
             <ButtonLink href="/intake">New intake</ButtonLink>
-            <ButtonLink href="/pickups" variant="secondary">
-              Route the open item
+            <ButtonLink href="/handoff" variant="secondary">
+              Open handoff
             </ButtonLink>
           </>
         }
@@ -557,11 +557,14 @@ export default async function ValuationsPage({
                       : "No hazard declared, so this can take the standard board line."}
                   </p>
                   <p className="mt-3 text-[12px] leading-relaxed text-ink-muted">
-                    Routing, a pickup and the credit note are feature 04 (Smart Pickup &amp;
-                    Digital Credit) and are not built: nothing on this screen creates a load.
+                    Routing, the pickup and the credit note are feature 04 (Smart Pickup
+                    &amp; Digital Credit), and they run on the handoff screen — the
+                    collector&rsquo;s phone routes the load to a licensed recycler and puts a
+                    PIN on screen for the gate to settle against. This screen prices an item
+                    and never routes it: nothing here creates a load.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <ButtonLink href="/pickups">Open pickups</ButtonLink>
+                    <ButtonLink href="/handoff">Open handoff</ButtonLink>
                     <ButtonLink href="/recyclers" variant="secondary">
                       Destinations
                     </ButtonLink>

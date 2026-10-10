@@ -253,14 +253,14 @@ export default async function ValidationQueuePage() {
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
             Approving an item releases its valuation. Turning that release into a routed
             pickup with a credit note attached is feature 04, Smart Pickup &amp; Digital
-            Credit — it is not built, and the approval recorded here is where it will start
-            from. A refusal or a reuse decision never reaches it, and no credit note is
-            minted for either.
+            Credit, and it runs on the handoff screen — the approval recorded here is the
+            state it starts from. A refusal or a reuse decision never reaches it, and no
+            credit note is minted for either.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <ButtonLink href="/valuation">Open valuations</ButtonLink>
-            <ButtonLink href="/pickups" variant="secondary">
-              Open pickups
+            <ButtonLink href="/handoff" variant="secondary">
+              Open handoff
             </ButtonLink>
           </div>
           <p className="mt-4 flex items-center gap-2">
