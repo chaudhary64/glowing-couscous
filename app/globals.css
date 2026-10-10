@@ -472,26 +472,7 @@ body {
     linear-gradient(color-mix(in oklab, var(--color-copper) 22%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in oklab, var(--color-copper) 22%, transparent) 1px, transparent 1px);
   background-size: 28px 28px;
-  mix-blend-mode: screen;
-  opacity: 0.45;
-}
-.analysis-scanner__beam {
-  top: 0;
-  height: 22%;
-  background: linear-gradient(
-    to bottom,
-    transparent,
-    color-mix(in oklab, var(--color-copper) 35%, transparent) 70%,
-    var(--color-copper) 98%,
-    #ffd2a8 100%
-  );
-  box-shadow: 0 6px 24px 2px color-mix(in oklab, var(--color-copper) 70%, transparent);
-  mix-blend-mode: screen;
-  animation: analysis-beam 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
-}
-@keyframes analysis-beam {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(460%); }
+  opacity: 0.5;
 }
 .analysis-scanner__corner {
   position: absolute;
@@ -558,14 +539,12 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .analysis-scanner,
-  .analysis-scanner__beam,
-  .analysis-scanner__corner,
+    .analysis-scanner__corner,
   .analysis-step__dot,
   .result-cascade > * > *,
   .stamp-strike {
     animation: none !important;
   }
-  .analysis-scanner__beam { display: none; }
 }
 
 /* ----------------------------------------------------- smart pickup: motion */
@@ -936,4 +915,152 @@ body {
   .press-feel:not(.border-0):active:not(:disabled) {
     transform: none;
   }
+}
+
+
+/* ----------------------------------------------------- 3D: the analysis scan bed
+   analysis-scanner.tsx: the photo lies on a bed tilted back in perspective; a copper
+   laser sheet stands up out of it along a bright line and sweeps front to back. */
+.analysis-scanner__frame {
+  perspective: 900px;
+  perspective-origin: 50% 20%;
+}
+.scan-bed {
+  position: absolute;
+  inset: 9% 9% 16% 9%;
+  transform-style: preserve-3d;
+  transform: rotateX(38deg) rotateZ(-7deg);
+  box-shadow:
+    0 0 0 1px rgb(232 137 77 / 0.35),
+    0 40px 60px -20px rgb(0 0 0 / 0.95);
+  animation: scan-bed-float 7s ease-in-out infinite;
+}
+@keyframes scan-bed-float {
+  50% { transform: rotateX(32deg) rotateZ(-4deg) translateZ(14px); }
+}
+.scan-sheet {
+  position: absolute;
+  left: -5%;
+  right: -5%;
+  height: 48%;
+  top: -48%;
+  transform-origin: 50% 100%;
+  transform: rotateX(-90deg);
+  background: linear-gradient(to top, rgb(255 200 160 / 0.85) 0%, rgb(232 137 77 / 0.45) 6%, rgb(232 137 77 / 0.12) 45%, transparent 100%);
+  border-bottom: 2px solid #ffd2a8;
+  box-shadow: 0 0 22px 4px rgb(232 137 77 / 0.6);
+  /* No blend mode: one would flatten the bed's 3D context and lay the sheet flat. */
+  animation: scan-sheet-sweep 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+@keyframes scan-sheet-sweep {
+  from { top: -48%; }
+  to { top: 52%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scan-bed, .scan-sheet { animation: none; }
+  .scan-sheet { top: 2%; }
+}
+
+/* --------------------------------------------- 3D: assay ingots (assay-ingots.tsx)
+   Each ingot is a CSS 3D box (front, right and top faces), seen from the front-right
+   and above, rising out of the bench. */
+.ingots > div {
+  perspective: 520px;
+}
+.ingot {
+  position: relative;
+  width: 34px;
+  height: var(--h);
+  transform-style: preserve-3d;
+  transform-origin: 50% 100%;
+  transform: rotateX(-20deg) rotateY(-35deg);
+  animation: ingot-rise 900ms var(--ease-print) both;
+}
+@keyframes ingot-rise {
+  from { transform: rotateX(-20deg) rotateY(-35deg) scaleY(0.02); }
+  to { transform: rotateX(-20deg) rotateY(-35deg) scaleY(1); }
+}
+.ingot__face {
+  position: absolute;
+  display: block;
+}
+.ingot__front {
+  inset: 0;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--c) 100%, white 12%), var(--c));
+  transform: translateZ(17px);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+.ingot__right {
+  left: 0;
+  top: 0;
+  width: 34px;
+  height: 100%;
+  background: color-mix(in oklab, var(--c) 58%, black);
+  transform: rotateY(90deg) translateZ(17px);
+}
+.ingot__top {
+  left: 0;
+  top: 0;
+  width: 34px;
+  height: 34px;
+  background: color-mix(in oklab, var(--c) 68%, white);
+  transform: rotateX(90deg) translateZ(17px);
+}
+.ingots-stage::after {
+  content: "";
+  position: absolute;
+  left: 15%;
+  right: 15%;
+  bottom: 20px;
+  height: 18px;
+  background: radial-gradient(ellipse at center, rgb(0 0 0 / 0.55), transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ingot { animation: none; }
+}
+
+/* UPI success: chips thrown out in 3D from behind the tick (upi-overlay.tsx). */
+.upi-burst {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: 0;
+  height: 0;
+  perspective: 600px;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+.upi-chip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 9999px;
+  opacity: 0;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.35), inset 0 -2px 0 rgb(0 0 0 / 0.18);
+  animation: upi-chip 1800ms cubic-bezier(0.15, 0.7, 0.3, 1) both;
+}
+@keyframes upi-chip {
+  0% { opacity: 1; transform: translate3d(0, 0, 0) rotate3d(1, 1, 0, 0deg) scale(0.3); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(var(--tx), calc(var(--ty) + 60px), var(--tz)) rotate3d(1, 1, 0, var(--spin)) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .upi-burst { display: none; }
+}
+
+/* The outcome ring as a coin: thickness and depth, leaning with the pointer. */
+.ring-3d > svg {
+  filter:
+    drop-shadow(0 4px 0 rgb(0 0 0 / 0.55))
+    drop-shadow(0 16px 22px rgb(0 0 0 / 0.6))
+    drop-shadow(0 0 18px rgb(72 195 138 / 0.18));
+}
+
+/* A hazardous fraction's ingot glows red at its base. */
+.ingot--hazard .ingot__front {
+  box-shadow:
+    inset 0 0 0 1px rgb(255 111 82 / 0.7),
+    0 0 18px 2px rgb(255 111 82 / 0.45);
 }

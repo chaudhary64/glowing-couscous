@@ -120,7 +120,7 @@ export default function LandingPage() {
         content and a veil keeps the headline legible over it; without WebGL the section
         is exactly this ground and nothing is missing.
       */}
-      <section data-spotlight className="tone-chrome relative isolate overflow-hidden border-b-2 border-ink bg-ink text-paper">
+      <section data-spotlight className="tone-chrome relative isolate overflow-hidden rule-light border-b-2 border-ink bg-ink text-paper">
         <SpotlightLayer className="-z-[5]" />
         <div
           aria-hidden
@@ -217,7 +217,7 @@ export default function LandingPage() {
       <AssaySequence facts={assayFacts} stamp={<Stamp verdict={item.gatekeeper.verdict} angle={-8} />} />
 
       {/* ------------------------------------------------------ the numbers */}
-      <section data-node className="border-b-2 border-ink bg-paper-raised">
+      <section data-node className="rule-light border-b-2 border-ink bg-paper-raised">
         <div className="mx-auto w-full max-w-6xl px-5 py-10 sm:px-8">
           <StatGrid columns={4}>
             <Stat
@@ -250,7 +250,7 @@ export default function LandingPage() {
       </section>
 
       {/* ---------------------------------------------------------- the gap */}
-      <section id="gap" data-node className="scroll-mt-24 border-b-2 border-ink">
+      <section id="gap" data-node className="scroll-mt-24 rule-light border-b-2 border-ink">
         <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
           <SectionHeader
             eyebrow="The gap"
@@ -281,7 +281,7 @@ export default function LandingPage() {
       </section>
 
       {/* ------------------------------------------------------- the loop */}
-      <section id="how" data-node className="scroll-mt-24 border-b-2 border-ink bg-paper-raised">
+      <section id="how" data-node className="scroll-mt-24 rule-light border-b-2 border-ink bg-paper-raised">
         <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
           <SectionHeader
             eyebrow="The core loop"
@@ -323,7 +323,7 @@ export default function LandingPage() {
       </section>
 
       {/* -------------------------------------------------- why it holds up */}
-      <section id="proof" data-node className="scroll-mt-24 border-b-2 border-ink">
+      <section id="proof" data-node className="scroll-mt-24 rule-light border-b-2 border-ink">
         <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
           <SectionHeader
             eyebrow="Why it survives an audit"
@@ -420,7 +420,7 @@ export default function LandingPage() {
       </section>
 
       {/* ------------------------------------------------------ the handoff */}
-      <section id="handoff" data-node className="scroll-mt-24 border-b-2 border-ink">
+      <section id="handoff" data-node className="scroll-mt-24 rule-light border-b-2 border-ink">
         <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
           <SectionHeader
             eyebrow="Smart pickup & digital credit"
@@ -434,7 +434,7 @@ export default function LandingPage() {
       </section>
 
       {/* --------------------------------------------------------- honesty */}
-      <section data-node className="border-b-2 border-ink bg-paper-raised">
+      <section data-node className="rule-light border-b-2 border-ink bg-paper-raised">
         <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
           <Panel eyebrow="Honesty clause" title="What we are not claiming">
             <ul data-motion="rows" className="flex flex-col gap-3">

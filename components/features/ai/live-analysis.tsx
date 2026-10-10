@@ -12,6 +12,7 @@ import { Field, FieldList } from "@/components/ui/field-list";
 import { Meter } from "@/components/ui/meter";
 import { Stamp, VerdictMark } from "@/components/ui/stamp";
 import { AnalysisScanner } from "./analysis-scanner";
+import { AssayIngots } from "@/components/charts/assay-ingots";
 import { CompositionBar } from "@/components/charts/composition-bar";
 import { ValueWaterfall } from "@/components/charts/value-waterfall";
 import { LiveWaveform } from "./live-waveform";
@@ -981,6 +982,7 @@ function ValuationResult({ analysis }: { analysis: AiAnalysis }) {
 
       <Surface>
         <div className="px-4 pt-4">
+          <AssayIngots materials={materials} />
           <CompositionBar materials={materials} />
         </div>
         <Table caption="Material assay, priced against the EcoEPR rate card">

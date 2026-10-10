@@ -170,7 +170,9 @@ export function HotspotMap({
   const mapRef = useRef<MapLibreMap | null>(null);
   const onSelectRef = useRef(onSelect);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
-  const [tilted, setTilted] = useState(false);
+  // Opens in 3D (the site is set in 3D): the map loads flat and swings into the tilted
+  // view once ready. "Flat view" is a click away.
+  const [tilted, setTilted] = useState(true);
   const openingFrame = useRef(frame);
 
   // The map's click handler is registered once; it reads the latest callback through

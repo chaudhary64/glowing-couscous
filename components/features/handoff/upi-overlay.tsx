@@ -30,6 +30,7 @@ export function UpiOverlay({
       aria-live="assertive"
       className="handoff-upi absolute inset-0 z-20 flex flex-col items-center justify-center bg-verified px-6 text-center text-paper"
     >
+      <Burst />
       <div className="relative">
         <span aria-hidden className="upi-ring" />
         <span aria-hidden className="upi-ring" style={{ animationDelay: "700ms" }} />
@@ -61,6 +62,56 @@ export function UpiOverlay({
           Done
         </button>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The payment lands with a burst: gold and copper coins thrown out in 3D from behind
+ * the tick. Trajectories come from a fixed hash of the chip's index, so the
+ * render is pure and every burst is the same shape.
+ */
+const CHIPS = Array.from({ length: 36 }, (_, i) => {
+  const h = (n: number) => {
+    const x = Math.sin((i + 1) * n) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  const angle = h(12.9898) * Math.PI * 2;
+  const reach = 110 + h(78.233) * 140;
+  return {
+    tx: Math.cos(angle) * reach,
+    ty: Math.sin(angle) * reach - 30,
+    tz: (h(37.719) - 0.3) * 260,
+    spin: 180 + h(91.13) * 540,
+    size: 12 + Math.round(h(23.41) * 10),
+    gold: i % 3 !== 0,
+    delay: Math.round(h(55.5) * 160),
+  };
+});
+
+function Burst() {
+  return (
+    <div aria-hidden className="upi-burst">
+      {CHIPS.map((chip, index) => (
+        <span
+          key={index}
+          className="upi-chip"
+          style={
+            {
+              "--tx": `${chip.tx.toFixed(1)}px`,
+              "--ty": `${chip.ty.toFixed(1)}px`,
+              "--tz": `${chip.tz.toFixed(1)}px`,
+              "--spin": `${chip.spin.toFixed(0)}deg`,
+              width: chip.size,
+              height: chip.size,
+              background: chip.gold
+                ? "radial-gradient(circle at 35% 30%, #fff1c2, #e3bd55 45%, #a87c22 100%)"
+                : "radial-gradient(circle at 35% 30%, #ffd9bf, #e8894d 45%, #8f4a22 100%)",
+              animationDelay: `${420 + chip.delay}ms`,
+            } as React.CSSProperties
+          }
+        />
+      ))}
     </div>
   );
 }

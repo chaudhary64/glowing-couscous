@@ -69,19 +69,23 @@ export function AnalysisScanner({
       className="tone-chrome analysis-scanner mt-4 grid gap-4 border-2 border-ink bg-ink p-4 text-paper md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]"
     >
       <div className="analysis-scanner__frame relative aspect-[4/3] overflow-hidden bg-[#0b0f12]">
-        {photo ? (
-          // A data URL of the photo the operator just picked — never a remote image.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={`data:${photo.mimeType};base64,${photo.dataBase64}`}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover opacity-80 saturate-[0.7]"
-          />
-        ) : (
-          <BoardSchematic />
-        )}
-        <div aria-hidden className="analysis-scanner__grid absolute inset-0" />
-        <div aria-hidden className="analysis-scanner__beam absolute inset-x-0" />
+        {/* The scan bed: the photo lies tilted back in perspective, and a copper laser
+            sheet stands up out of it and sweeps across, like a 3D scanner's line. */}
+        <div aria-hidden className="scan-bed">
+          {photo ? (
+            // A data URL of the photo the operator just picked — never a remote image.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`data:${photo.mimeType};base64,${photo.dataBase64}`}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover opacity-85 saturate-[0.75]"
+            />
+          ) : (
+            <BoardSchematic />
+          )}
+          <div className="analysis-scanner__grid absolute inset-0" />
+          <div className="scan-sheet" />
+        </div>
         {(["tl", "tr", "bl", "br"] as const).map((corner) => (
           <span key={corner} aria-hidden data-c={corner} className="analysis-scanner__corner" />
         ))}

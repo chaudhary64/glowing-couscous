@@ -22,6 +22,7 @@ export function OutcomeRing({ segments, total, caption }: { segments: RingSegmen
 
   return (
     <figure className="flex flex-wrap items-center gap-6">
+      <span data-tilt="14" className="ring-3d inline-block rounded-full">
       <svg viewBox="0 0 110 110" className="size-36 -rotate-90" role="img" aria-label={`${caption}: ${segments.map((s) => `${s.value} ${s.label}`).join(", ")}.`}>
         <circle cx="55" cy="55" r={r} fill="none" stroke="var(--color-rule-soft)" strokeWidth="12" />
         {arcs.map(({ segment, length, offset }, index) =>
@@ -45,6 +46,7 @@ export function OutcomeRing({ segments, total, caption }: { segments: RingSegmen
           {total}
         </text>
       </svg>
+      </span>
       <figcaption className="flex flex-col gap-2">
         <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">{caption}</span>
         {segments.map((segment) => (

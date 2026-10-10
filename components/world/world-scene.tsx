@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { MODEL_URL } from "@/components/features/landing/board-model";
 import { boardMaterial } from "@/components/features/landing/board-material";
 
-import { stationFor } from "./stations";
+import { alongPath, stationFor } from "./stations";
 
 /**
  * The world the whole site is set in: the CC0 circuit board from the landing page,
@@ -342,17 +342,22 @@ function CameraRig({ pathname, still }: { pathname: string; still: boolean }) {
     const scrollable = document.documentElement.scrollHeight - window.innerHeight;
     const scroll = scrollable > 0 ? window.scrollY / scrollable : 0;
 
-    target.eye.set(...station.eye);
-    target.look.set(...station.look);
+    // A station with a path flies it with the scroll; otherwise it stands at its spot.
+    const spot = station.path ? alongPath(station.path, scroll) : station;
+    target.eye.set(...spot.eye);
+    target.look.set(...spot.look);
     const distance = target.eye.distanceTo(target.look);
     const drift = (station.drift ?? 0.05) * distance;
     target.eye.x += Math.sin(t * 0.07) * drift + pointer.current.x * 0.09 * distance;
     target.eye.z += Math.cos(t * 0.05) * drift * 0.6;
-    target.eye.y += -pointer.current.y * 0.05 * distance - scroll * 0.18 * distance;
-    // Scrolling leans the view forward along the board, as if walking into it.
-    target.forward.copy(target.look).sub(target.eye).setY(0).normalize();
-    target.eye.addScaledVector(target.forward, scroll * 0.25 * distance);
-    target.look.addScaledVector(target.forward, scroll * 0.35 * distance);
+    target.eye.y += -pointer.current.y * 0.05 * distance;
+    if (!station.path) {
+      // Scrolling dips and leans the view forward along the board, as if walking in.
+      target.eye.y -= scroll * 0.18 * distance;
+      target.forward.copy(target.look).sub(target.eye).setY(0).normalize();
+      target.eye.addScaledVector(target.forward, scroll * 0.25 * distance);
+      target.look.addScaledVector(target.forward, scroll * 0.35 * distance);
+    }
 
     const lambda = 1.4;
     const dt = Math.min(delta, 0.1);
