@@ -16,9 +16,10 @@ intake screen ── one tap: GPS fix ──▶ POST /api/ai/intake
                                          │ analyse (Foundry) ─┐
                                          │ archive (S3 + media_assets) ─┤ both settle
                                          ▼                               ▼
-                               lib/intake/record.ts — one transaction:
-                               intakes → items → material_lines, item_hazards,
-                               gatekeeper_verdicts → geopoints (filed to a BMC ward)
+                               lib/s3/intakes.ts      → intakes
+                               lib/records/items.ts   → items, material_lines, hazards,
+                                                        valuations, gatekeeper_verdicts
+                               lib/intake/location.ts → ward filing, geopoints
                                          │
 /map ── getHeatmap() ◀── geopoints (last 30 days, gatekeeper-rejected excluded)
           │  detectHotspots(): ~150 m cells, ≥4 in 21 days, touching cells merged
@@ -142,7 +143,8 @@ screen cannot send a van to a site the data no longer supports.
 ```bash
 npm run test:heatmap   # 16 tests: geohash, polygons, ward filing, the hotspot rule, pressure
 
-# 18 integration tests: the real modules against a real, migrated Postgres. Refuses any
+# 16 integration tests: the intake route's real recorders, then the heatmap read, dispatch
+# and recompute, against a real, migrated Postgres. Refuses any
 # host but localhost, so it can never write test rows into the shared RDS.
 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/postgres npx drizzle-kit migrate
 TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/postgres npm run test:heatmap:db

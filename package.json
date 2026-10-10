@@ -16,9 +16,13 @@
     "prebuild": "node scripts/vendor-maplibre.mjs",
     "test:heatmap": "node --import ./scripts/ts-paths.mjs --test lib/heatmap/heatmap.test.mts",
     "geo:wards": "node --import ./scripts/ts-paths.mjs scripts/geo-wards.mts",
-    "test:heatmap:db": "node --import ./scripts/ts-paths.mjs --test --test-concurrency=1 lib/heatmap/integration.test.mts"
+    "test:heatmap:db": "node --import ./scripts/ts-paths.mjs --test --test-concurrency=1 lib/heatmap/integration.test.mts",
+    "pickup:setup": "bash scripts/pickup-setup.sh",
+    "pickup:seed": "node --env-file=.env.local scripts/pickup-seed.mjs",
+    "pickup:check": "node --env-file=.env.local scripts/pickup-check.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1148.0",
     "@aws-sdk/client-s3": "^3.1148.0",
     "@aws-sdk/s3-request-presigner": "^3.1148.0",
     "drizzle-orm": "^0.45.4",

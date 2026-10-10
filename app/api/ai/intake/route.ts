@@ -1,7 +1,9 @@
 import { analyseIntake } from "@/lib/ai/analyse";
 import { aiErrorResponse, authorizeUser, jsonResponse, readPayload } from "@/lib/ai/http";
 import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
-import { intakeRecordWarning, recordIntake } from "@/lib/intake/record";
+import { locationWarning, recordLocation } from "@/lib/intake/location";
+import { recordPricedItem, pricedRecordWarning } from "@/lib/records/items";
+import { recordSubmission, submissionWarning } from "@/lib/s3/intakes";
 import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
 
 /**
@@ -21,6 +23,10 @@ import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
  * was. See `lib/s3/archive.ts` for why the keys are content-addressed and why a
  * storage fault is reported rather than thrown, and `lib/s3/media-assets.ts` for why
  * the row is written after the bytes and never gates them.
+ *
+ * Once the price exists, the same request writes an `intakes` row joining the priced
+ * result to the object it came from, so the archive can be read *from* a valuation
+ * rather than only by its content hash. See `lib/s3/intakes.ts`.
  */
 
 export async function POST(request: Request) {
@@ -81,33 +87,71 @@ export async function POST(request: Request) {
     return aiErrorResponse(analysed.reason);
   }
 
+  const analysis = analysed.value.analysis;
   const storage = kept?.storage ?? null;
   const records = kept?.records ?? null;
-
-  /**
-   * Filing the intake comes last, after both halves above have settled, because it
-   * needs both: the priced item from the model and the evidence row from the archive.
-   * It is the moment the submission becomes an `intakes` row — and, when the handset
-   * gave a fix, a geopoint the hotspot map can count. Like the archive, it reports and
-   * never fails the request (see `lib/intake/record.ts`).
-   */
-  const recorded = await recordIntake({
-    result: analysed.value,
-    storage,
-    records,
-    location: parsed.payload.location,
-    collectorId: parsed.payload.collectorId,
-    note: parsed.payload.note,
-  });
-
   const warnings = [...analysed.value.warnings];
-  for (const warning of [
-    storage ? archiveWarning(storage) : null,
-    records ? recordWarning(records) : null,
-    intakeRecordWarning(recorded),
-  ]) {
+  for (const warning of [storage ? archiveWarning(storage) : null, records ? recordWarning(records) : null]) {
     if (warning) warnings.push(warning);
   }
 
-  return jsonResponse({ ...analysed.value, warnings, storage, records, recorded });
+  /**
+   * The submission row, written last because it is the only step that needs both halves
+   * of the request at once: the objects the archive stored, and the identity the price
+   * carries.
+   *
+   * Which is also why a request whose analysis failed gets none — `intakes.code` *is*
+   * that identity, so there would be nothing to record and nothing an operator could
+   * look it up by. The bytes and their `media_assets` rows stay either way. Awaited
+   * before the response, like the archive, because this host can cut off work still in
+   * flight when the reply is written.
+   */
+  const submission =
+    records && analysis
+      ? await recordSubmission({
+          records: records.records,
+          pricedCode: analysis.id,
+          label: analysis.identified.itemLabel,
+          massGrams: analysis.identified.massGrams,
+          extraction: {
+            model: analysis.source.model,
+            confidence: analysis.gatekeeper.confidence,
+            latencyMs: analysis.source.latencyMs,
+          },
+        })
+      : null;
+  const submissionNote = submission ? submissionWarning(submission) : null;
+  if (submissionNote) warnings.push(submissionNote);
+
+  /**
+   * The priced record, with the parsed fields this route and only this route produces.
+   *
+   * `intake_fields` is what makes the intake screen's own claim true — "the parsed record
+   * is kept before valuation" — and it is written here rather than anywhere else because
+   * the field list with its per-field source and confidence exists only on this pass.
+   */
+  const priced =
+    records && analysis
+      ? await recordPricedItem({
+          intakeId: submission?.submission?.id ?? null,
+          analysis,
+          fields: analysed.value.fields,
+        })
+      : null;
+  const pricedNote = priced ? pricedRecordWarning(priced) : null;
+  if (pricedNote) warnings.push(pricedNote);
+
+  /**
+   * Where it was made — only when the handset gave a fix, and only once the submission
+   * row exists to attach it to. This is the geopoint `/map` counts. Like the two writes
+   * above, it reports and never fails the request (see `lib/intake/location.ts`).
+   */
+  const location = await recordLocation({
+    intakeId: submission?.submission?.id,
+    location: parsed.payload.location,
+  });
+  const locationNote = locationWarning(location);
+  if (locationNote) warnings.push(locationNote);
+
+  return jsonResponse({ ...analysed.value, warnings, storage, records, submission, priced, location });
 }

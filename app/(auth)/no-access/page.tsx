@@ -1,3 +1,5 @@
+import { connection } from "next/server";
+
 import { AuthNotice } from "@/components/auth/auth-form";
 import { Button } from "@/components/ui/button";
 import { ScreenHeader } from "@/components/ui/page-header";
@@ -19,7 +21,10 @@ import { cn } from "@/lib/cn";
  * actually decided and cannot drift from it.
  *
  * Reachable by any signed-in user, role or not. It reads the session to name the
- * caller's own role in the ladder, which is request data, hence `instant = false`.
+ * caller's own role in the ladder, which is request data — hence `instant = false`,
+ * and hence the `connection()` below. This screen does not go through `requireAccess`
+ * (it is where that function sends people), so it has to stop prerendering itself:
+ * without it the token verification reports `blocking-prerender-current-time`.
  */
 
 type Search = Record<string, string | string[] | undefined>;
@@ -38,6 +43,7 @@ export default async function NoAccessPage({
 }: {
   searchParams: Promise<Search>;
 }) {
+  await connection();
   const [params, user] = await Promise.all([searchParams, getCurrentUser()]);
 
   const from = pick(params.from);

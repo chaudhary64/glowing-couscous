@@ -1,6 +1,8 @@
 import { analyseItem } from "@/lib/ai/analyse";
 import { aiErrorResponse, authorizeUser, jsonResponse, readPayload } from "@/lib/ai/http";
 import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
+import { recordPricedItem, pricedRecordWarning } from "@/lib/records/items";
+import { recordSubmission, submissionWarning } from "@/lib/s3/intakes";
 import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
 
 /**
@@ -17,7 +19,9 @@ import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
  * justify: "show me the photograph you turned away" should have an answer that is
  * not a shrug, and it should be the same answer for a held item as for a credited
  * one. A `media_assets` row goes with each object, which is what lets that question
- * be answered from the database rather than from a bucket listing.
+ * be answered from the database rather than from a bucket listing, and the `intakes`
+ * row written once the decision exists is what ties it to the submission it was made
+ * on — see `lib/s3/intakes.ts`.
  */
 
 export async function POST(request: Request) {
@@ -72,6 +76,35 @@ export async function POST(request: Request) {
     if (warning) warnings.push(warning);
   }
 
+  // The submission row, written once the decision exists. A rejected item is recorded
+  // like any other: "show me the photograph you turned away" is the question this row
+  // has to be able to answer. Last and awaited — see the note in the intake route.
+  const submission = records
+    ? await recordSubmission({
+        records: records.records,
+        pricedCode: analysis.id,
+        label: analysis.identified.itemLabel,
+        massGrams: analysis.identified.massGrams,
+        extraction: {
+          model: analysis.source.model,
+          confidence: analysis.gatekeeper.confidence,
+          latencyMs: analysis.source.latencyMs,
+        },
+      })
+    : null;
+  const submissionNote = submission ? submissionWarning(submission) : null;
+  if (submissionNote) warnings.push(submissionNote);
+
+  // The priced record — item, assay, price, verdict — written under the submission it
+  // came from. A refusal is recorded like any other: the queue's "already refused" list
+  // is a query over exactly these rows, so "show me what you turned away" has an answer.
+  const priced = await recordPricedItem({
+    intakeId: submission?.submission?.id ?? null,
+    analysis,
+  });
+  const pricedNote = pricedRecordWarning(priced);
+  if (pricedNote) warnings.push(pricedNote);
+
   const creditable = analysis.gatekeeper.verdict !== "rejected";
   return jsonResponse({
       id: analysis.id,
@@ -97,5 +130,7 @@ export async function POST(request: Request) {
       source: analysis.source,
       storage,
       records,
+      submission,
+      priced,
     });
 }

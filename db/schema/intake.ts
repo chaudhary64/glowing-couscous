@@ -104,9 +104,20 @@ export const intakes = pgTable(
     /** Sample id shown in the UI, e.g. SMP-0001. */
     code: text("code").notNull(),
 
-    collectorId: uuid("collector_id")
-      .notNull()
-      .references(() => collectors.id, { onDelete: "cascade" }),
+    /**
+     * The collector whose material this is, once anybody knows who they are.
+     *
+     * Nullable for the same reason `media_assets.collector_id` is: a submission
+     * arrives through an operator's own phone, and the request that carries it says
+     * nothing about whose material it is — the collector is standing in the lane, not
+     * holding a session. Refusing the row because the person is unknown would lose the
+     * only link from a priced submission back to its photograph, which is exactly the
+     * evidence this table exists to keep. `items.collector_id` stays `notNull`: an
+     * item is a thing somebody is paid for, and that somebody has to be named.
+     */
+    collectorId: uuid("collector_id").references(() => collectors.id, {
+      onDelete: "cascade",
+    }),
 
     mode: intakeMode("mode").notNull(),
 

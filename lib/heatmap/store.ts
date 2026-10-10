@@ -13,7 +13,7 @@ import {
 } from "@/db/schema";
 import { encodeGeohash, geohashCenter } from "@/lib/geo/geohash";
 import { WARDS, wardByCode, wardForPoint } from "@/lib/geo/wards";
-import { ensureWards } from "@/lib/intake/record";
+import { ensureWards } from "@/lib/intake/location";
 import type { MaterialCategory } from "@/lib/types";
 
 import { HOTSPOT_RULE, detectHotspots, wardPressure, withinWindow, type ClusterResult, type DetectionPoint } from "./cluster";

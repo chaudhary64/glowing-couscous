@@ -96,6 +96,54 @@ export function formatTimestamp(iso: string): string {
 }
 
 /**
+ * An instant as the fixtures spell one: "09 Nov 2026, 23:59 IST".
+ *
+ * The rate card's own expiry is written that way, and a row stores the instant rather
+ * than the string — so this is the inverse of `parseIstStamp` and the pair has to
+ * round-trip exactly, or a stored rate-card expiry would read back as a different
+ * moment from the one the card published.
+ */
+export function formatIstStamp(iso: string | Date): string {
+  const date = typeof iso === "string" ? new Date(iso) : iso;
+  if (Number.isNaN(date.getTime())) return typeof iso === "string" ? iso : "";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("day")} ${get("month")} ${get("year")}, ${get("hour")}:${get("minute")} IST`;
+}
+
+/**
+ * The reverse of `formatIstStamp`: "09 Nov 2026, 23:59 IST" as an instant.
+ *
+ * Returns null rather than guessing when the string is not that shape, because the
+ * only caller stores the answer in a `timestamptz` and a wrong instant on a quote
+ * expiry is worse than a null the screen renders as "no expiry".
+ */
+export function parseIstStamp(text: string): Date | null {
+  const match = text.trim().match(/^(\d{2}) ([A-Za-z]{3}) (\d{4}), (\d{2}):(\d{2}) IST$/);
+  if (!match) return null;
+  const [, day, month, year, hour, minute] = match;
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  const monthIndex = months.indexOf(month);
+  if (monthIndex === -1) return null;
+  // IST is a fixed +05:30 — no daylight saving, which is why this is arithmetic and
+  // not a timezone database lookup.
+  const utcMillis = Date.UTC(Number(year), monthIndex, Number(day), Number(hour), Number(minute));
+  return new Date(utcMillis - 5.5 * 60 * 60 * 1000);
+}
+
+/**
  * Bytes as a person reads them, for evidence whose exact size nothing acts on.
  *
  * The binary units are deliberate: the archive stores what S3 stored, and a screen that

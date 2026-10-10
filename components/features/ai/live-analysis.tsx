@@ -14,7 +14,7 @@ import { Stamp, VerdictMark } from "@/components/ui/stamp";
 import { formatConfidence, formatInr, formatMass, formatRate, lineValue } from "@/lib/format";
 import { conditionTone, materialTone, verdictTone } from "@/lib/tone";
 import type { AiAnalysis, AiIntakeResult } from "@/lib/ai/proposal";
-import type { IntakeRecordOutcome } from "@/lib/intake/record";
+import type { LocationOutcome } from "@/lib/intake/location";
 import type { Verdict } from "@/lib/types";
 
 /**
@@ -76,7 +76,12 @@ interface GatekeeperDecision {
   creditable: boolean;
   confidence: number;
   matchedClass: string;
-  ruleCode: string;
+  /**
+   * Reject rule that fired, or absent. Optional because the live path omits it for a
+   * verified item — `lib/types.ts` declares it optional and `lib/ai/analyse.ts` maps
+   * `"none"` to `undefined` — while the fixtures always carry a code.
+   */
+  ruleCode?: string;
   reason: string;
   signals: { label: string; value: string }[];
   modelVersion: string;
@@ -259,25 +264,16 @@ async function audioToMedia(
   };
 }
 
-/** A collector the intake can be filed under, as the server lists them. */
-export interface CollectorChoice {
-  id: string;
-  label: string;
-}
-
 type Located = { latitude: number; longitude: number; accuracyM: number };
 type LocateState = "idle" | "locating" | "ok" | "denied" | "unavailable";
 
-type RecordedIntake = AiIntakeResult & { recorded?: IntakeRecordOutcome };
+/** The intake response, with what the server recorded alongside the analysis. */
+type RecordedIntake = AiIntakeResult & {
+  submission?: { configured: boolean; submission: { code: string } | null; error: string | null } | null;
+  location?: LocationOutcome | null;
+};
 
-export function LiveAnalysis({
-  mode,
-  collectors = [],
-}: {
-  mode: LiveMode;
-  /** Intake only: the collectors a submission can be filed under. Empty hides the picker. */
-  collectors?: CollectorChoice[];
-}) {
+export function LiveAnalysis({ mode }: { mode: LiveMode }) {
   const [photo, setPhoto] = useState<Media | null>(null);
   const [audio, setAudio] = useState<Media | null>(null);
   const [audioSeconds, setAudioSeconds] = useState(0);
@@ -290,7 +286,6 @@ export function LiveAnalysis({
   const [intake, setIntake] = useState<RecordedIntake | null>(null);
   const [location, setLocation] = useState<Located | null>(null);
   const [locate, setLocate] = useState<LocateState>("idle");
-  const [collectorId, setCollectorId] = useState("");
   const [decision, setDecision] = useState<GatekeeperDecision | null>(null);
 
   const recorder = useRef<MediaRecorder | null>(null);
@@ -452,7 +447,6 @@ export function LiveAnalysis({
       body.durationSeconds = Math.round(audioSeconds);
     }
     if (mode === "intake" && location) body.location = location;
-    if (mode === "intake" && collectorId) body.collectorId = collectorId;
 
     // Refused here rather than upstream. The server checks the same total, but past
     // roughly 6 MiB the hosting layer answers 413 itself, so the request never
@@ -621,31 +615,6 @@ export function LiveAnalysis({
               </p>
             </Surface>
 
-            {collectors.length ? (
-              <Surface tone="inset" className="flex flex-col gap-3 p-4">
-                <label className="flex flex-col gap-3">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
-                    Collector
-                  </span>
-                  <select
-                    value={collectorId}
-                    onChange={(event) => setCollectorId(event.target.value)}
-                    disabled={running}
-                    className="w-full border border-rule bg-paper-raised px-3 py-2 font-mono text-[12px] text-ink outline-none focus:border-ink"
-                  >
-                    <option value="">Walk-in (no account)</option>
-                    {collectors.map((choice) => (
-                      <option key={choice.id} value={choice.id}>
-                        {choice.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <p className="text-[12px] leading-snug text-ink-muted">
-                  The intake is filed under this collector. Walk-in is for a first visit.
-                </p>
-              </Surface>
-            ) : null}
           </div>
         ) : null}
 
@@ -888,27 +857,26 @@ function ValuationResult({ analysis }: { analysis: AiAnalysis }) {
 }
 
 function IntakeResult({ result }: { result: RecordedIntake }) {
-  const recorded = result.recorded;
   return (
     <div className="flex flex-col gap-6">
-      {recorded && recorded.configured ? (
+      {result.submission?.configured || result.location?.configured ? (
         <Surface tone="inset" className="flex flex-wrap items-center gap-2 p-4">
-          {recorded.intakeCode ? (
-            <Badge tone={recorded.inserted ? "verified" : "neutral"}>
-              {recorded.inserted ? "Filed" : "Already filed"} · {recorded.intakeCode}
-            </Badge>
+          {result.submission?.submission ? (
+            <Badge tone="verified">Filed · {result.submission.submission.code}</Badge>
           ) : (
             <Badge tone="hazard">Not filed</Badge>
           )}
-          {recorded.location ? (
-            <Badge tone="copper">{recorded.location.wardName ?? "Outside the 24 BMC wards"}</Badge>
-          ) : recorded.inserted ? (
+          {result.location?.recorded || result.location?.skipped ? (
+            <Badge tone="copper">{result.location.wardName ?? "Outside the 24 BMC wards"}</Badge>
+          ) : (
             <Badge tone="lead">No location</Badge>
-          ) : null}
+          )}
           <span className="text-[12px] leading-snug text-ink-muted">
-            {recorded.error ??
-              recorded.skipped ??
-              (recorded.location?.wardCode ? "Counted on the hotspot map." : "Recorded as an intake.")}
+            {result.location?.error ??
+              result.location?.skipped ??
+              (result.location?.recorded && result.location.wardCode
+                ? "Counted on the hotspot map."
+                : "Recorded as an intake.")}
           </span>
         </Surface>
       ) : null}
@@ -947,7 +915,12 @@ function DecisionResult({ decision }: { decision: GatekeeperDecision }) {
 
   return (
     <Panel
-      eyebrow={`Result · Gatekeeper${decision.ruleCode !== "none" ? ` · ${decision.ruleCode}` : ""}`}
+      eyebrow={`Result · Gatekeeper${
+        // Truthy *and* not the sentinel: an absent code has to read as no code. Comparing
+        // against `"none"` alone rendered the heading as `· undefined` on the live route,
+        // where a verified item carries no rule at all.
+        decision.ruleCode && decision.ruleCode !== "none" ? ` · ${decision.ruleCode}` : ""
+      }`}
       title={decision.subject}
       actions={<VerdictMark verdict={decision.verdict} />}
     >

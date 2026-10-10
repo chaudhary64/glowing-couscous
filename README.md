@@ -25,7 +25,7 @@ nothing has to be discovered by reading code.
 | Product screens | **Built** — 9 role-gated screens; the evidence archive and the hotspot map read live data, the rest render fixtures |
 | Doc site | **Built** — 6 feature write-ups, public |
 | Media archive (S3) | **Real** — every submitted photo and voice note is written to `impact-proof-bucket` under a content-addressed key |
-| Intake records | **Real** — an analysed submission with evidence writes `intakes`, `items`, `material_lines`, `item_hazards`, `gatekeeper_verdicts` and, with a GPS fix, a `geopoints` row |
+| Intake records | **Real** — a priced submission writes `intakes` (`lib/s3/intakes.ts`) and its item, assay, valuation and verdict (`lib/records/items.ts`); with a GPS fix, `lib/intake/location.ts` adds the `geopoints` row `/map` counts |
 | Hotspot map | **Real** — live geotagged intakes clustered on real BMC ward boundaries over an OpenStreetMap basemap; empty, and saying so, until real intakes arrive |
 | Database schema | **Applied to real RDS, partly wired** — 39 tables; media, intake and geo tables are read and written, the rest are not |
 | Money | **Simulated** — no payout, no ledger writes |
@@ -87,10 +87,10 @@ Bucket, IAM policy, key layout and its honest gaps are in
 
 `/map` clusters geotagged intakes into collection sites on Mumbai's real ward map.
 
-- **Capture.** The intake screen takes a GPS fix with one explicit tap and lets the
-  operator pick the collector (walk-in by default). `lib/intake/record.ts` files the
-  submission — intake, item, material lines, hazards, gatekeeper verdict and geopoint —
-  in one transaction, idempotent on the evidence row, and never fails the request.
+- **Capture.** The intake screen takes a GPS fix with one explicit tap. After the
+  submission and its priced item are recorded, `lib/intake/location.ts` files the point
+  to its ward, stamps the ward and coordinates on that intake and item, and writes one
+  `geopoints` row — idempotent per intake, and never able to fail the request.
 - **Wards.** The 24 BMC administrative wards with real boundaries, from DataMeet's open
   data (CC BY-SA 2.5 India), simplified to 56 KB by `npm run geo:wards`. Points are filed
   by point-in-polygon; there is no PostGIS.
@@ -169,21 +169,21 @@ The design, the deletion policy, the role model and the instance details are in
 
 ### The database is only partly wired to the app
 
-This is the largest remaining gap and it is deliberate, not an oversight. The schema is
-fully designed and applied to RDS, and three parts of the app now use it:
+The schema is applied to RDS and these parts of the app use it:
 
-- [`lib/s3/media-assets.ts`](lib/s3/media-assets.ts) writes `media_assets` rows as evidence
-  is archived and lists them for [`/evidence`](app/(product)/evidence/page.tsx).
-- [`lib/intake/record.ts`](lib/intake/record.ts) files each analysed intake — `intakes`,
-  `items`, `material_lines`, `item_hazards`, `gatekeeper_verdicts`, `geopoints` — so the
-  evidence can now be found from the item it priced.
-- [`lib/heatmap/store.ts`](lib/heatmap/store.ts) reads those geopoints for
-  [`/map`](app/(product)/map/page.tsx) and stores dispatch decisions in `hotspot_clusters`.
+- [`lib/s3/media-assets.ts`](lib/s3/media-assets.ts) and [`lib/s3/intakes.ts`](lib/s3/intakes.ts)
+  record each archived object and the submission it belongs to.
+- [`lib/records/`](lib/records) writes the priced record — `items`, `material_lines`,
+  `item_hazards`, `valuations`, `gatekeeper_verdicts`, `verdict_signals`, `intake_fields`
+  — and officers' `validation_decisions`, and reads them back for the dashboard and queues.
+- [`lib/intake/location.ts`](lib/intake/location.ts) and
+  [`lib/heatmap/store.ts`](lib/heatmap/store.ts) write `geopoints` and read them for
+  [`/map`](app/(product)/map/page.tsx), storing dispatch decisions in `hotspot_clusters`.
 
-Everything else — valuations, pickups, credit notes, the ledger, every dashboard stat —
-still renders hardcoded fixtures from [`lib/data/`](lib/data). In particular no
-`valuations` row is written (the priced lines are stored as `material_lines`, the totals
-are not), and the pickup board does not yet read the intakes that now exist.
+Pickups and credit notes run on the pickup API (API Gateway + Lambda + DynamoDB,
+`scripts/pickup-*`), not on these tables. What still renders fixtures from
+[`lib/data/`](lib/data) says so on screen — the collector roster among them, since
+nothing provisions a collector at submission time yet.
 
 ### Auth gaps
 

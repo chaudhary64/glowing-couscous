@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 
 import { canOpen } from "./roles";
@@ -41,6 +42,19 @@ export async function requireUser(nextPath: string): Promise<AuthUser> {
  * the validation queue deserves to be told why they cannot.
  */
 export async function requireAccess(pathname: string): Promise<AuthUser> {
+  /*
+    Rendering stops here, before the session is verified.
+
+    Verifying an id token reads the clock — jose checks `exp` — and under
+    `cacheComponents` the framework tries to prerender a shell for every route, so each
+    guarded page was reporting `blocking-prerender-current-time` on every authenticated
+    render. A page that needs a session cannot be prerendered at all, and this is where
+    that belongs: every protected page already calls this function, so the statement is
+    made once rather than in sixteen page bodies. `await connection()` is the documented
+    way to say it and changes no behaviour — these routes read cookies already, so none
+    of them was ever static.
+  */
+  await connection();
   const user = await requireUser(pathname);
   const verdict = canOpen(pathname, user.role);
 

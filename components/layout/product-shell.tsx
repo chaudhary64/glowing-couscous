@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { connection } from "next/server";
+
 import { ProductNav } from "@/components/layout/product-nav";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { roleLabel } from "@/lib/auth/roles";
@@ -19,6 +21,19 @@ import { logisticsStats } from "@/lib/data/operations";
  * of the wrong rail.
  */
 export async function ProductShell({ children }: { children: React.ReactNode }) {
+  /*
+    Prerendering stops here, deliberately.
+
+    Verifying the id token reads the clock — jose checks `exp`, which is `Date.now()` —
+    and nothing about that value may end up in a static shell. `cookies()` alone did not
+    settle it: the framework still ran the verify during its prerender pass and reported
+    `blocking-prerender-current-time` on every authenticated route in the app. `instant
+    = false` on the segment is the same statement made in configuration; this is the half
+    that tells the renderer where to stop. `await connection()` is the documented remedy
+    and costs nothing here, because this shell can never be prerendered: it exists to
+    name the person holding the session.
+  */
+  await connection();
   const user = await getCurrentUser();
 
   return (

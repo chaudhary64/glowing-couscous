@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { connection } from "next/server";
 
 import { ROLES, roleLabel } from "@/lib/auth/roles";
 import { getSession } from "@/lib/auth/session";
@@ -13,6 +14,12 @@ import { getSession } from "@/lib/auth/session";
  * That is also the shortest honest answer to "why do I have to sign in at all".
  */
 export async function AuthShell({ children }: { children: React.ReactNode }) {
+  // Prerendering stops here, for the same reason it stops in `ProductShell`: this strip
+  // verifies an id token to say who is signed in, and a verified session is request data
+  // that must not be baked into a shell. Without it, every render of these four screens
+  // reports `blocking-prerender-current-time`.
+  await connection();
+
   const roleCount = Object.keys(ROLES).length;
 
   /*

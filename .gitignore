@@ -42,6 +42,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# build output from the serverless half: `scripts/pickup-setup.sh` packages the Lambda
+# here and stages its scratch JSON beside it. Reproducible from the source in `aws/`.
+/dist
+
 # freebuff (local agent state)
 .freebuff
 freebuff

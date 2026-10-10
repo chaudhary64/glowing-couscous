@@ -1,0 +1,1 @@
+ALTER TABLE "intakes" ALTER COLUMN "collector_id" DROP NOT NULL;

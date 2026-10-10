@@ -65,8 +65,6 @@ export interface AiRequestPayload {
   durationSeconds?: number;
   /** Where the submission was captured, when the device gave a fix. Intake only. */
   location?: { latitude: number; longitude: number; accuracyM?: number };
-  /** The collector chosen on the intake screen (`collectors.id`). Intake only. */
-  collectorId?: string;
 }
 
 /**
@@ -244,10 +242,6 @@ export function readPayload(body: unknown): { ok: true; payload: AiRequestPayloa
       declaredMassGrams: declaredMass,
       durationSeconds: duration,
       location: readLocation(raw.location),
-      collectorId:
-        typeof raw.collectorId === "string" && /^[0-9a-f-]{36}$/i.test(raw.collectorId)
-          ? raw.collectorId
-          : undefined,
     },
   };
 }

@@ -8,6 +8,8 @@ import {
   safeNext,
 } from "@/lib/auth/form";
 import { rememberPendingEmail, startSession } from "@/lib/auth/session";
+import { verifyIdToken } from "@/lib/auth/token";
+import { provisionUser } from "@/lib/records/users";
 
 /**
  * Sign in.
@@ -41,6 +43,13 @@ export async function POST(request: Request) {
 
   try {
     const result = await signIn(email, password);
+    // The user row is written here and nowhere else, because this is the one moment a
+    // freshly verified id token is in hand. Attribution columns across the schema —
+    // a decision's decider, a submission's uploader — join through `users.cognito_sub`,
+    // and nothing provisioned one before this. Non-fatal by construction: provisioning
+    // failing must not turn a successful sign-in into a lockout.
+    const session = await verifyIdToken(result.idToken);
+    if (session) await provisionUser(session);
     await startSession(result.idToken, result.expiresIn);
   } catch (error) {
     const code = error instanceof AuthError ? error.code : "server";
