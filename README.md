@@ -257,8 +257,10 @@ screens live behind the guards and start at `/dashboard`.
 [`.env.example`](.env.example) names every variable and carries no values. Four groups:
 
 - **`NEXT_PUBLIC_COGNITO_*` / `COGNITO_*`** — pool and app client settings. Not secrets;
-  a public browser client ships them. Only four names may be copied to disk during a
-  deployment, which `amplify.yml` does and explains.
+  a public browser client ships them. Amplify's SSR compute receives no environment
+  variables at runtime, so `amplify.yml` copies an explicit list of names — including
+  `DATABASE_URL`, which `/evidence`, intake recording and `/map` need — into
+  `.env.production` at build time, and explains the cost of each.
 - **`AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_API_KEY` / `AZURE_OPENAI_DEPLOYMENT`** —
   the Microsoft Foundry endpoint, a real secret key, and the deployment name. The key
   belongs in `.env.local` (gitignored) and never in the template. Without them, live
