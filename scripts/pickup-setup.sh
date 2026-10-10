@@ -766,5 +766,6 @@ say "  node --env-file=${ENV_FILE} scripts/pickup-seed.mjs   # write the catalog
 say "  node --env-file=${ENV_FILE} scripts/pickup-check.mjs  # drive the API end to end"
 say ""
 say "The API is private: every route needs a Cognito ID token for a user in one of the"
-say "eco-* groups, and the write routes need eco-operator or above. The check script"
-say "creates a temporary operator, uses it, and deletes it."
+say "eco-* groups, and each route then names its own minimum — the loads and their reads"
+say "need eco-operator or above, the recycler directory needs eco-officer. The check"
+say "script creates a temporary operator, uses it, and deletes it."
