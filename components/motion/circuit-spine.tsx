@@ -37,6 +37,7 @@ const MIN_WIDTH = 1280;
 export function CircuitSpine() {
   const svg = useRef<SVGSVGElement>(null);
   const trace = useRef<SVGPathElement>(null);
+  const glow = useRef<SVGPathElement>(null);
   const tip = useRef<SVGCircleElement>(null);
   const [layout, setLayout] = useState<Layout | null>(null);
   const [lit, setLit] = useState(0);
@@ -100,6 +101,8 @@ export function CircuitSpine() {
     };
 
     path.style.strokeDasharray = `${total}`;
+    const halo = glow.current;
+    if (halo) halo.style.strokeDasharray = `${total}`;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let frame = 0;
     const draw = () => {
@@ -107,6 +110,7 @@ export function CircuitSpine() {
       const tipY = reduced ? Infinity : window.scrollY + window.innerHeight * 0.62 - (host.getBoundingClientRect().top + window.scrollY);
       const len = Math.min(total, lengthAt(tipY));
       path.style.strokeDashoffset = `${total - len}`;
+      if (halo) halo.style.strokeDashoffset = `${total - len}`;
       const point = path.getPointAtLength(len);
       tip.current?.setAttribute("cx", String(point.x));
       tip.current?.setAttribute("cy", String(point.y));
@@ -143,9 +147,12 @@ export function CircuitSpine() {
               </feMerge>
             </filter>
           </defs>
-          {/* The unlit track, then the copper drawn over it. */}
+          {/* The unlit track, then the copper drawn over it. The trace runs the page's full
+              height and redraws on every scroll frame, so its glow is a wide faint stroke
+              rather than a blur filter, which would re-blur the whole page-tall path. */}
           <path d={layout.path} fill="none" stroke="var(--color-rule)" strokeWidth={2} />
-          <path ref={trace} d={layout.path} fill="none" stroke="var(--color-copper)" strokeWidth={2.5} filter="url(#spine-glow)" />
+          <path ref={glow} d={layout.path} fill="none" stroke="var(--color-copper)" strokeOpacity={0.22} strokeWidth={7} strokeLinecap="round" />
+          <path ref={trace} d={layout.path} fill="none" stroke="var(--color-copper)" strokeWidth={2.5} />
           {layout.nodes.map((node, i) => {
             const on = i < lit;
             return (

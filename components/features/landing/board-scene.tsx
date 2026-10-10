@@ -168,7 +168,7 @@ export default function BoardScene({
   return (
     <Canvas
       frameloop="demand"
-      dpr={[1, 1.75]}
+      dpr={[1, 1.5]}
       camera={{ fov: 30, near: 0.01, far: 10, position: SHOTS[0].pos }}
       gl={{ antialias: true, powerPreference: "high-performance" }}
       onCreated={({ gl }) => {

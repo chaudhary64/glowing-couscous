@@ -1,9 +1,9 @@
 "use client";
 
-import { Environment, Lightformer, useGLTF } from "@react-three/drei";
+import { Environment, Lightformer, PerformanceMonitor, useGLTF } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Bloom, EffectComposer, Noise } from "@react-three/postprocessing";
-import { Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 
 import { MODEL_URL } from "./board-model";
@@ -207,6 +207,11 @@ export default function HeroScene({
   onReady?: () => void;
 }) {
   const pointer = useRef({ x: 0, y: 0 });
+  // Pixel ratio, stepped down while the frame rate struggles and back up when it
+  // recovers. Starts at the cap; never above the screen's own ratio.
+  const cap = compact ? 1.25 : 1.5;
+  const [dpr, setDpr] = useState(cap);
+  const [lean, setLean] = useState(false);
 
   useEffect(() => {
     if (!live) return;
@@ -221,7 +226,7 @@ export default function HeroScene({
     <Canvas
       frameloop={live && active ? "always" : "demand"}
       key={compact ? "compact" : "wide"}
-      dpr={compact ? [1, 1.5] : [1, 1.75]}
+      dpr={Math.min(dpr, typeof window === "undefined" ? 1 : window.devicePixelRatio)}
       camera={{ fov: (compact ? FRAMING.compact : FRAMING.wide).fov, near: 0.01, far: 10, position: (compact ? FRAMING.compact : FRAMING.wide).position }}
       gl={{ antialias: false, powerPreference: "high-performance", stencil: false }}
       onCreated={({ gl, camera }) => {
@@ -233,6 +238,20 @@ export default function HeroScene({
       }}
       aria-hidden
     >
+      {/* Under ~45 fps: drop the pixel ratio a step, then the film grain. Recovers above ~58. */}
+      <PerformanceMonitor
+        bounds={() => [45, 58]}
+        flipflops={4}
+        onDecline={() => {
+          setDpr((d) => Math.max(0.75, +(d - 0.25).toFixed(2)));
+          setLean(true);
+        }}
+        onIncline={() => setDpr((d) => Math.min(cap, +(d + 0.25).toFixed(2)))}
+        onFallback={() => {
+          setDpr(0.75);
+          setLean(true);
+        }}
+      />
       {/* Opaque ink, matching the section, so the post-processing has a ground to work on. */}
       <color attach="background" args={["#12171b"]} />
       <ambientLight intensity={0.12} />
@@ -248,9 +267,11 @@ export default function HeroScene({
       <Suspense fallback={null}>
         <XrayBoard live={live} pointer={pointer} mode={mode} />
       </Suspense>
-      <EffectComposer multisampling={compact ? 0 : 4}>
+      {/* No MSAA: on the composer's float buffers it was the single largest per-frame
+          cost, and the bloom and grain already soften the hairline edges. */}
+      <EffectComposer multisampling={0}>
         <Bloom mipmapBlur intensity={1.15} luminanceThreshold={1} luminanceSmoothing={0.15} radius={0.7} />
-        <Noise premultiply opacity={0.35} />
+        {lean ? <></> : <Noise premultiply opacity={0.35} />}
       </EffectComposer>
     </Canvas>
   );

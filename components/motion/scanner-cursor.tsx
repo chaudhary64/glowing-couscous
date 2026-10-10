@@ -45,8 +45,13 @@ export function ScannerCursor() {
     const label = (target: Element) =>
       (target.getAttribute("aria-label") ?? target.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 22).toUpperCase();
 
+    // The loop sleeps once the reticle has caught up and no magnet is moving; the next
+    // pointer move wakes it. An idle page then costs no frames at all.
+    const wake = () => {
+      if (!frame) frame = requestAnimationFrame(tick);
+    };
     const tick = () => {
-      frame = requestAnimationFrame(tick);
+      frame = 0;
       // Target box: the locked element's rect (padded), or a small square on the pointer.
       let tx = pointer.x - 17;
       let ty = pointer.y - 17;
@@ -94,6 +99,9 @@ export function ScannerCursor() {
           magnets.delete(target);
         }
       });
+
+      const moving = Math.abs(tx - box.x) + Math.abs(ty - box.y) + Math.abs(tw - box.w) + Math.abs(th - box.h) > 0.1;
+      if (moving || magnets.size > 0) wake();
     };
 
     const onMove = (event: PointerEvent) => {
@@ -118,6 +126,7 @@ export function ScannerCursor() {
         if (Math.abs(event.clientX - (r.left + r.width / 2)) < r.width / 2 + 24 && Math.abs(event.clientY - (r.top + r.height / 2)) < r.height / 2 + 24)
           magnets.set(m, { x: 0, y: 0, pull: m.animate([at(0, 0), at(0, 0)], { duration: 1, fill: "forwards" }) });
       });
+      wake();
     };
     const onLeave = () => {
       visible = false;
@@ -126,10 +135,13 @@ export function ScannerCursor() {
 
     window.addEventListener("pointermove", onMove, { passive: true });
     document.documentElement.addEventListener("pointerleave", onLeave);
-    frame = requestAnimationFrame(tick);
+    // A locked target can move under a still pointer when the page scrolls.
+    window.addEventListener("scroll", wake, { passive: true });
+    wake();
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("scroll", wake);
       document.documentElement.removeEventListener("pointerleave", onLeave);
       magnets.forEach((offset) => offset.pull.cancel());
     };
