@@ -582,3 +582,32 @@ body {
 @keyframes type-caret {
   50% { opacity: 0; }
 }
+
+/* ------------------------------------------------------------------- charts
+   components/charts/*: bars grow from their baseline, segments sweep in, ring arcs draw
+   round. Static under reduced motion. */
+.chart-grow {
+  transform-box: view-box;
+  animation: chart-grow 700ms var(--ease-print) both;
+}
+@keyframes chart-grow {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+.chart-grow-x {
+  transform-origin: 0 50%;
+  animation: chart-grow-x 640ms var(--ease-print) both;
+}
+@keyframes chart-grow-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.chart-ring-draw {
+  animation: chart-ring 900ms var(--ease-print) both;
+}
+@keyframes chart-ring {
+  from { stroke-dasharray: 0 var(--gap); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chart-grow, .chart-grow-x, .chart-ring-draw { animation: none !important; }
+}

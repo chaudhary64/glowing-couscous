@@ -6,6 +6,7 @@ import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { MeterRow } from "@/components/ui/meter";
 import { Stat, StatGrid } from "@/components/ui/stat";
+import { OutcomeRing } from "@/components/charts/outcome-ring";
 import { requireAccess } from "@/lib/auth/dal";
 import { needsAttention } from "@/lib/data/activity";
 import { collectors, pickups } from "@/lib/data/operations";
@@ -137,7 +138,30 @@ export default async function DashboardPage() {
             note={`Cleared items only. ${formatInr(counts.eprCreditInr)} of brand EPR credit beside it. Simulated — no payout is made.`}
           />
         </StatGrid>
-      ) : (
+      ) : null}
+
+      {counts && counts.itemsPriced > 0 ? (
+        <Panel eyebrow="Gatekeeper" title="What happened to every priced item">
+          <div className="flex flex-wrap items-center justify-between gap-6">
+            <OutcomeRing
+              total={counts.itemsPriced}
+              caption="Verdicts on file"
+              segments={[
+                { label: "cleared, credit issued", value: counts.verified, color: "var(--color-verified)" },
+                { label: "held for an officer", value: counts.held, color: "var(--color-review)" },
+                { label: "refused before a credit", value: counts.rejected, color: "var(--color-hazard)" },
+              ]}
+            />
+            <p className="max-w-md text-sm leading-relaxed text-ink-soft">
+              Every item the model priced, by the verdict the gatekeeper gave it. A refused
+              item never reaches a credit note; a held one waits for a human on the
+              validation queue.
+            </p>
+          </div>
+        </Panel>
+      ) : null}
+
+      {counts ? null : (
         <Surface tone="inset" className="p-4">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
             No <span className="font-mono">DATABASE_URL</span> is configured, so no count
@@ -156,7 +180,9 @@ export default async function DashboardPage() {
           note="Decisions and hotspots are counted from the record. The rest depend on pickups and credit notes, which nothing writes yet — they are sample values and say so."
         />
 
-        <ul className="mt-5 grid gap-px border border-rule bg-rule sm:grid-cols-2 lg:grid-cols-4">
+        {/* Five cards: one row of five on wide screens; on two columns the last card spans
+            the row, so no empty cell shows the grid's rule colour through. */}
+        <ul className="mt-5 grid gap-px border border-rule bg-rule sm:grid-cols-2 xl:grid-cols-5">
           <li className="bg-paper-raised p-4">
             <div className="flex items-start justify-between gap-3">
               <Dot tone="review" />
@@ -240,8 +266,11 @@ export default async function DashboardPage() {
             </Link>
           </li>
 
-          {sampleAttention.slice(0, 2).map((item) => (
-            <li key={item.id} className="bg-paper-raised p-4">
+          {sampleAttention.slice(0, 2).map((item, index, shown) => (
+            <li
+              key={item.id}
+              className={`bg-paper-raised p-4 ${index === shown.length - 1 ? "sm:col-span-2 xl:col-span-1" : ""}`}
+            >
               <div className="flex items-start justify-between gap-3">
                 <Dot tone={item.tone} />
                 <span className="font-display text-2xl leading-none tracking-tight text-ink-muted">

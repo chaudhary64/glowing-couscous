@@ -12,6 +12,8 @@ import { Field, FieldList } from "@/components/ui/field-list";
 import { Meter } from "@/components/ui/meter";
 import { Stamp, VerdictMark } from "@/components/ui/stamp";
 import { AnalysisScanner } from "./analysis-scanner";
+import { CompositionBar } from "@/components/charts/composition-bar";
+import { ValueWaterfall } from "@/components/charts/value-waterfall";
 import { LiveWaveform } from "./live-waveform";
 import { saveConsent, useConsent } from "@/lib/consent";
 import { formatConfidence, formatInr, formatMass, formatRate, lineValue } from "@/lib/format";
@@ -978,6 +980,9 @@ function ValuationResult({ analysis }: { analysis: AiAnalysis }) {
       </Panel>
 
       <Surface>
+        <div className="px-4 pt-4">
+          <CompositionBar materials={materials} />
+        </div>
         <Table caption="Material assay, priced against the EcoEPR rate card">
           <THead>
             <TR>
@@ -1029,6 +1034,11 @@ function ValuationResult({ analysis }: { analysis: AiAnalysis }) {
               mono
             />
           </FieldList>
+          <ValueWaterfall
+            gross={valuation.grossValue}
+            handling={valuation.handlingFee}
+            net={valuation.netToCollector}
+          />
           <p className="mt-4 border-t border-rule pt-3 font-mono text-[11px] leading-relaxed text-ink-muted">
             {valuation.eprCreditNote}
             <br />
