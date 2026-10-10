@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AssaySequence, type AssayFacts } from "@/components/features/landing/assay-sequence";
+import { HeroBoard } from "@/components/features/landing/hero-board";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Panel, Surface } from "@/components/ui/card";
@@ -106,8 +107,18 @@ export default function LandingPage() {
   return (
     <div className="flex flex-col">
       {/* ------------------------------------------------------------- hero */}
-      <section className="border-b-2 border-ink">
-        <div className="mx-auto grid w-full max-w-6xl gap-10 px-5 py-14 sm:px-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-start lg:gap-12 lg:py-20">
+      {/*
+        Ink ground, continuing the header: the gatekeeper's eye. The board sits behind the
+        content and a veil keeps the headline legible over it; without WebGL the section
+        is exactly this ground and nothing is missing.
+      */}
+      <section className="relative isolate overflow-hidden border-b-2 border-ink bg-ink text-paper">
+        <HeroBoard className="absolute inset-0 -z-10 lg:left-[18%]" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(90deg,var(--color-ink)_0%,color-mix(in_oklab,var(--color-ink)_82%,transparent)_34%,transparent_62%)] max-lg:bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-ink)_70%,transparent)_0%,var(--color-ink)_75%)]"
+        />
+        <div className="mx-auto grid w-full max-w-6xl gap-10 px-5 py-14 sm:px-8 lg:min-h-[calc(100dvh-56px)] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-center lg:gap-12 lg:py-20">
           <div className="min-w-0">
             <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-copper">
               Brand EPR compliance · Mumbai + Pune pilot
@@ -117,7 +128,7 @@ export default function LandingPage() {
               Prove it went to a licensed recycler.
             </h1>
 
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-ink-soft">
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-paper/75">
               India generates 3.2 million tonnes of e-waste a year, and over 90% of it
               moves through informal collectors — no safety protocol, no paper trail.
               EcoEPR gives the kabadiwala a Hindi voice-note intake and gives you the
@@ -126,18 +137,29 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
-              <ButtonLink href="/dashboard">Open the app</ButtonLink>
-              <ButtonLink href="/doc" variant="secondary">
+              <ButtonLink
+                href="/dashboard"
+                className="border-copper! bg-copper! text-paper! hover:border-paper! hover:bg-paper! hover:text-ink!"
+              >
+                Open the app
+              </ButtonLink>
+              <ButtonLink
+                href="/doc"
+                variant="secondary"
+                className="border-paper/40! bg-transparent! text-paper! hover:border-paper! hover:bg-paper! hover:text-ink!"
+              >
                 Read the feature write-ups
               </ButtonLink>
             </div>
 
-            <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+            <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-paper/50">
               Documentation is public · the working screens need an account
             </p>
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 lg:pl-8">
+            {/* Paper on the bench: the receipt keeps its own ink colour on the dark ground. */}
+            <div className="text-ink shadow-[0_30px_80px_-20px_rgb(0_0_0/0.7)]">
             <Receipt
               title="Scrap rate receipt"
               reference={item.id}
@@ -157,7 +179,8 @@ export default function LandingPage() {
               note="Every figure is derived from the assay above and the rate card below. Nothing is issued until the gatekeeper reads Verified."
               stamp={<Stamp verdict={item.gatekeeper.verdict} />}
             />
-            <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+            </div>
+            <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-paper/50">
               The one artefact a compliance officer can hold: a note that names the item,
               the rate and the recycler.
             </p>

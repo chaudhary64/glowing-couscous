@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
 
+import { MODEL_URL } from "./board-model";
 import { explodeAttributes, footprint, partition } from "./board-parts";
 
 /**
@@ -24,7 +25,6 @@ import { explodeAttributes, footprint, partition } from "./board-parts";
  *   something, and nothing at all while the section is off screen.
  */
 
-export const MODEL_URL = "/models/circuit-board/circuit_board.gltf";
 
 /** Camera keyframes over the sequence progress (0..1). */
 const SHOTS: { at: number; pos: [number, number, number]; look: [number, number, number]; explode: number }[] = [
