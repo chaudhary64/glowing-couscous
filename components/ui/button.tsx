@@ -23,7 +23,7 @@ const variants: Record<ButtonVariant, string> = {
 };
 
 const base =
-  "inline-flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.14em] transition-colors disabled:cursor-not-allowed disabled:border-rule disabled:bg-paper disabled:text-ink-muted";
+  "press-feel inline-flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.14em] transition-colors disabled:cursor-not-allowed disabled:border-rule disabled:bg-paper disabled:text-ink-muted";
 
 export function Button({
   children,

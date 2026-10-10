@@ -642,3 +642,79 @@ body {
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }
 }
+
+/* ------------------------------------------------------------------ app shell */
+
+/* The rail's active block (components/layout/product-nav.tsx): one paper block that
+   slides to the page you opened, with a copper edge. */
+.nav-marker {
+  background: var(--color-paper);
+  box-shadow: inset 3px 0 0 var(--color-copper);
+  opacity: 0;
+  transition:
+    transform 420ms var(--ease-print),
+    height 420ms var(--ease-print),
+    opacity 200ms;
+  will-change: transform;
+}
+
+/* Buttons and button-links press in a little, so a click feels received. */
+.press-feel {
+  transition-property: color, background-color, border-color, transform, box-shadow;
+  transition-duration: 160ms;
+}
+.press-feel:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-marker { transition: none; }
+  .press-feel:active:not(:disabled) { transform: none; }
+}
+
+/* Nav link pending bar (product-nav.tsx PendingHint). */
+.link-pending {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.link-pending.is-pending {
+  opacity: 1;
+  transition: opacity 0ms 120ms;
+}
+.link-pending.is-pending::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: var(--color-copper);
+  animation: link-pending 900ms ease-in-out 120ms infinite;
+}
+@keyframes link-pending {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(260%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .link-pending.is-pending::before { animation: none; width: 100%; }
+}
+
+/* EmptyState trace (components/ui/empty-state.tsx). */
+.empty-trace {
+  stroke-dasharray: 160;
+  animation: empty-trace 1100ms var(--ease-print) both;
+}
+.empty-chip {
+  animation: rise-fade 500ms var(--ease-print) 700ms both;
+}
+@keyframes empty-trace {
+  from { stroke-dashoffset: 160; }
+  to { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .empty-trace, .empty-chip { animation: none; }
+}

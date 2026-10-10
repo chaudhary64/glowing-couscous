@@ -10,6 +10,7 @@ import { Panel } from "@/components/ui/card";
 import { formatConfidence, formatInr, formatMass, formatTimestamp } from "@/lib/format";
 import type { BadgeTone } from "@/lib/tone";
 import type { StoredDecision, StoredItem } from "@/lib/types";
+import { EmptyState } from "@/components/ui/empty-state";
 
 /**
  * The queue that now remembers what a human decided.
@@ -159,10 +160,10 @@ export function DecisionQueue({
         }
       >
         {pending.length === 0 ? (
-          <p className="text-sm leading-relaxed text-ink-soft">
+          <EmptyState title="Queue clear">
             Nothing is held. Every item on file either cleared the gatekeeper on its own or
             already has a decision recorded against it.
-          </p>
+          </EmptyState>
         ) : (
           <ul className="flex flex-col gap-px bg-rule">
             {pending.map((item) => {
@@ -250,10 +251,10 @@ export function DecisionQueue({
         actions={<Badge tone="neutral">{live.length} live</Badge>}
       >
         {live.length === 0 ? (
-          <p className="text-sm leading-relaxed text-ink-soft">
+          <EmptyState title="No decisions yet">
             No decision has been recorded yet. Choosing an action above writes a row here,
             and it is still on this list after a reload.
-          </p>
+          </EmptyState>
         ) : (
           <ul className="flex flex-col">
             {live.map((decision) => {

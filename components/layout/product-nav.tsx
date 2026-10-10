@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
+import { useLayoutEffect, useRef } from "react";
 import { productNav } from "@/lib/data/product-nav";
 import { pickups } from "@/lib/data/operations";
 import { validationQueue } from "@/lib/data/model";
@@ -40,6 +41,32 @@ export interface NavViewer {
  */
 export function ProductNav({ viewer }: { viewer: NavViewer }) {
   const pathname = usePathname();
+  const navList = useRef<HTMLDivElement>(null);
+  const marker = useRef<HTMLSpanElement>(null);
+
+  // The active block slides to the page you opened instead of jumping (desktop rail),
+  // and on the phone's sideways nav the active item scrolls into view. Written straight
+  // to the marker's style after layout: no state, so no extra render per navigation.
+  useLayoutEffect(() => {
+    const list = navList.current;
+    const block = marker.current;
+    const link = list?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!list || !block) return;
+    if (!link) {
+      block.style.opacity = "0";
+      return;
+    }
+    const top = link.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+    const first = block.dataset.placed !== "1";
+    block.style.transition = first ? "none" : "";
+    block.style.transform = `translateY(${top}px)`;
+    block.style.height = `${link.offsetHeight}px`;
+    block.style.opacity = "1";
+    block.dataset.placed = "1";
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      link.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+    }
+  }, [pathname]);
 
   const groups = productNav
     .map((group) => ({
@@ -73,7 +100,9 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
         </p>
       </div>
 
-      <div className="flex gap-6 overflow-x-auto px-5 py-4 lg:block lg:overflow-visible lg:px-0 lg:py-0">
+      <div ref={navList} className="relative flex gap-6 overflow-x-auto px-5 py-4 lg:block lg:overflow-visible lg:px-0 lg:py-0">
+        {/* The sliding active block (desktop rail only), behind the links. */}
+        <span ref={marker} aria-hidden className="nav-marker pointer-events-none absolute inset-x-0 top-0 hidden lg:block" />
         {groups.map((group) => (
           <div key={group.label} className="lg:pt-5">
             <p className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-paper/45 lg:block lg:px-6">
@@ -90,13 +119,16 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
                       title={item.hint}
                       aria-current={active ? "page" : undefined}
                       className={[
-                        "flex min-w-[150px] items-center justify-between gap-3 border-b border-paper/15 px-5 py-3 text-[13px] font-medium transition-colors lg:min-w-0 lg:px-6",
+                        "relative z-[1] flex min-w-[150px] items-center justify-between gap-3 border-b border-paper/15 px-5 py-3 text-[13px] font-medium transition-colors duration-300 lg:min-w-0 lg:px-6",
                         active
-                          ? "bg-paper text-ink"
+                          ? // On the rail the sliding block is the background; the label turns dark
+                            // only as the block arrives under it, never dark-on-dark mid-slide.
+                            "bg-paper text-ink lg:bg-transparent lg:delay-200"
                           : "text-paper/80 hover:bg-paper/10 hover:text-paper",
                       ].join(" ")}
                     >
                       <span>{item.label}</span>
+                      <PendingHint />
                       {count ? (
                         <span
                           className={[
@@ -162,4 +194,15 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
       </div>
     </nav>
   );
+}
+
+/**
+ * While the page a link points at is still rendering (these routes block on the session
+ * check, so there is no loading.js to show instantly), a copper bar runs along the
+ * bottom of the clicked link. It waits 120 ms before showing, so a fast navigation never
+ * flashes it.
+ */
+function PendingHint() {
+  const { pending } = useLinkStatus();
+  return <span aria-hidden className={`link-pending ${pending ? "is-pending" : ""}`} />;
 }
