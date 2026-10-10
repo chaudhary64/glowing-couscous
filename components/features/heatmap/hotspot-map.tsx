@@ -236,8 +236,10 @@ export function HotspotMap({
             source: "districts",
             paint: {
               "line-color": COLORS.ink,
-              "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.2, 8, 0.8],
-              "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.25, 9, 0.5],
+              // Readable at country zoom even with no data: the map must look like India's
+              // districts, not like an empty basemap.
+              "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.45, 8, 1],
+              "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.45, 9, 0.6],
             },
           });
           map.addLayer({
@@ -461,6 +463,16 @@ export function HotspotMap({
           relative }` on this element, which would beat `absolute inset-0` and collapse
           the map to zero height. */}
       <div ref={container} style={{ position: "absolute", inset: 0 }} />
+      {state === "ready" && points.length === 0 && clusters.length === 0 ? (
+        // Said on the map itself, so an empty map never reads as a broken one.
+        <div className="pointer-events-none absolute inset-x-3 bottom-10 flex justify-center">
+          <p className="max-w-md border-2 border-ink bg-paper-raised/95 px-4 py-2.5 text-center text-[12px] leading-snug text-ink">
+            <span className="block font-mono text-[10px] uppercase tracking-[0.16em] text-copper">No geotagged intakes yet</span>
+            Submit an intake with <span className="font-medium">Add location</span> and it appears here, filed to its
+            district.
+          </p>
+        </div>
+      ) : null}
       {state === "ready" ? (
         <button
           type="button"
