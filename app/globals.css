@@ -187,3 +187,193 @@ body {
     animation-delay: 0s !important;
   }
 }
+
+/* ------------------------------------------------------------ show pieces */
+
+/* Hero headline: each line rises out of its own mask, the copy after it. */
+.rise-line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.04em;
+}
+.rise-line > span {
+  display: block;
+  animation: rise 900ms var(--ease-print) both;
+  animation-delay: calc(var(--n, 0) * 110ms + 120ms);
+}
+.rise-after {
+  animation: rise-fade 800ms var(--ease-print) both;
+  animation-delay: calc(var(--n, 0) * 90ms + 420ms);
+}
+@keyframes rise {
+  from { transform: translateY(105%); }
+  to { transform: none; }
+}
+@keyframes rise-fade {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Receipt printer: the receipt feeds out of a slot, line by line, as the page opens. */
+.receipt-printer {
+  position: relative;
+  padding-top: 14px;
+}
+.receipt-printer::before {
+  /* the slot */
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: -10px;
+  right: -10px;
+  height: 14px;
+  background: linear-gradient(#05080a, #1b2228);
+  border: 1px solid #2b3138;
+  box-shadow: 0 6px 14px -6px rgb(0 0 0 / 0.8);
+}
+.receipt-printer::after {
+  /* the status LED: blinks while printing, settles green */
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: 4px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-verified);
+  box-shadow: 0 0 8px var(--color-verified);
+  animation: printer-led 1900ms steps(1, end) 300ms both;
+}
+.receipt-printer > .receipt-paper {
+  animation: receipt-feed 1700ms steps(22, end) 350ms both;
+}
+@keyframes receipt-feed {
+  from { clip-path: inset(0 0 100% 0); transform: translateY(-42px); }
+  to { clip-path: inset(0 0 0 0); transform: none; }
+}
+@keyframes printer-led {
+  0%, 20%, 40%, 60%, 80% { background: var(--color-copper); box-shadow: 0 0 10px var(--color-copper); }
+  10%, 30%, 50%, 70%, 90% { background: #3a2a20; box-shadow: none; }
+  100% { background: var(--color-verified); box-shadow: 0 0 8px var(--color-verified); }
+}
+
+/* Rate ticker (components/motion/rate-ticker.tsx). */
+.rate-ticker__track {
+  animation: ticker 60s linear infinite;
+}
+.rate-ticker:hover .rate-ticker__track {
+  animation-play-state: paused;
+}
+@keyframes ticker {
+  to { transform: translateX(-50%); }
+}
+
+/* Spotlight: a hidden PCB pattern under dark sections, lit where the pointer is. */
+.spotlight-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' fill='none' stroke='%23d9783f' stroke-width='1.4'%3E%3Cpath d='M0 40h40l20 20h40l20-20h40M40 0v20l20 20M120 160v-30l-20-20H60l-20-20V60M160 100h-30l-10 10v50M0 120h30l10-10'/%3E%3Ccircle cx='40' cy='40' r='3'/%3E%3Ccircle cx='120' cy='40' r='3'/%3E%3Ccircle cx='60' cy='110' r='3'/%3E%3Ccircle cx='130' cy='100' r='3'/%3E%3Crect x='86' y='76' width='22' height='14'/%3E%3Cpath d='M90 76v-6M97 76v-6M104 76v-6M90 90v6M97 90v6M104 90v6'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  opacity: 0;
+  transition: opacity 400ms;
+  mask-image: radial-gradient(circle 220px at var(--mx, -999px) var(--my, -999px), #000 0%, rgb(0 0 0 / 0.35) 45%, transparent 75%);
+}
+@media (pointer: fine) {
+  [data-spotlight]:hover > .spotlight-layer {
+    opacity: 0.55;
+  }
+}
+
+/* Scanner reticle (components/motion/scanner-cursor.tsx). */
+.scanner-reticle {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 60;
+  width: 34px;
+  height: 34px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 250ms;
+  mix-blend-mode: normal;
+}
+.scanner-reticle[data-on] {
+  opacity: 1;
+}
+.scanner-reticle__corner {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-color: var(--color-copper);
+  border-style: solid;
+  border-width: 0;
+  transition: width 200ms, height 200ms;
+}
+.scanner-reticle__corner[data-c="tl"] { left: 0; top: 0; border-left-width: 2px; border-top-width: 2px; }
+.scanner-reticle__corner[data-c="tr"] { right: 0; top: 0; border-right-width: 2px; border-top-width: 2px; }
+.scanner-reticle__corner[data-c="bl"] { left: 0; bottom: 0; border-left-width: 2px; border-bottom-width: 2px; }
+.scanner-reticle__corner[data-c="br"] { right: 0; bottom: 0; border-right-width: 2px; border-bottom-width: 2px; }
+.scanner-reticle[data-locked] .scanner-reticle__readout {
+  /* Locked, the readout sits above the frame so it never covers a neighbour. */
+  left: 0;
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+.scanner-reticle[data-locked] .scanner-reticle__corner {
+  width: 14px;
+  height: 14px;
+  filter: drop-shadow(0 0 4px color-mix(in oklab, var(--color-copper) 80%, transparent));
+}
+.scanner-reticle__readout {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: calc(100% + 4px);
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--color-copper);
+  background: color-mix(in oklab, var(--color-ink) 82%, transparent);
+  padding: 2px 5px;
+}
+
+/* Footer wordmark: an outline that fills with copper as it scrolls into view. Where
+   scroll-driven animations are unsupported it simply stays an outline. */
+.wordmark {
+  color: transparent;
+  -webkit-text-stroke: 1px color-mix(in oklab, var(--color-paper) 28%, transparent);
+  background: linear-gradient(90deg, var(--color-copper) 0 50%, transparent 50% 100%) no-repeat;
+  background-size: 200% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+@supports (animation-timeline: view()) {
+  .wordmark {
+    animation: wordmark-fill linear both;
+    animation-timeline: view();
+    /* Filled by the time the word is fully on screen: it is the last thing on the page. */
+    animation-range: entry 0% entry 75%;
+  }
+}
+@keyframes wordmark-fill {
+  to { background-position: 0% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-line > span,
+  .rise-after,
+  .receipt-printer > .receipt-paper,
+  .receipt-printer::after,
+  .rate-ticker__track {
+    animation: none !important;
+  }
+  .wordmark {
+    animation: none !important;
+    background-position: 0% 0;
+  }
+}

@@ -152,6 +152,7 @@ export function AssaySequence({ facts, stamp }: { facts: AssayFacts; stamp: Reac
     <section
       ref={section}
       id="assay"
+      data-node
       aria-labelledby="assay-title"
       className={cn("relative scroll-mt-24 border-b-2 border-ink bg-paper", !reduced && "h-[420vh]")}
     >

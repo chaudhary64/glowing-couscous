@@ -3,7 +3,9 @@ import Link from "next/link";
 
 import { AssaySequence, type AssayFacts } from "@/components/features/landing/assay-sequence";
 import { HeroBoard } from "@/components/features/landing/hero-board";
+import { CircuitSpine } from "@/components/motion/circuit-spine";
 import { LoopTrace } from "@/components/motion/loop-trace";
+import { RateTicker } from "@/components/motion/rate-ticker";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Panel, Surface } from "@/components/ui/card";
@@ -106,29 +108,38 @@ const claims = [
 
 export default function LandingPage() {
   return (
-    <div className="flex flex-col">
+    <div className="relative flex flex-col">
+      {/* The page as a circuit: a trace routed through every data-node section. */}
+      <CircuitSpine />
+
       {/* ------------------------------------------------------------- hero */}
       {/*
         Ink ground, continuing the header: the gatekeeper's eye. The board sits behind the
         content and a veil keeps the headline legible over it; without WebGL the section
         is exactly this ground and nothing is missing.
       */}
-      <section className="relative isolate overflow-hidden border-b-2 border-ink bg-ink text-paper">
+      <section data-spotlight className="relative isolate overflow-hidden border-b-2 border-ink bg-ink text-paper">
+        <span aria-hidden className="spotlight-layer -z-[5]" />
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10 hidden bg-[linear-gradient(90deg,var(--color-ink)_0%,var(--color-ink)_34%,color-mix(in_oklab,var(--color-ink)_90%,transparent)_46%,color-mix(in_oklab,var(--color-ink)_45%,transparent)_58%,transparent_70%)] lg:block"
         />
         <div className="mx-auto grid w-full max-w-6xl gap-10 px-5 py-14 sm:px-8 lg:min-h-[calc(100dvh-56px)] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-center lg:gap-12 lg:py-20">
           <div className="min-w-0">
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-copper">
+            <p className="rise-after font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-copper" style={{ "--n": 0 } as React.CSSProperties}>
               Brand EPR compliance · Mumbai + Pune pilot
             </p>
 
             <h1 className="mt-4 font-display text-5xl uppercase leading-[0.92] tracking-tight sm:text-6xl lg:text-7xl">
-              Prove it went to a licensed recycler.
+              <span className="rise-line" style={{ "--n": 0 } as React.CSSProperties}>
+                <span>Prove it went to a</span>
+              </span>{" "}
+              <span className="rise-line" style={{ "--n": 1 } as React.CSSProperties}>
+                <span>licensed recycler.</span>
+              </span>
             </h1>
 
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-paper/75">
+            <p className="rise-after mt-5 max-w-xl text-base leading-relaxed text-paper/75" style={{ "--n": 1 } as React.CSSProperties}>
               India generates 3.2 million tonnes of e-waste a year, and over 90% of it
               moves through informal collectors — no safety protocol, no paper trail.
               EcoEPR gives the kabadiwala a Hindi voice-note intake and gives you the
@@ -136,7 +147,7 @@ export default function LandingPage() {
               credit note stamped at a CPCB-registered recycler.
             </p>
 
-            <div className="mt-7 flex flex-wrap items-center gap-3">
+            <div className="rise-after mt-7 flex flex-wrap items-center gap-3" style={{ "--n": 2 } as React.CSSProperties}>
               <ButtonLink
                 href="/dashboard"
                 className="border-copper! bg-copper! text-paper! hover:border-paper! hover:bg-paper! hover:text-ink!"
@@ -166,7 +177,9 @@ export default function LandingPage() {
 
           <div className="relative z-10 min-w-0 max-lg:-mt-10 lg:pl-8">
             {/* Paper on the bench: the receipt keeps its own ink colour on the dark ground. */}
-            <div className="text-ink shadow-[0_30px_80px_-20px_rgb(0_0_0/0.7)]">
+            {/* It prints: the receipt feeds out of a slot as the page opens (globals.css). */}
+            <div className="receipt-printer">
+            <div className="receipt-paper text-ink shadow-[0_30px_80px_-20px_rgb(0_0_0/0.7)]">
             <Receipt
               title="Scrap rate receipt"
               reference={item.id}
@@ -187,6 +200,7 @@ export default function LandingPage() {
               stamp={<Stamp verdict={item.gatekeeper.verdict} />}
             />
             </div>
+            </div>
             <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-paper/50">
               The one artefact a compliance officer can hold: a note that names the item,
               the rate and the recycler.
@@ -195,11 +209,13 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <RateTicker />
+
       {/* ---------------------------------------------- the assay, in 3D */}
       <AssaySequence facts={assayFacts} stamp={<Stamp verdict={item.gatekeeper.verdict} angle={-8} />} />
 
       {/* ------------------------------------------------------ the numbers */}
-      <section className="border-b-2 border-ink bg-paper-raised">
+      <section data-node className="border-b-2 border-ink bg-paper-raised">
         <div className="mx-auto w-full max-w-6xl px-5 py-10 sm:px-8">
           <StatGrid columns={4}>
             <Stat
@@ -232,7 +248,7 @@ export default function LandingPage() {
       </section>
 
       {/* ---------------------------------------------------------- the gap */}
-      <section id="gap" className="scroll-mt-24 border-b-2 border-ink">
+      <section id="gap" data-node className="scroll-mt-24 border-b-2 border-ink">
         <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
           <SectionHeader
             eyebrow="The gap"
@@ -263,7 +279,7 @@ export default function LandingPage() {
       </section>
 
       {/* ------------------------------------------------------- the loop */}
-      <section id="how" className="scroll-mt-24 border-b-2 border-ink bg-paper-raised">
+      <section id="how" data-node className="scroll-mt-24 border-b-2 border-ink bg-paper-raised">
         <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
           <SectionHeader
             eyebrow="The core loop"
@@ -305,7 +321,7 @@ export default function LandingPage() {
       </section>
 
       {/* -------------------------------------------------- why it holds up */}
-      <section id="proof" className="scroll-mt-24 border-b-2 border-ink">
+      <section id="proof" data-node className="scroll-mt-24 border-b-2 border-ink">
         <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
           <SectionHeader
             eyebrow="Why it survives an audit"
@@ -402,7 +418,7 @@ export default function LandingPage() {
       </section>
 
       {/* --------------------------------------------------------- honesty */}
-      <section className="border-b-2 border-ink bg-paper-raised">
+      <section data-node className="border-b-2 border-ink bg-paper-raised">
         <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
           <Panel eyebrow="Honesty clause" title="What we are not claiming">
             <ul data-motion="rows" className="flex flex-col gap-3">
@@ -419,7 +435,8 @@ export default function LandingPage() {
 
       {/* ------------------------------------------------------------- cta */}
       {/* The board returns for the close: all X-ray now, turning slowly. */}
-      <section className="relative isolate overflow-hidden bg-ink text-paper">
+      <section data-node data-spotlight className="relative isolate overflow-hidden bg-ink text-paper">
+        <span aria-hidden className="spotlight-layer -z-[5]" />
         <HeroBoard
           mode="xray"
           className="relative h-[80vw] max-h-[420px] [mask-image:linear-gradient(180deg,transparent,#000_20%,#000_80%,transparent)] lg:absolute lg:inset-y-0 lg:right-0 lg:left-[54%] lg:-z-10 lg:h-auto lg:max-h-none lg:[mask-image:linear-gradient(90deg,transparent,#000_30%)]"
