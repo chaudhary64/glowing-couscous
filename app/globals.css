@@ -611,3 +611,34 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .chart-grow, .chart-grow-x, .chart-ring-draw { animation: none !important; }
 }
+
+/* Landing: the self-playing handoff (components/features/landing/handoff-showcase.tsx). */
+.showcase-step {
+  opacity: 0.45;
+  transition: opacity 400ms var(--ease-print), border-color 400ms var(--ease-print);
+}
+.showcase-step[data-lit] {
+  opacity: 1;
+  border-left-color: var(--color-copper);
+}
+.showcase-frame {
+  animation: rise-fade 480ms var(--ease-print) both;
+}
+.showcase-press {
+  animation: showcase-press 2.6s ease-in-out both;
+}
+@keyframes showcase-press {
+  0%, 55% { transform: none; box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-copper) 50%, transparent); }
+  65% { transform: scale(0.97); box-shadow: 0 0 0 10px color-mix(in oklab, var(--color-copper) 0%, transparent); }
+  75%, 100% { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .showcase-step { opacity: 1; transition: none; }
+  .showcase-frame, .showcase-press { animation: none !important; }
+}
+
+/* In-page links glide rather than jump — only when the visitor has not asked for less
+   motion. The sticky header's height is left to each section's scroll-mt. */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}

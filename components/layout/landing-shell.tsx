@@ -67,6 +67,12 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
             >
               How it works
             </a>
+            <a
+              href="#handoff"
+              className="hidden font-mono text-[11px] uppercase tracking-[0.14em] text-paper/70 underline decoration-paper/30 underline-offset-4 hover:text-paper hover:decoration-copper md:inline-block"
+            >
+              Smart pickup
+            </a>
             <Link
               href="/doc"
               className="font-mono text-[11px] uppercase tracking-[0.14em] text-paper/70 underline decoration-paper/30 underline-offset-4 hover:text-paper hover:decoration-copper"

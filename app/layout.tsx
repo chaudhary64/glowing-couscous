@@ -36,8 +36,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     // Browser extensions write attributes onto <html> before React loads (e.g. a
     // focus extension's id). This silences that one element's attribute check only;
     // everything inside it is still verified.
+    // data-scroll-behavior: globals.css makes in-page anchors glide; this tells Next to
+    // switch that off for the jump to the top on a route change, so navigation stays
+    // instant (Next 16 no longer does so by default).
     <html
       lang="en"
+      data-scroll-behavior="smooth"
       className={`${anton.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >

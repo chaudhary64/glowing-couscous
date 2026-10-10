@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AssaySequence, type AssayFacts } from "@/components/features/landing/assay-sequence";
+import { HandoffShowcase } from "@/components/features/landing/handoff-showcase";
 import { HeroBoard } from "@/components/features/landing/hero-board";
 import { CircuitSpine } from "@/components/motion/circuit-spine";
 import { LoopTrace } from "@/components/motion/loop-trace";
@@ -414,6 +415,20 @@ export default function LandingPage() {
                 moves nothing else.
               </p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------ the handoff */}
+      <section id="handoff" data-node className="scroll-mt-24 border-b-2 border-ink">
+        <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
+          <SectionHeader
+            eyebrow="Smart pickup & digital credit"
+            title="From the lane to a licensed line, paid on the spot."
+            note="The handoff the whole audit trail hangs on: a PIN only the collector's phone shows, checked at the recycler's gate."
+          />
+          <div className="mt-10">
+            <HandoffShowcase />
           </div>
         </div>
       </section>
