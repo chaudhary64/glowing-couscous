@@ -4,6 +4,7 @@ import "./globals.css";
 import { ConsentBanner } from "@/components/layout/consent-banner";
 import { MotionObserver } from "@/components/motion/motion-observer";
 import { WorldBackdrop } from "@/components/world/world-backdrop";
+import { TiltLayer } from "@/components/motion/tilt-layer";
 
 const anton = Anton({
   subsets: ["latin"],
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <WorldBackdrop />
         {children}
         <MotionObserver />
+        <TiltLayer />
         <ConsentBanner />
       </body>
     </html>
