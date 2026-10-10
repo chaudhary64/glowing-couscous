@@ -32,13 +32,14 @@ process.env.DATABASE_URL = url;
 
 const { closeDatabase, database } = await import("@/db/client");
 const schema = await import("@/db/schema");
-const { ensureWards, recordLocation } = await import("@/lib/intake/location");
+const { ensureArea, recordLocation } = await import("@/lib/intake/location");
 const { recordSubmission } = await import("@/lib/s3/intakes");
 const { recordPricedItem } = await import("@/lib/records/items");
 const { recordArchivedObjects } = await import("@/lib/s3/media-assets");
 const { getHeatmap, setClusterStatus, recomputeClusters } = await import("@/lib/heatmap/store");
 const { canOpen } = await import("@/lib/auth/roles");
 const { distanceMetres } = await import("@/lib/geo/geohash");
+const { fileLocation } = await import("@/lib/geo/areas");
 const { eq, sql } = await import("drizzle-orm");
 
 import type { AiAnalysis } from "@/lib/ai/proposal";
@@ -49,6 +50,7 @@ let db = database()!.db;
 let counter = 0;
 
 const KURLA = { latitude: 19.0728, longitude: 72.8834 };
+const PUNE = { latitude: 18.5286, longitude: 73.8743 };
 
 /**
  * Drop every pooled connection and open fresh ones.
@@ -151,17 +153,23 @@ after(async () => {
   await closeDatabase();
 });
 
-describe("wards", () => {
-  it("creates all 24 BMC wards once, idempotently", async () => {
-    const first = await ensureWards(db);
-    assert.equal(first.size, 24);
-    (globalThis as { __ecoeprWardIds?: unknown }).__ecoeprWardIds = undefined; // force a second insert attempt
-    const second = await ensureWards(db);
-    assert.equal(await rows("wards"), 24);
-    assert.deepEqual([...second].sort(), [...first].sort());
+describe("filing areas", () => {
+  it("creates an area row on first use, once, for a ward or a district", async () => {
+    const ward = await ensureArea(db, "MCGM-L");
+    (globalThis as { __ecoeprAreaIds?: unknown }).__ecoeprAreaIds = undefined; // force a second insert attempt
+    assert.equal(await ensureArea(db, "MCGM-L"), ward);
+    assert.equal(await rows("wards"), 1, "areas are added one at a time, not all up front");
     const [l] = await db.select().from(schema.wards).where(eq(schema.wards.code, "MCGM-L"));
     assert.equal(l.name, "L Ward (Kurla)");
     assert.equal((l.boundaryGeoJson as { type: string }).type, "MultiPolygon");
+
+    const pune = fileLocation(PUNE.latitude, PUNE.longitude).district!;
+    const id = await ensureArea(db, pune.code);
+    assert.ok(id);
+    const [d] = await db.select().from(schema.wards).where(eq(schema.wards.code, pune.code));
+    assert.equal(d.name, "Pune");
+    assert.match(d.city, /^Mah/);
+    assert.equal(await ensureArea(db, "IND-not-a-code"), null);
   });
 });
 
@@ -203,8 +211,20 @@ describe("recording a submission's location", () => {
     assert.equal(await rows("geopoints"), before);
   });
 
-  it("records a fix outside Mumbai without filing it to a ward", async () => {
-    const out = await submit({ location: { latitude: 18.5204, longitude: 73.8567 } });
+  it("files a fix elsewhere in India to its district", async () => {
+    const out = await submit({ location: PUNE });
+    assert.equal(out.location?.recorded, true);
+    assert.equal(out.location?.areaKind, "district");
+    assert.equal(out.location?.wardName, "Pune");
+    assert.match(out.location?.stateName ?? "", /^Mah/);
+    const [intake] = await db.select().from(schema.intakes).where(eq(schema.intakes.id, out.submission.submission!.id));
+    assert.match(intake.wardCode ?? "", /^IND-/);
+    const [point] = await db.select().from(schema.geopoints).where(eq(schema.geopoints.intakeId, out.submission.submission!.id));
+    assert.ok(point.wardId, "a district is a filing area like a ward");
+  });
+
+  it("records a fix outside India without filing it", async () => {
+    const out = await submit({ location: { latitude: 27.7172, longitude: 85.324 } }); // Kathmandu
     assert.equal(out.location?.recorded, true);
     assert.equal(out.location?.wardCode, null);
     const [point] = await db.select().from(schema.geopoints).where(eq(schema.geopoints.intakeId, out.submission.submission!.id));
@@ -226,8 +246,8 @@ describe("the heatmap read", () => {
     await submit({ location: KURLA });
     const data = await getHeatmap();
     assert.equal(data.configured, true);
-    // Kurla submissions with a location: two above, two here = 4, plus the Pune point.
-    assert.equal(data.livePointCount, 4 + 1 /* the Pune point is a real detection, just unfiled */);
+    // Kurla submissions with a location: two above, two here = 4, plus Pune and Kathmandu.
+    assert.equal(data.livePointCount, 4 + 2 /* Kathmandu is a real detection, just unfiled */);
     assert.equal(data.clusters.length, 1);
     const site = data.clusters[0];
     assert.equal(site.wardCode, "MCGM-L");
@@ -235,6 +255,11 @@ describe("the heatmap read", () => {
     assert.equal(site.status, "open");
     assert.equal(data.wards[0].code, "MCGM-L");
     assert.equal(data.wards[0].pressure, 100);
+    // India by district: Mumbai Suburban (Kurla's district) and Pune, Kathmandu nowhere.
+    const names = data.districts.map((d) => d.name).sort();
+    assert.deepEqual(names, ["Mumbai Suburban", "Pune"]);
+    assert.equal(data.districts.find((d) => d.name === "Mumbai Suburban")?.detections, 4);
+    assert.ok(data.bounds && data.bounds.north > 19 && data.bounds.south < 19, "frames the real points");
   });
 
   it("never sends a raw coordinate: points and site centres are snapped to ~38 m", async () => {

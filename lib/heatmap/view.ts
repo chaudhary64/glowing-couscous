@@ -34,6 +34,18 @@ export function toWards(data: HeatmapData): Ward[] {
   }));
 }
 
+/** India's districts with detections, in the same shape; `city` carries the state. */
+export function toDistricts(data: HeatmapData): Ward[] {
+  return data.districts.map((d) => ({
+    id: d.code,
+    name: d.name,
+    city: d.state ?? "India",
+    density: d.pressure,
+    pickups: d.detections,
+    flaggedSites: d.hotspots,
+  }));
+}
+
 export function toHotspot(c: HeatmapCluster): HotspotCluster {
   return {
     id: c.code,

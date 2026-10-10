@@ -72,5 +72,6 @@ export const config = {
   // MapLibre's web worker (scripts/vendor-maplibre.mjs): the browser fetches it from a
   // worker without the page's navigation, and a redirect to /login breaks the map.
   // `models/` is the landing page's 3D board, which a signed-out visitor must load.
-  matcher: ["/((?!api|_next|vendor/|models/|favicon.ico).*)"],
+  // `geo/` is public boundary data (India's districts) the map fetches from its worker.
+  matcher: ["/((?!api|_next|vendor/|models/|geo/|favicon.ico).*)"],
 };

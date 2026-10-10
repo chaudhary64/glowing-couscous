@@ -154,3 +154,24 @@ export function simplifyRing(ring: Ring, tolerance: number): Ring {
   const out = ring.filter((_, i) => keep[i] === 1);
   return out.length >= 4 ? out : ring;
 }
+
+/**
+ * Approximate distance in km from a point to the nearest edge of a shape, measured on a
+ * local flat projection around the point (fine at the few-km scale it is used for:
+ * snapping a coastal GPS fix onto a simplified outline it fell just outside).
+ */
+export function multiPolygonDistanceKm(shape: MultiPolygon, latitude: number, longitude: number): number {
+  const kx = 111.32 * Math.cos((latitude * Math.PI) / 180);
+  const ky = 110.57;
+  const p: Position = [longitude * kx, latitude * ky];
+  let best = Infinity;
+  for (const polygon of shape)
+    for (const ring of polygon)
+      for (let i = 1; i < ring.length; i++) {
+        const a: Position = [ring[i - 1][0] * kx, ring[i - 1][1] * ky];
+        const b: Position = [ring[i][0] * kx, ring[i][1] * ky];
+        const d = segmentDistanceSq(p, a, b);
+        if (d < best) best = d;
+      }
+  return Math.sqrt(best);
+}

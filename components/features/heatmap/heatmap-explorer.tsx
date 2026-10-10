@@ -94,7 +94,15 @@ export function HeatmapExplorer({ data, canDispatch }: { data: HeatmapData; canD
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-      <HotspotMap points={data.points} clusters={data.clusters} wards={data.wards} selected={selected} onSelect={setSelected} />
+      <HotspotMap
+        points={data.points}
+        clusters={data.clusters}
+        wards={data.wards}
+        districts={data.districts}
+        frame={data.frame}
+        selected={selected}
+        onSelect={setSelected}
+      />
 
       <div className="flex flex-col gap-4">
         <Surface tone="inset" className="flex flex-col gap-3 p-4">
@@ -142,7 +150,7 @@ export function HeatmapExplorer({ data, canDispatch }: { data: HeatmapData; canD
             <p className="text-sm font-medium leading-snug">{site.label}</p>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12px]">
               <dt className="text-ink-muted">Ward</dt>
-              <dd>{site.wardName ?? "Outside the 24 BMC wards"}</dd>
+              <dd>{site.wardName ?? "Outside India"}</dd>
               <dt className="text-ink-muted">Detections</dt>
               <dd className="font-mono tabular-nums">{site.detections} in {data.rule.windowDays} days</dd>
               <dt className="text-ink-muted">Radius</dt>

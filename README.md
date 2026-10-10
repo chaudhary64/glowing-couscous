@@ -85,15 +85,18 @@ Bucket, IAM policy, key layout and its honest gaps are in
 
 ### Spatial heatmapping
 
-`/map` clusters geotagged intakes into collection sites on Mumbai's real ward map.
+`/map` clusters geotagged intakes into collection sites across India, by district, with
+Mumbai's BMC wards as the finer city layer.
 
 - **Capture.** The intake screen takes a GPS fix with one explicit tap. After the
   submission and its priced item are recorded, `lib/intake/location.ts` files the point
-  to its ward, stamps the ward and coordinates on that intake and item, and writes one
-  `geopoints` row — idempotent per intake, and never able to fail the request.
-- **Wards.** The 24 BMC administrative wards with real boundaries, from DataMeet's open
-  data (CC BY-SA 2.5 India), simplified to 56 KB by `npm run geo:wards`. Points are filed
-  by point-in-polygon; there is no PostGIS.
+  to its area, stamps it and the coordinates on that intake and item, and writes one
+  `geopoints` row — idempotent per intake, and never able to fail the request. An intake
+  sent with no fix asks once, inline, whether to add one.
+- **Areas.** India's 735 districts (geoBoundaries / LGD, ODbL 1.0, built by
+  `npm run geo:districts`) everywhere, and Mumbai's 24 BMC wards (DataMeet, CC BY-SA 2.5
+  India, `npm run geo:wards`) inside Mumbai. Points are filed by point-in-polygon; there
+  is no PostGIS.
 - **Clustering.** On every read: ~150 m geohash cells (precision 7); four or more
   detections in 21 days make a cell hot; touching hot cells are one site. Gatekeeper-
   rejected items never count. The rule is one pure function, `lib/heatmap/cluster.ts`,

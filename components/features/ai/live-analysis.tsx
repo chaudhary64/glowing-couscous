@@ -286,6 +286,8 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
   const [intake, setIntake] = useState<RecordedIntake | null>(null);
   const [location, setLocation] = useState<Located | null>(null);
   const [locate, setLocate] = useState<LocateState>("idle");
+  /** Intake submitted with no fix yet: ask once, inline, before sending. */
+  const [askLocation, setAskLocation] = useState(false);
   const [decision, setDecision] = useState<GatekeeperDecision | null>(null);
 
   const recorder = useRef<MediaRecorder | null>(null);
@@ -298,31 +300,49 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
   const hasInput = Boolean(photo || audio || note.trim());
 
   /**
-   * One explicit tap, never an automatic prompt: the browser asks permission the first
+   * Always a tap, never an automatic prompt: the browser asks permission the first
    * time, and a collector who says no still gets paid - the location only feeds the
-   * hotspot map. High accuracy because a ward boundary can run down the middle of a lane.
+   * hotspot map. High accuracy because a ward or district boundary can run down the
+   * middle of a lane. Resolves with the fix (or null) so a submit can use it at once.
    */
-  function captureLocation() {
+  function captureLocation(): Promise<Located | null> {
     if (!("geolocation" in navigator)) {
       setLocate("unavailable");
-      return;
+      return Promise.resolve(null);
     }
     setLocate("locating");
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracyM: position.coords.accuracy,
-        });
-        setLocate("ok");
-      },
-      (error) => {
-        setLocation(null);
-        setLocate(error.code === error.PERMISSION_DENIED ? "denied" : "unavailable");
-      },
-      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
-    );
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const fix = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracyM: position.coords.accuracy,
+          };
+          setLocation(fix);
+          setLocate("ok");
+          resolve(fix);
+        },
+        (error) => {
+          setLocation(null);
+          setLocate(error.code === error.PERMISSION_DENIED ? "denied" : "unavailable");
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
+      );
+    });
+  }
+
+  /**
+   * Submit. An intake with no fix, where the device has not already refused or failed
+   * to give one, first asks once - inline, never a browser dialog - whether to add it.
+   */
+  function submit() {
+    if (mode === "intake" && !location && locate !== "denied" && locate !== "unavailable") {
+      setAskLocation(true);
+      return;
+    }
+    void run();
   }
 
   function reset() {
@@ -432,7 +452,8 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
     }
   }
 
-  async function run() {
+  async function run(fix: Located | null = location) {
+    setAskLocation(false);
     setStatus("running");
     setFailure(null);
 
@@ -446,7 +467,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
     if (mode === "intake" && audioSeconds > 0) {
       body.durationSeconds = Math.round(audioSeconds);
     }
-    if (mode === "intake" && location) body.location = location;
+    if (mode === "intake" && fix) body.location = fix;
 
     // Refused here rather than upstream. The server checks the same total, but past
     // roughly 6 MiB the hosting layer answers 413 itself, so the request never
@@ -581,7 +602,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
                 Location · for the hotspot map
               </p>
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="secondary" onClick={captureLocation} disabled={running || locate === "locating"}>
+                <Button variant="secondary" onClick={() => void captureLocation()} disabled={running || locate === "locating"}>
                   {locate === "locating" ? "Locating…" : location ? "Update location" : "Use this device’s location"}
                 </Button>
                 {location ? (
@@ -610,7 +631,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
                 ) : locate === "unavailable" ? (
                   "This device could not give a fix. The submission still works without one."
                 ) : (
-                  "Optional. Filed to a BMC ward and counted on the hotspot map — never shown as an exact address."
+                  "Optional. Filed to its district (its BMC ward in Mumbai) and counted on the hotspot map — never shown as an exact address."
                 )}
               </p>
             </Surface>
@@ -652,7 +673,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-3 border-t-2 border-ink pt-4">
-          <Button onClick={() => void run()} disabled={running || !hasInput}>
+          <Button onClick={submit} disabled={running || !hasInput || askLocation}>
             {running ? "Analysing…" : copy.action}
           </Button>
           <span className="text-[12px] leading-snug text-ink-muted">
@@ -661,6 +682,29 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
               : "Attach a photo, record a note, or describe the item."}
           </span>
         </div>
+
+        {askLocation ? (
+          <div role="group" aria-label="Add a location" className="mt-4 border-2 border-copper bg-copper-tint p-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-copper">No location yet</p>
+            <p className="mt-1.5 text-sm leading-relaxed text-ink">
+              Add this device&apos;s location? It files the intake to its district (its BMC ward in Mumbai) and counts it
+              on the hotspot map. The collector is paid either way.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                onClick={() => {
+                  void captureLocation().then((fix) => run(fix));
+                }}
+                disabled={locate === "locating"}
+              >
+                {locate === "locating" ? "Finding location…" : "Add location and submit"}
+              </Button>
+              <Button variant="secondary" onClick={() => void run(null)} disabled={locate === "locating"}>
+                Submit without
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {failure ? (
           <div className="mt-4 border-2 border-hazard bg-hazard-tint p-4">
@@ -867,7 +911,11 @@ function IntakeResult({ result }: { result: RecordedIntake }) {
             <Badge tone="hazard">Not filed</Badge>
           )}
           {result.location?.recorded || result.location?.skipped ? (
-            <Badge tone="copper">{result.location.wardName ?? "Outside the 24 BMC wards"}</Badge>
+            <Badge tone="copper">
+              {result.location.wardName
+                ? `${result.location.wardName}${result.location.areaKind === "ward" ? " · Mumbai" : result.location.stateName ? ` · ${result.location.stateName}` : ""}`
+                : "Outside India"}
+            </Badge>
           ) : (
             <Badge tone="lead">No location</Badge>
           )}

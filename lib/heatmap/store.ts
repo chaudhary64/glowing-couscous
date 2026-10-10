@@ -12,8 +12,10 @@ import {
   wards as wardsTable,
 } from "@/db/schema";
 import { encodeGeohash, geohashCenter } from "@/lib/geo/geohash";
-import { WARDS, wardByCode, wardForPoint } from "@/lib/geo/wards";
-import { ensureWards } from "@/lib/intake/location";
+import { areaByCode, fileLocation } from "@/lib/geo/areas";
+import { INDIA_BOUNDS, districtByCode } from "@/lib/geo/districts";
+import { WARDS } from "@/lib/geo/wards";
+import { ensureArea } from "@/lib/intake/location";
 import type { MaterialCategory } from "@/lib/types";
 
 import { HOTSPOT_RULE, detectHotspots, wardPressure, withinWindow, type ClusterResult, type DetectionPoint } from "./cluster";
@@ -80,6 +82,11 @@ export interface HeatmapWard {
   hotspots: number;
 }
 
+/** A district's pressure, across India. Only districts with a detection are listed. */
+export interface HeatmapDistrict extends HeatmapWard {
+  state: string | null;
+}
+
 export interface HeatmapData {
   configured: boolean;
   /** Geotagged, gatekeeper-accepted intakes inside the window, before any filter. */
@@ -88,7 +95,14 @@ export interface HeatmapData {
   rule: typeof HOTSPOT_RULE;
   points: HeatmapPoint[];
   clusters: HeatmapCluster[];
+  /** Mumbai's 24 BMC wards: the city-level view. */
   wards: HeatmapWard[];
+  /** India's districts that have at least one detection, busiest first. */
+  districts: HeatmapDistrict[];
+  /** The box around every shown point; null when there are none. */
+  bounds: { south: number; west: number; north: number; east: number } | null;
+  /** What the map should open on: the points, or all of India when there are none. */
+  frame: { south: number; west: number; north: number; east: number };
   filter: HeatmapFilter;
   error: string | null;
 }
@@ -153,13 +167,16 @@ export async function loadLivePoints(now: Date): Promise<{ configured: boolean; 
       .map((r) => {
         const latitude = Number(r.latitude);
         const longitude = Number(r.longitude);
+        // The district always comes from the coordinates (it is not stored); the finest
+        // area is the stored one, or filed now for a point recorded before it existed.
+        const filing = fileLocation(latitude, longitude);
         return {
           id: r.id,
           latitude,
           longitude,
           recordedAt: r.recordedAt,
-          // A point filed before the ward table existed is filed now, from its coordinates.
-          wardCode: r.wardCode ?? wardForPoint(latitude, longitude)?.code ?? null,
+          wardCode: r.wardCode ?? filing.area?.code ?? null,
+          districtCode: filing.district?.code ?? null,
           category: r.itemId ? dominantCategory(linesByItem.get(r.itemId) ?? []) : null,
           massG: r.massG !== null ? Number(r.massG) : null,
           itemId: r.itemId,
@@ -211,14 +228,14 @@ function snap(latitude: number, longitude: number): { latitude: number; longitud
 }
 
 function toCluster(c: ClusterResult, status: ClusterStatus): HeatmapCluster {
-  const ward = wardByCode(c.wardCode);
+  const ward = areaByCode(c.wardCode);
   // The centre of four points is close to where people stood; it is snapped like a point.
   const centre = snap(c.center.latitude, c.center.longitude);
   return {
     code: c.code,
     // A real site has no name until a person gives it one; the ward and the cell are
     // what is actually known about it.
-    label: `${ward ? ward.name.replace(/ \(.*\)$/, "") : "Outside the wards"} · cell ${c.cells[0]}`,
+    label: `${ward ? ward.name.replace(/ \(.*\)$/, "") : "Outside India"} · cell ${c.cells[0]}`,
     wardCode: c.wardCode,
     wardName: ward?.name ?? null,
     latitude: centre.latitude,
@@ -266,13 +283,35 @@ export async function getHeatmap(options: { filter?: HeatmapFilter; now?: Date }
   const clusters = shownSites.map((c) => toCluster(c, effectiveStatus(c, statuses.get(c.code))));
   const pressure = wardPressure(shownPoints, shownSites, WARDS);
 
+  // District pressure across India: the same arithmetic, keyed by district, over the
+  // districts that have anything in them (735 rows of zeros would say nothing).
+  const byDistrict = (p: DetectionPoint) => ({ ...p, wardCode: p.districtCode ?? null });
+  const districtPoints = shownPoints.map(byDistrict);
+  const districtSites = shownSites.map((c) => {
+    const centre = fileLocation(c.center.latitude, c.center.longitude);
+    return { ...c, wardCode: centre.district?.code ?? null };
+  });
+  const touched = [...new Set(districtPoints.map((p) => p.wardCode).filter((code): code is string => code !== null))]
+    .map((code) => districtByCode(code))
+    .filter((d): d is NonNullable<typeof d> => d !== undefined);
+  const districtPressure = wardPressure(districtPoints, districtSites, touched);
+  const snappedPoints = shownPoints.map((p) => snap(p.latitude, p.longitude));
+  const bounds = snappedPoints.length
+    ? {
+        south: Math.min(...snappedPoints.map((p) => p.latitude)),
+        west: Math.min(...snappedPoints.map((p) => p.longitude)),
+        north: Math.max(...snappedPoints.map((p) => p.latitude)),
+        east: Math.max(...snappedPoints.map((p) => p.longitude)),
+      }
+    : null;
+
   return {
     configured: live.configured,
     livePointCount,
     generatedAt: now.toISOString(),
     rule: HOTSPOT_RULE,
-    points: shownPoints.map((p) => {
-      const snapped = snap(p.latitude, p.longitude);
+    points: shownPoints.map((p, i) => {
+      const snapped = snappedPoints[i];
       return {
         latitude: snapped.latitude,
         longitude: snapped.longitude,
@@ -283,9 +322,24 @@ export async function getHeatmap(options: { filter?: HeatmapFilter; now?: Date }
     }),
     clusters,
     wards: pressure.map((row) => {
-      const ward = wardByCode(row.wardCode)!;
+      const ward = areaByCode(row.wardCode)!;
       return { code: row.wardCode, name: ward.name, areaKm2: ward.areaKm2, detections: row.detections, perKm2: row.perKm2, pressure: row.pressure, hotspots: row.hotspots };
     }),
+    districts: districtPressure.map((row) => {
+      const district = districtByCode(row.wardCode)!;
+      return {
+        code: row.wardCode,
+        name: district.name,
+        state: district.state,
+        areaKm2: district.areaKm2,
+        detections: row.detections,
+        perKm2: row.perKm2,
+        pressure: row.pressure,
+        hotspots: row.hotspots,
+      };
+    }),
+    bounds,
+    frame: bounds ?? INDIA_BOUNDS,
     filter,
     error,
   };
@@ -304,17 +358,19 @@ export async function recomputeClusters(now = new Date()): Promise<{ configured:
   const found = detectHotspots(live.points, now);
   try {
     let detections = 0;
-    const wardIds = await ensureWards(connection.db);
+    // Area rows are ensured before the transaction (see ensureArea).
+    const areaIds = new Map<string, string | null>();
+    for (const c of found) if (c.wardCode && !areaIds.has(c.wardCode)) areaIds.set(c.wardCode, await ensureArea(connection.db, c.wardCode));
     await connection.db.transaction(async (tx) => {
       for (const c of found) {
-        const wardId = c.wardCode ? wardIds.get(c.wardCode) : undefined;
+        const wardId = c.wardCode ? areaIds.get(c.wardCode) : undefined;
         if (!wardId) continue; // hotspot_clusters.ward_id is required; an unfiled site waits.
         const [row] = await tx
           .insert(hotspotClusters)
           .values({
             code: c.code,
             wardId,
-            label: `${wardByCode(c.wardCode)?.name ?? c.wardCode} · cell ${c.cells[0]}`,
+            label: `${areaByCode(c.wardCode)?.name ?? c.wardCode} · cell ${c.cells[0]}`,
             radiusM: c.radiusM,
             topCategory: c.topCategory,
             firstSeenAt: c.firstSeenAt,
@@ -360,9 +416,8 @@ export async function setClusterStatus(code: string, status: ClusterStatus, now 
   const live = await loadLivePoints(now);
   const cluster = detectHotspots(live.points, now).find((c) => c.code === code);
   if (!cluster) return { ok: false, status: 404, message: "That site is not a hotspot in the current window. Refresh the map." };
-  const wardIds = await ensureWards(connection.db);
-  const wardId = cluster.wardCode ? wardIds.get(cluster.wardCode) : undefined;
-  if (!wardId) return { ok: false, status: 409, message: "This site is outside the 24 BMC wards, so there is no ward to dispatch from." };
+  const wardId = cluster.wardCode ? await ensureArea(connection.db, cluster.wardCode) : null;
+  if (!wardId) return { ok: false, status: 409, message: "This site is outside India, so there is no district to dispatch from." };
 
   const stamps = {
     vanAssignedAt: status === "van_assigned" ? now : status === "open" ? null : undefined,
@@ -373,7 +428,7 @@ export async function setClusterStatus(code: string, status: ClusterStatus, now 
     .values({
       code,
       wardId,
-      label: `${wardByCode(cluster.wardCode)?.name ?? cluster.wardCode} · cell ${cluster.cells[0]}`,
+      label: `${areaByCode(cluster.wardCode)?.name ?? cluster.wardCode} · cell ${cluster.cells[0]}`,
       radiusM: cluster.radiusM,
       topCategory: cluster.topCategory,
       firstSeenAt: cluster.firstSeenAt,

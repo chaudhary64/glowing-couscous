@@ -33,7 +33,10 @@ export interface DetectionPoint {
   latitude: number;
   longitude: number;
   recordedAt: Date;
+  /** The finest filing area: a BMC ward code, or an `IND-` district code. */
   wardCode: string | null;
+  /** The district, for every point in India (equal to `wardCode` outside city wards). */
+  districtCode?: string | null;
   category: MaterialCategory | null;
   massG: number | null;
   /** The item this point is evidence for, when one was recorded. */

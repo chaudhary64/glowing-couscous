@@ -3,7 +3,9 @@ import { eq } from "drizzle-orm";
 import { database } from "@/db/client";
 import { geopoints, intakes, items, wards as wardsTable } from "@/db/schema";
 import { publicDbError } from "@/lib/db-error";
-import { WARDS, WARD_SOURCE, wardForPoint } from "@/lib/geo/wards";
+import { areaBoundary, areaByCode, fileLocation } from "@/lib/geo/areas";
+import { DISTRICT_SOURCE } from "@/lib/geo/districts";
+import { WARD_SOURCE } from "@/lib/geo/wards";
 
 /**
  * Where a submission was made: the one thing the hotspot map needs that the intake
@@ -11,9 +13,10 @@ import { WARDS, WARD_SOURCE, wardForPoint } from "@/lib/geo/wards";
  *
  * `lib/s3/intakes.ts` writes the `intakes` row and `lib/records/items.ts` the item, its
  * material lines, hazards, valuation and gatekeeper verdict. This file runs after both,
- * and only when the handset gave a fix: it files the point to its BMC ward, stamps the
- * ward and coordinates on that intake and its item, and writes one `geopoints` row —
- * the row `/map` aggregates.
+ * and only when the handset gave a fix: it files the point to its area — a Mumbai BMC
+ * ward, or the district anywhere else in India (`lib/geo/areas.ts`) — stamps that area
+ * and the coordinates on the intake and its item, and writes one `geopoints` row: the
+ * row `/map` aggregates.
  *
  * The same bargain as the recorders it follows:
  *
@@ -23,8 +26,7 @@ import { WARDS, WARD_SOURCE, wardForPoint } from "@/lib/geo/wards";
  *    retried request cannot add a second point to a hotspot's count.
  * 3. **No database is `configured: false`.**
  *
- * A fix outside the 24 wards is still recorded — the coordinates are true even when the
- * city is not Mumbai — but it is filed to no ward.
+ * A fix outside India is still recorded (the coordinates are true) but filed to no area.
  */
 
 export interface CapturedLocation {
@@ -38,8 +40,14 @@ export interface LocationOutcome {
   configured: boolean;
   /** True when this call wrote the geopoint; false when there was nothing to write. */
   recorded: boolean;
+  /** The finest area the point was filed to: a BMC ward code, or an `IND-` district. */
   wardCode: string | null;
+  /** That area's name, e.g. "L Ward (Kurla)" or "Pune". */
   wardName: string | null;
+  areaKind: "ward" | "district" | null;
+  /** The district and its state, for every point in India. */
+  districtName: string | null;
+  stateName: string | null;
   accuracyM: number | null;
   /** Why nothing was written, when that was a decision rather than a fault. */
   skipped: string | null;
@@ -49,34 +57,39 @@ export interface LocationOutcome {
 type Db = NonNullable<ReturnType<typeof database>>["db"];
 
 /**
- * Every BMC ward as a `wards` row, created once per process. Returns code → id.
+ * The `wards` row for one filing area (a BMC ward or a district), created the first
+ * time a point lands in it. Returns its id.
  *
- * Must run on the connection, never inside a transaction: the result is cached for the
- * life of the process, and ids read inside a transaction that later rolls back would be
- * cached as if they existed — every later geopoint would then fail its foreign key.
+ * Areas are added one at a time rather than all 759 up front: a district row carries
+ * its boundary, and most of India's districts will never see a submission in a pilot.
+ *
+ * Must run on the connection, never inside a transaction: ids are cached for the life
+ * of the process, and an id read inside a transaction that later rolls back would be
+ * cached as if the row existed — every later geopoint there would fail its foreign key.
  */
-export async function ensureWards(db: Db): Promise<Map<string, string>> {
-  const cache = globalThis as unknown as { __ecoeprWardIds?: Map<string, string> };
-  if (cache.__ecoeprWardIds && cache.__ecoeprWardIds.size === WARDS.length) return cache.__ecoeprWardIds;
+export async function ensureArea(db: Db, code: string): Promise<string | null> {
+  const cache = globalThis as unknown as { __ecoeprAreaIds?: Map<string, string> };
+  cache.__ecoeprAreaIds ??= new Map();
+  const known = cache.__ecoeprAreaIds.get(code);
+  if (known) return known;
 
+  const area = areaByCode(code);
+  if (!area) return null;
+  const source = area.kind === "ward" ? WARD_SOURCE : DISTRICT_SOURCE;
   await db
     .insert(wardsTable)
-    .values(
-      WARDS.map((ward) => ({
-        code: ward.code,
-        name: ward.name,
-        city: WARD_SOURCE.city,
-        centroidLatitude: String(ward.centroid.latitude),
-        centroidLongitude: String(ward.centroid.longitude),
-        boundaryGeoJson: { type: "MultiPolygon", coordinates: ward.boundary, attribution: WARD_SOURCE.attribution },
-      })),
-    )
+    .values({
+      code: area.code,
+      name: area.name,
+      city: area.region ?? "India",
+      centroidLatitude: String(area.centroid.latitude),
+      centroidLongitude: String(area.centroid.longitude),
+      boundaryGeoJson: { ...areaBoundary(area.code), kind: area.kind, attribution: source.attribution },
+    })
     .onConflictDoNothing({ target: wardsTable.code });
-
-  const rows = await db.select({ id: wardsTable.id, code: wardsTable.code }).from(wardsTable);
-  const map = new Map(rows.map((row) => [row.code, row.id]));
-  cache.__ecoeprWardIds = map;
-  return map;
+  const [row] = await db.select({ id: wardsTable.id }).from(wardsTable).where(eq(wardsTable.code, code)).limit(1);
+  if (row) cache.__ecoeprAreaIds.set(code, row.id);
+  return row?.id ?? null;
 }
 
 const outcome = (patch: Partial<LocationOutcome>): LocationOutcome => ({
@@ -84,6 +97,9 @@ const outcome = (patch: Partial<LocationOutcome>): LocationOutcome => ({
   recorded: false,
   wardCode: null,
   wardName: null,
+  areaKind: null,
+  districtName: null,
+  stateName: null,
   accuracyM: null,
   skipped: null,
   error: null,
@@ -103,21 +119,28 @@ export async function recordLocation(input: {
   }
 
   const { latitude, longitude, accuracyM } = input.location;
-  const ward = wardForPoint(latitude, longitude);
-  const base = { wardCode: ward?.code ?? null, wardName: ward?.name ?? null, accuracyM: accuracyM ?? null };
+  const { area, district } = fileLocation(latitude, longitude);
+  const base = {
+    wardCode: area?.code ?? null,
+    wardName: area?.name ?? null,
+    areaKind: area?.kind ?? null,
+    districtName: district?.name ?? null,
+    stateName: district?.region ?? null,
+    accuracyM: accuracyM ?? null,
+  };
 
   try {
-    const wardIds = ward ? await ensureWards(connection.db) : new Map<string, string>();
+    const areaId = area ? await ensureArea(connection.db, area.code) : null;
     return await connection.db.transaction(async (tx) => {
       const [existing] = await tx.select({ id: geopoints.id }).from(geopoints).where(eq(geopoints.intakeId, input.intakeId!)).limit(1);
       if (existing) return outcome({ ...base, skipped: "This submission already has a location; it was not counted twice." });
 
-      const coords = { wardCode: ward?.code ?? null, latitude: String(latitude), longitude: String(longitude) };
+      const coords = { wardCode: area?.code ?? null, latitude: String(latitude), longitude: String(longitude) };
       await tx.update(intakes).set(coords).where(eq(intakes.id, input.intakeId!));
       await tx.update(items).set(coords).where(eq(items.intakeId, input.intakeId!));
       await tx.insert(geopoints).values({
         intakeId: input.intakeId!,
-        wardId: ward ? wardIds.get(ward.code) ?? null : null,
+        wardId: areaId,
         latitude: String(latitude),
         longitude: String(longitude),
         accuracyM: accuracyM !== undefined ? Math.round(accuracyM) : null,
@@ -135,6 +158,6 @@ export function locationWarning(result: LocationOutcome | null): string | null {
   if (!result || !result.configured) return null;
   if (result.error) return `The analysis is complete, but its location was not recorded: ${result.error}`;
   if (result.skipped && !result.recorded && result.skipped.startsWith("The submission was not recorded")) return result.skipped;
-  if (result.recorded && !result.wardCode) return "The location is outside the 24 BMC wards of Mumbai; it was recorded but not filed to a ward.";
+  if (result.recorded && !result.wardCode) return "The location is outside India; it was recorded but not filed to any district.";
   return null;
 }

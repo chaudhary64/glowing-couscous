@@ -15,6 +15,8 @@ import {
   geohashNeighbours,
 } from "@/lib/geo/geohash";
 import { multiPolygonAreaKm2, multiPolygonContains, simplifyRing, type MultiPolygon } from "@/lib/geo/polygon";
+import { fileLocation } from "@/lib/geo/areas";
+import { DISTRICTS, districtForPoint } from "@/lib/geo/districts";
 import { WARDS, wardForPoint } from "@/lib/geo/wards";
 
 import { HOTSPOT_RULE, detectHotspots, wardPressure, withinWindow, type DetectionPoint } from "./cluster";
@@ -107,6 +109,50 @@ describe("wards", () => {
 
   it("refuses a point far outside the city", () => {
     assert.equal(wardForPoint(18.5204, 73.8567), null); // Pune
+  });
+});
+
+describe("districts (all India)", () => {
+  it("has India's 735 districts, each with a state, a code and a positive area", () => {
+    assert.equal(DISTRICTS.length, 735);
+    assert.equal(new Set(DISTRICTS.map((d) => d.code)).size, 735);
+    for (const d of DISTRICTS) {
+      assert.ok(d.state, `${d.name} has a state`);
+      assert.ok(d.areaKm2 > 0, `${d.name} has an area`);
+    }
+  });
+
+  it("files cities across India to the right district and state", () => {
+    const cases: [number, number, string, RegExp][] = [
+      [18.5286, 73.8743, "Pune", /^Mah/],
+      [28.6315, 77.2167, "New Delhi", /^Delhi$/],
+      [22.5646, 88.351, "Kolkata", /^West Bengal$/],
+      [13.0827, 80.2707, "Chennai", /^Tamil/],
+      [12.9757, 77.6061, "Bangalore", /^Karn/],
+    ];
+    for (const [lat, lng, name, state] of cases) {
+      const d = districtForPoint(lat, lng);
+      assert.equal(d?.name, name);
+      assert.match(d?.state ?? "", state);
+    }
+  });
+
+  it("files a Mumbai point to its BMC ward, and knows its district", () => {
+    const f = fileLocation(19.0728, 72.8834); // Kurla
+    assert.equal(f.area?.kind, "ward");
+    assert.equal(f.area?.code, "MCGM-L");
+    assert.equal(f.district?.name, "Mumbai Suburban");
+  });
+
+  it("keeps Thane out of Mumbai's wards", () => {
+    const f = fileLocation(19.186, 72.975);
+    assert.equal(f.area?.kind, "district");
+    assert.equal(f.area?.name, "Thane");
+  });
+
+  it("files nothing at sea or abroad", () => {
+    assert.equal(fileLocation(18.5, 71.0).area, null); // Arabian Sea
+    assert.equal(fileLocation(27.7172, 85.324).area, null); // Kathmandu
   });
 });
 

@@ -59,7 +59,8 @@ export default async function DashboardPage() {
     getHeatmap(),
   ]);
   const openSites = heat.clusters.filter((c) => c.status === "open");
-  const pressureWards = heat.wards.filter((w) => w.detections > 0).slice(0, 4);
+  // Across India, by district: the busiest four, each with its state.
+  const pressureWards = heat.districts.slice(0, 4);
   const counts = snapshot.counts;
   const configured = snapshot.configured;
 
@@ -375,7 +376,7 @@ export default async function DashboardPage() {
           </section>
 
           <Panel
-            eyebrow="Ward pressure"
+            eyebrow="District pressure · India"
             title="Where to send the next van"
             actions={
               <Link
@@ -395,7 +396,7 @@ export default async function DashboardPage() {
               {pressureWards.map((ward) => (
                 <MeterRow
                   key={ward.code}
-                  label={`${ward.name} · ${ward.detections} detection${ward.detections === 1 ? "" : "s"}`}
+                  label={`${ward.name}${ward.state ? `, ${ward.state}` : ""} · ${ward.detections} detection${ward.detections === 1 ? "" : "s"}`}
                   value={ward.pressure / 100}
                   tone={ward.pressure >= 80 ? "hazard" : ward.pressure >= 60 ? "copper" : "lead"}
                   display={`${ward.pressure}/100`}
@@ -403,8 +404,8 @@ export default async function DashboardPage() {
               ))}
             </div>
             <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-              Counted from geotagged intakes. Pressure is detections per km², relative to
-              the busiest ward. {openSites.length} site{openSites.length === 1 ? " is" : "s are"} open
+              Counted from geotagged intakes across India. Pressure is detections per km²,
+              relative to the busiest district. {openSites.length} site{openSites.length === 1 ? " is" : "s are"} open
               with no van assigned.
             </p>
           </Panel>

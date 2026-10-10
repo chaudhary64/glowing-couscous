@@ -5,7 +5,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 
-import { CITY_BOUNDS, WARD_SOURCE, WARDS } from "@/lib/geo/wards";
+import { WARD_SOURCE, WARDS } from "@/lib/geo/wards";
 import { HOTSPOT_RULE } from "@/lib/heatmap/cluster";
 import type { HeatmapCluster, HeatmapPoint, HeatmapWard } from "@/lib/heatmap/store";
 
@@ -15,8 +15,10 @@ import type { HeatmapCluster, HeatmapPoint, HeatmapWard } from "@/lib/heatmap/st
  *
  * - **Basemap:** OpenFreeMap's "positron" style — OpenStreetMap data, open-source
  *   tiles, no API key, no usage cap. Greyscale so the only colour on the map is ours.
- * - **Wards:** the 24 BMC boundaries, shaded by pressure (detections per km², relative
- *   to the busiest ward). The fill is ink, so a dark ward reads as a loaded ward.
+ * - **Districts:** all of India's 735, from a static file, shaded by pressure
+ *   (detections per km², relative to the busiest district) where there are detections.
+ * - **Wards:** inside Mumbai, from city zoom in, the 24 BMC boundaries take over,
+ *   shaded the same way relative to the busiest ward.
  * - **Heat:** every point in the window, weighted by recency so a site that went quiet
  *   fades instead of lingering. Points arrive snapped to a ~38 m cell by the server.
  * - **Sites:** each hotspot as a true-scale circle of its computed radius, coloured by
@@ -46,6 +48,24 @@ const COLORS = {
  * a drawing failure. Heights are in metres on a map spanning ~25 km.
  */
 const WARD_HEIGHT_PER_PRESSURE_M = 14;
+/** Districts are tens of km across, so their columns are scaled to the country view. */
+const DISTRICT_HEIGHT_PER_PRESSURE_M = 1_800;
+
+/**
+ * India's district outlines, as a static file (public/geo, written by
+ * `npm run geo:districts`): MapLibre fetches and parses it in its worker, so ~1 MB of
+ * geometry never enters this bundle. Pressure reaches it as feature-state by code.
+ */
+const DISTRICTS_URL = "/geo/india-districts.geojson";
+const DISTRICT_ATTRIBUTION = "Districts © geoBoundaries / LGD (ODbL)";
+/** Mumbai's wards take over from its districts from this zoom in. */
+const CITY_ZOOM = 9.5;
+
+type Box = { south: number; west: number; north: number; east: number };
+const toBounds = (b: Box): [[number, number], [number, number]] => [
+  [b.west, b.south],
+  [b.east, b.north],
+];
 const SITE_HEIGHT_PER_DETECTION_M = 110;
 const TILT = { pitch: 55, bearing: -18 };
 
@@ -120,12 +140,18 @@ export function HotspotMap({
   points,
   clusters,
   wards,
+  districts = [],
+  frame,
   selected,
   onSelect,
 }: {
   points: HeatmapPoint[];
   clusters: HeatmapCluster[];
   wards: HeatmapWard[];
+  /** Districts with detections, across India. */
+  districts?: { code: string; pressure: number; detections: number }[];
+  /** What to open on: the data, or all of India. */
+  frame: Box;
   selected?: string | null;
   onSelect?: (code: string | null) => void;
 }) {
@@ -134,6 +160,7 @@ export function HotspotMap({
   const onSelectRef = useRef(onSelect);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [tilted, setTilted] = useState(false);
+  const openingFrame = useRef(frame);
 
   // The map's click handler is registered once; it reads the latest callback through
   // this ref, which is updated after each render rather than during one.
@@ -155,23 +182,21 @@ export function HotspotMap({
         map = new maplibre.Map({
           container: container.current,
           style: STYLE_URL,
-          bounds: [
-            [CITY_BOUNDS.west, CITY_BOUNDS.south],
-            [CITY_BOUNDS.east, CITY_BOUNDS.north],
-          ],
-          fitBoundsOptions: { padding: 24 },
+          // The opening view only; later changes reframe (below) without rebuilding.
+          bounds: toBounds(openingFrame.current),
+          fitBoundsOptions: { padding: 32, maxZoom: 13 },
           attributionControl: false,
           dragRotate: false,
           pitchWithRotate: false,
           maxZoom: 17,
-          minZoom: 9,
+          minZoom: 3.5,
         });
         map.touchZoomRotate.disableRotation();
         map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
         map.addControl(
           new maplibre.AttributionControl({
             compact: true,
-            customAttribution: `${WARD_SOURCE.attribution} · <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a>`,
+            customAttribution: `${DISTRICT_ATTRIBUTION} · ${WARD_SOURCE.attribution} · <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a>`,
           }),
           "bottom-right",
         );
@@ -184,14 +209,53 @@ export function HotspotMap({
 
         map.on("load", () => {
           if (!map) return;
+          // promoteId: districts are keyed by code for feature-state (pressure, detections).
+          map.addSource("districts", { type: "geojson", data: DISTRICTS_URL, promoteId: "code" });
           map.addSource("wards", { type: "geojson", data: wardFeatures([]) });
           map.addSource("ward-labels", { type: "geojson", data: wardLabels() });
           map.addSource("points", { type: "geojson", data: pointFeatures([]) });
           // promoteId: feature-state (the selected outline) is keyed by the string site code.
           map.addSource("clusters", { type: "geojson", data: clusterFeatures([]), promoteId: "code" });
 
+          // India, by district: shaded only where there are detections.
+          const hasData = [">", ["coalesce", ["feature-state", "detections"], 0], 0];
+          const districtRamp = ["interpolate", ["linear"], ["coalesce", ["feature-state", "pressure"], 0], 0, "#d9dcd2", 50, COLORS.copper, 100, COLORS.hazard];
+          map.addLayer({
+            id: "district-fill",
+            type: "fill",
+            source: "districts",
+            maxzoom: CITY_ZOOM + 1,
+            paint: {
+              "fill-color": districtRamp as never,
+              "fill-opacity": ["case", hasData, 0.42, 0] as never,
+            },
+          });
+          map.addLayer({
+            id: "district-line",
+            type: "line",
+            source: "districts",
+            paint: {
+              "line-color": COLORS.ink,
+              "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.2, 8, 0.8],
+              "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.25, 9, 0.5],
+            },
+          });
+          map.addLayer({
+            id: "district-extrude",
+            type: "fill-extrusion",
+            source: "districts",
+            maxzoom: CITY_ZOOM,
+            layout: { visibility: "none" },
+            paint: {
+              "fill-extrusion-color": districtRamp as never,
+              "fill-extrusion-height": ["*", ["coalesce", ["feature-state", "pressure"], 0], DISTRICT_HEIGHT_PER_PRESSURE_M] as never,
+              "fill-extrusion-opacity": 0.82,
+            },
+          });
+
           map.addLayer({
             id: "ward-fill",
+            minzoom: CITY_ZOOM - 1,
             type: "fill",
             source: "wards",
             paint: {
@@ -201,6 +265,7 @@ export function HotspotMap({
           });
           map.addLayer({
             id: "ward-line",
+            minzoom: CITY_ZOOM - 1,
             type: "line",
             source: "wards",
             paint: { "line-color": COLORS.ink, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 14, 1.6], "line-opacity": 0.7 },
@@ -208,6 +273,7 @@ export function HotspotMap({
           // 3D: hidden until tilted. Wards first so site columns draw over them.
           map.addLayer({
             id: "ward-extrude",
+            minzoom: CITY_ZOOM,
             type: "fill-extrusion",
             source: "wards",
             layout: { visibility: "none" },
@@ -279,6 +345,7 @@ export function HotspotMap({
           });
           map.addLayer({
             id: "ward-letter",
+            minzoom: CITY_ZOOM + 0.5,
             type: "symbol",
             source: "ward-labels",
             layout: { "text-field": ["get", "letter"], "text-size": 12, "text-font": ["Noto Sans Bold"], "text-allow-overlap": false },
@@ -331,8 +398,10 @@ export function HotspotMap({
     if (state !== "ready" || !map) return;
     const show = (id: string, on: boolean) => map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
     show("ward-extrude", tilted);
+    show("district-extrude", tilted);
     show("cluster-extrude", tilted);
     show("ward-fill", !tilted);
+    show("district-fill", !tilted);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     map.easeTo({
       pitch: tilted ? TILT.pitch : 0,
@@ -341,6 +410,36 @@ export function HotspotMap({
       easing: (t) => 1 - Math.pow(1 - t, 3),
     });
   }, [state, tilted]);
+
+  // District pressure as feature-state. The outlines arrive asynchronously from the
+  // static file, so the state is (re)applied whenever that source finishes loading too.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (state !== "ready" || !map) return;
+    const apply = () => {
+      if (!map.getSource("districts")) return;
+      map.removeFeatureState({ source: "districts" });
+      for (const d of districts) map.setFeatureState({ source: "districts", id: d.code }, { pressure: d.pressure, detections: d.detections });
+    };
+    apply();
+    const onData = (event: { sourceId?: string; isSourceLoaded?: boolean }) => {
+      if (event.sourceId === "districts" && event.isSourceLoaded) apply();
+    };
+    map.on("sourcedata", onData);
+    return () => {
+      map.off("sourcedata", onData);
+    };
+  }, [state, districts]);
+
+  // Reframe when the data's extent changes (a filter, new detections).
+  const frameKey = `${frame.south},${frame.west},${frame.north},${frame.east}`;
+  const firstFrame = useRef(frameKey);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (state !== "ready" || !map || frameKey === firstFrame.current) return;
+    firstFrame.current = frameKey;
+    map.fitBounds(toBounds(frame), { padding: 32, maxZoom: 13, duration: 900 });
+  }, [state, frameKey, frame]);
 
   // Selection: thicken the outline, and bring the site into view — but only once the
   // selection has changed. The first render opens on the whole city, which is the

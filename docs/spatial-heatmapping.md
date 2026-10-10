@@ -6,8 +6,9 @@ of that existed: intake never asked for a location, no `intakes` row was ever wr
 there was nothing real to cluster.
 
 This is the version that works. A collector's submission can now carry a GPS fix, the
-intake is filed to a real Mumbai ward, and `/map` clusters those points into collection
-sites on an actual street map — with the same rule the screen always printed.
+intake is filed to its real district anywhere in India (and, in Mumbai, to its BMC ward),
+and `/map` clusters those points into collection sites on an actual street map, with the
+same rule the screen always printed.
 
 ## The loop
 
@@ -19,13 +20,14 @@ intake screen ── one tap: GPS fix ──▶ POST /api/ai/intake
                                lib/s3/intakes.ts      → intakes
                                lib/records/items.ts   → items, material_lines, hazards,
                                                         valuations, gatekeeper_verdicts
-                               lib/intake/location.ts → ward filing, geopoints
+                               lib/intake/location.ts → area filing, geopoints
                                          │
 /map ── getHeatmap() ◀── geopoints (last 30 days, gatekeeper-rejected excluded)
           │  detectHotspots(): ~150 m cells, ≥4 in 21 days, touching cells merged
-          │  wardPressure():   detections per km², busiest ward = 100
+          │  wardPressure():   detections per km², busiest = 100, per district and per ward
           ▼
-     MapLibre + OpenFreeMap: wards shaded, heat by recency, sites at true radius
+     MapLibre + OpenFreeMap: districts (India) and wards (Mumbai) shaded, heat by recency,
+     sites at true radius
           │
           └─ POST /api/heatmap/dispatch (operator+): assign van / clear / reopen
 ```
@@ -83,7 +85,43 @@ detection lands after the clearance, so an old decision cannot hide a returning 
 - A site is a routing suggestion for a ward officer, never an accusation about a place or
   a person. The screen says so.
 
-## Ward data
+## Filing areas: districts across India, wards in Mumbai
+
+A point is filed to the **finest** area that covers it (`lib/geo/areas.ts`):
+
+- a **BMC ward** inside Mumbai (24, `MCGM-<letter>`), the unit a van is dispatched to;
+- otherwise its **district** (735 across India, `IND-<id>`).
+
+Its district is always known too, so `/map` and the dashboard rank pressure across the
+whole country by district while Mumbai keeps its ward view. Both kinds are rows in the
+`wards` table (a generic filing-area table: code, name, city or state, centroid,
+boundary), created one at a time by `ensureArea()` the first time a point lands in one.
+No schema change was needed. A fix within 5 km of a simplified outline (a shoreline, a
+border river) snaps to the nearest district; one further out, at sea or abroad, is
+recorded but filed nowhere.
+
+### District data
+
+India's districts come from [geoBoundaries](https://www.geoboundaries.org) gbOpen IND
+ADM2 (release 9469f09): the 2021 **Local Government Directory** districts via Pathways
+Data, **ODbL 1.0**. State names come from geoBoundaries IND ADM1 (**CC BY 2.5 India**),
+by the state containing each district's centroid, or most of its boundary. The generated
+files are derivatives under the same licences and carry the attribution, which `/map`
+shows.
+
+```bash
+mkdir -p .tmp-geo/in
+curl -sL -o .tmp-geo/in/adm2.geojson https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IND/ADM2/geoBoundaries-IND-ADM2_simplified.geojson
+curl -sL -o .tmp-geo/in/adm1.geojson https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IND/ADM1/geoBoundaries-IND-ADM1_simplified.geojson
+npm run geo:districts -- .tmp-geo/in/adm2.geojson .tmp-geo/in/adm1.geojson
+```
+
+It writes two files that cannot disagree: `lib/geo/data/india-districts.json` (server,
+for filing; never imported by client code) and `public/geo/india-districts.geojson`
+(fetched by the map's worker, so ~1.2 MB of outlines never enters a bundle). Rings are
+simplified to ~1 km and rounded to 4 decimals; filing a point takes ~0.3 ms.
+
+### Ward data
 
 The 24 BMC administrative wards come from DataMeet's
 [Municipal Spatial Data](https://github.com/datameet/Municipal_Spatial_Data/tree/master/Mumbai),
@@ -102,7 +140,7 @@ npm run geo:wards -- .tmp-geo/bmc.geojson
 Rings are simplified to ~10 m and rounded to 5 decimals (≈56 KB, from ≈1 MB); area and
 centroid are computed from the unsimplified source. Ward codes are `MCGM-<letter>`
 (`MCGM-ME` is M/East), the value `intakes.ward_code`, `items.ward_code` and `wards.code`
-join on. The `wards` table is populated on first use by `ensureWards()`.
+join on. A ward's row is created on first use by `ensureArea()`, like a district's.
 
 ## The map stack
 
@@ -141,9 +179,9 @@ screen cannot send a van to a site the data no longer supports.
 ## Checks
 
 ```bash
-npm run test:heatmap   # 16 tests: geohash, polygons, ward filing, the hotspot rule, pressure
+npm run test:heatmap   # 21 tests: geohash, polygons, ward and district filing, the rule, pressure
 
-# 16 integration tests: the intake route's real recorders, then the heatmap read, dispatch
+# 17 integration tests: the intake route's real recorders, then the heatmap read, dispatch
 # and recompute, against a real, migrated Postgres. Refuses any
 # host but localhost, so it can never write test rows into the shared RDS.
 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/postgres npx drizzle-kit migrate
@@ -161,8 +199,9 @@ npm run build
   is unused until the pickup board is wired to the database.
 - **No scheduled recompute.** Clusters are computed on read, so none is needed for the
   screen; `hotspot_detections` is only rewritten when an operator acts or asks for it.
-- **Mumbai only.** Points outside the 24 wards are recorded but not filed to a ward. A
-  second city is a second boundary file and a `city` filter, not a redesign.
+- **City wards for Mumbai only.** Every Indian district is covered; finer, ward-level
+  filing exists only where a city's ward map is loaded (Mumbai). Another city is another
+  boundary file passed through the same `areas.ts`, not a redesign.
 - **Not yet run with a real signed-in submission.** Every database path — recording an
   intake, ward filing, idempotency, atomic rollback, the heatmap read, the filter, dispatch,
   auto-reopen and recompute — passes against the real migrated schema in a disposable
