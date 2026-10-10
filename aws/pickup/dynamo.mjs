@@ -37,8 +37,25 @@ let client = null;
  * check scripts import it before they know whether the environment is configured.
  */
 export function db() {
-  if (!client) client = new DynamoDBClient({});
+  if (!client) client = new DynamoDBClient(localConfig() ?? {});
   return client;
+}
+
+/**
+ * DynamoDB Local, when `PICKUP_DYNAMODB_ENDPOINT` names one — `npm run pickup:local`
+ * sets it. Named for this feature rather than read from the SDK's generic
+ * `AWS_ENDPOINT_URL_DYNAMODB`, so pointing the pickup tables at a laptop cannot quietly
+ * redirect any other DynamoDB client the app grows. Local accepts any credentials; the
+ * placeholders keep the SDK from searching for real ones.
+ */
+function localConfig() {
+  const endpoint = process.env.PICKUP_DYNAMODB_ENDPOINT?.trim();
+  if (!endpoint) return null;
+  return {
+    endpoint,
+    region: process.env.PICKUP_REGION?.trim() || "ap-south-1",
+    credentials: { accessKeyId: "local", secretAccessKey: "local" },
+  };
 }
 
 /* --------------------------------------------------------------- marshalling */

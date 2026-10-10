@@ -6,6 +6,13 @@
  *   `POST /pickups`                 route this load to a licensed recycler, and say why
  *   `POST /pickups/{id}/settle`     weigh it and hand the collector a credit note
  *
+ * Between the two sits the handoff: `POST /pickups` mints a 4-digit PIN that is shown
+ * once, on the collector's phone, and settlement only goes through when the recycler
+ * types it at the gate (`pin.mjs` has the rules). `POST /pickups/{id}/pin` issues a
+ * fresh one when the first expired or was locked by wrong guesses, and
+ * `GET /pickups/{id}/events` reads back the audit trail every step writes. The money
+ * itself moves after settlement, asynchronously — see `payout.mjs`.
+ *
  * Everything else here exists to read back what those two wrote: the collector's
  * ledger, one load with its note, the note on its own, the stream catalogue and the
  * authorised-recycler directory. Nothing on this API updates or deletes a pickup —
@@ -38,16 +45,28 @@ import {
   validate,
 } from "./http.mjs";
 import {
+  PIN_MAX_ATTEMPTS,
+  PIN_TTL_MS,
+  issuePin,
+  isWellFormedPin,
+  pinMatches,
+  pinState,
+} from "./pin.mjs";
+import {
   assignedMassToday,
   authorizationsForStream,
   getCreditNoteByPickup,
   getPickup,
   getStream,
+  listEvents,
   listFacilities,
   listPickupsByCollector,
   listStreams,
   nextPickupId,
+  pickupEvent,
   putPickup,
+  recordPinFailure,
+  reissuePin,
   settle,
   tables,
   view,
@@ -113,6 +132,14 @@ async function route(event) {
   if (segments.length === 2 && segments[0] === "pickups" && method === "GET") {
     return await onePickup(segments[1]);
   }
+  if (segments.length === 3 && segments[0] === "pickups" && segments[2] === "events" && method === "GET") {
+    return await pickupEvents(segments[1]);
+  }
+  if (segments.length === 3 && segments[0] === "pickups" && segments[2] === "pin" && method === "POST") {
+    const write = requireRole(event, OPERATOR);
+    if (!write.ok) return write.response;
+    return await newPin(segments[1], write.caller);
+  }
   if (segments.length === 3 && segments[0] === "pickups" && segments[2] === "settle" && method === "POST") {
     const write = requireRole(event, OPERATOR);
     if (!write.ok) return write.response;
@@ -123,7 +150,7 @@ async function route(event) {
   }
 
   return problem("invalid_request", `No route for ${method} ${path}`, {
-    hint: "POST /pickups, POST /pickups/{id}/settle, GET /pickups, GET /pickups/{id}, GET /credit-notes/{pickupId}, GET /streams, GET /recyclers, GET /health",
+    hint: "POST /pickups, POST /pickups/{id}/pin, POST /pickups/{id}/settle, GET /pickups, GET /pickups/{id}, GET /pickups/{id}/events, GET /credit-notes/{pickupId}, GET /streams, GET /recyclers, GET /health",
   });
 }
 
@@ -248,7 +275,33 @@ async function onePickup(pickupId) {
   const pickup = await getPickup(pickupId);
   if (!pickup) return notFound(pickupId);
   const note = await getCreditNoteByPickup(pickupId);
-  return json(200, { pickup: view(pickup), creditNote: view(note) });
+  return json(200, { pickup: withPinState(pickup), creditNote: view(note) });
+}
+
+async function pickupEvents(pickupId) {
+  const pickup = await getPickup(pickupId);
+  if (!pickup) return notFound(pickupId);
+  const events = (await listEvents(pickupId)).map(view);
+  return json(200, { pickupId, count: events.length, events });
+}
+
+/**
+ * The pickup as the API shows it, with where its PIN stands spelled out — attempts
+ * left, locked, expired — so the gate can say which of those just happened without
+ * re-deriving the rules. The PIN itself is never in it; `view` drops the hash.
+ */
+function withPinState(pickup) {
+  const out = view(pickup);
+  if (!pickup.creditNoteId && typeof pickup.pinHash === "string") {
+    const state = pinState(pickup);
+    out.handoff = {
+      attemptsRemaining: state.attemptsRemaining,
+      locked: state.locked,
+      expired: state.expired,
+      expiresAt: state.expiresAt,
+    };
+  }
+  return out;
 }
 
 async function oneNote(pickupId) {
@@ -406,7 +459,34 @@ async function createPickup(event, who) {
     facilityDay: `${day}#${pickupId}`,
   };
 
-  await putPickup(pickup);
+  // The PIN is minted with the load and stored as a hash; the plain value goes back in
+  // this response, to the phone that asked for it, and nowhere else.
+  const handoff = issuePin(pickupId, new Date(requestedAt));
+  Object.assign(pickup, handoff.attributes);
+
+  await putPickup(pickup, [
+    pickupEvent(
+      pickupId,
+      "routed",
+      {
+        at: requestedAt,
+        actor: who,
+        details: {
+          facilityId: chosen.facilityId,
+          stream: catalogueRow.code,
+          hazardous: pickup.hazardous,
+          declaredMassG,
+        },
+      },
+      0,
+    ),
+    pickupEvent(
+      pickupId,
+      "pin_issued",
+      { at: requestedAt, actor: who, details: { expiresAt: handoff.attributes.pinExpiresAt } },
+      1,
+    ),
+  ]);
 
   console.log(
     JSON.stringify({
@@ -423,10 +503,64 @@ async function createPickup(event, who) {
   );
 
   return json(201, {
-    pickup: view(pickup),
+    pickup: withPinState(pickup),
     creditNote: null,
-    next: `POST /pickups/${pickupId}/settle with the weighed mass to issue the credit note`,
+    handoff: handoffResponse(handoff),
+    next: `POST /pickups/${pickupId}/settle with the weighed mass and the collector's PIN to issue the credit note`,
   });
+}
+
+function handoffResponse(handoff) {
+  return {
+    pin: handoff.pin,
+    expiresAt: handoff.attributes.pinExpiresAt,
+    ttlSeconds: PIN_TTL_MS / 1000,
+    maxAttempts: PIN_MAX_ATTEMPTS,
+  };
+}
+
+/**
+ * A fresh PIN for a load still waiting at the gate — after the first one expired, or
+ * after five wrong guesses locked it. Operator-only, like routing, because whoever can
+ * call this can put a new PIN on a phone.
+ */
+async function newPin(pickupId, who) {
+  const pickup = await getPickup(pickupId);
+  if (!pickup) return notFound(pickupId);
+  if (pickup.creditNoteId) {
+    return problem("pickup_not_settleable", "This load already settled, so it has no PIN to replace", {
+      pickupId,
+      status: pickup.status,
+    });
+  }
+
+  const now = new Date();
+  const handoff = issuePin(pickupId, now);
+  try {
+    await reissuePin({
+      pickupId,
+      attributes: handoff.attributes,
+      events: [
+        pickupEvent(pickupId, "pin_reissued", {
+          at: now.toISOString(),
+          actor: who,
+          details: {
+            expiresAt: handoff.attributes.pinExpiresAt,
+            previousAttempts: Number(pickup.pinAttempts ?? 0),
+          },
+        }),
+      ],
+    });
+  } catch (error) {
+    if (error?.name !== "TransactionCanceledException") throw error;
+    // Settled between the read and the write: the load no longer needs a PIN.
+    return problem("pickup_not_settleable", "This load settled while the new PIN was being issued", {
+      pickupId,
+    });
+  }
+
+  const updated = await getPickup(pickupId);
+  return json(200, { pickup: withPinState(updated ?? pickup), handoff: handoffResponse(handoff) });
 }
 
 /**
@@ -452,12 +586,13 @@ async function settlePickup(event, pickupId, who) {
 
   const checked = validate({
     weighedMassG: readInteger(body, "weighedMassG", { min: 1, max: 500000 }),
+    pin: readPin(body),
     settledVia: readString(body, "settledVia", { max: 40, required: false }),
     issuedBy: readString(body, "issuedBy", { max: 80, required: false }),
   });
   if (!checked.ok) return checked.response;
 
-  const { weighedMassG, settledVia, issuedBy } = checked.values;
+  const { weighedMassG, pin, settledVia, issuedBy } = checked.values;
 
   const pickup = await getPickup(pickupId);
   if (!pickup) return notFound(pickupId);
@@ -472,6 +607,32 @@ async function settlePickup(event, pickupId, who) {
         note: "This load already settled; the note that exists is returned unchanged",
       });
     }
+  }
+
+  // The handoff PIN, checked in the order that tells the gate the most: a locked or
+  // expired PIN is refused *before* the digits are compared, so a guess against a dead
+  // PIN neither counts nor confirms anything.
+  const state = pinState(pickup);
+  if (!state.issued) {
+    return problem("pin_not_issued", "This load was routed before handoff PINs existed and cannot be settled by PIN", {
+      pickupId,
+      hint: `POST /pickups/${pickupId}/pin to issue one`,
+    });
+  }
+  if (state.locked) {
+    return problem("pin_locked", `Too many wrong PINs — ${PIN_MAX_ATTEMPTS} attempts used. Issue a new PIN from the collector's phone`, {
+      pickupId,
+      attemptsRemaining: 0,
+    });
+  }
+  if (state.expired) {
+    return problem("pin_expired", "This PIN has expired. Issue a new one from the collector's phone", {
+      pickupId,
+      expiresAt: state.expiresAt,
+    });
+  }
+  if (!pinMatches(pickupId, pin, pickup.pinHash)) {
+    return await wrongPin(pickup, who);
   }
 
   const catalogueRow = await getStream(pickup.stream);
@@ -501,7 +662,38 @@ async function settlePickup(event, pickupId, who) {
   });
 
   try {
-    await settle({ pickupId, weighedMassG, settledVia: settledVia ?? "upi", note });
+    await settle({
+      pickupId,
+      weighedMassG,
+      settledVia: settledVia ?? "upi",
+      note,
+      pinHash: pickup.pinHash,
+      events: [
+        pickupEvent(
+          pickupId,
+          "pin_verified",
+          { at: issuedAt, actor: who, details: { attemptsUsed: state.attempts + 1 } },
+          0,
+        ),
+        pickupEvent(
+          pickupId,
+          "settled",
+          {
+            at: issuedAt,
+            actor: who,
+            details: {
+              noteId: note.noteId,
+              amountPaise: note.amountPaise,
+              declaredMassG: note.declaredMassG,
+              weighedMassG,
+              massVariancePct: note.massVariancePct,
+              flags: note.flags,
+            },
+          },
+          1,
+        ),
+      ],
+    });
   } catch (error) {
     if (error?.name !== "TransactionCanceledException") throw error;
     // The expected loser of a race: someone else settled this load between the read
@@ -515,6 +707,24 @@ async function settlePickup(event, pickupId, who) {
         creditNote: view(existing),
         idempotent: true,
         note: "This load settled concurrently; the note that exists is returned unchanged",
+      });
+    }
+    // Not settled, so the PIN moved under us: locked by a guess on another terminal,
+    // reissued from the phone, or expired in the gap. Say which.
+    const now = settledRow ? pinState(settledRow) : null;
+    if (now?.locked) {
+      return problem("pin_locked", "The PIN was locked by wrong guesses while this settlement was in flight", {
+        pickupId,
+        attemptsRemaining: 0,
+      });
+    }
+    if (now?.expired) {
+      return problem("pin_expired", "The PIN expired while this settlement was in flight", { pickupId });
+    }
+    if (settledRow && settledRow.pinHash !== pickup.pinHash) {
+      return problem("pin_mismatch", "A new PIN was issued while this settlement was in flight; use the one on the phone now", {
+        pickupId,
+        attemptsRemaining: now?.attemptsRemaining ?? null,
       });
     }
     return problem("pickup_not_settleable", "This load cannot be settled as it stands", {
@@ -541,7 +751,76 @@ async function settlePickup(event, pickupId, who) {
     pickup: view(settledRow ?? pickup),
     creditNote: view(note),
     idempotent: false,
+    payout: "pending — the UPI credit is sent by the payout function off this table's stream",
   });
+}
+
+/**
+ * A wrong PIN: counted, logged, and answered with how many tries are left. The fifth
+ * wrong guess also writes `pin_locked`, so the trail shows the moment the load stopped
+ * accepting PINs rather than leaving it to be inferred from a counter.
+ */
+async function wrongPin(pickup, who) {
+  const { pickupId } = pickup;
+  const at = new Date().toISOString();
+  const attemptNumber = Number(pickup.pinAttempts ?? 0) + 1;
+  const events = [
+    pickupEvent(pickupId, "pin_failed", { at, actor: who, details: { attempt: attemptNumber } }, 0),
+  ];
+  if (attemptNumber >= PIN_MAX_ATTEMPTS) {
+    events.push(pickupEvent(pickupId, "pin_locked", { at, actor: who, details: { attempts: attemptNumber } }, 1));
+  }
+
+  let attempts;
+  try {
+    attempts = await recordPinFailure({ pickupId, pinHash: pickup.pinHash, events });
+  } catch (error) {
+    if (error?.name !== "TransactionCanceledException") throw error;
+    // The PIN changed, locked or settled between the read and the count. Re-read, and
+    // report what is true now rather than a count that did not happen.
+    const current = await getPickup(pickupId);
+    if (current?.creditNoteId) {
+      return problem("pickup_not_settleable", "This load settled on another terminal a moment ago", { pickupId });
+    }
+    const state = current ? pinState(current) : null;
+    if (state?.locked) {
+      return problem("pin_locked", `Too many wrong PINs — ${PIN_MAX_ATTEMPTS} attempts used. Issue a new PIN from the collector's phone`, {
+        pickupId,
+        attemptsRemaining: 0,
+      });
+    }
+    return problem("pin_mismatch", "That PIN does not match the collector's phone", {
+      pickupId,
+      attemptsRemaining: state?.attemptsRemaining ?? null,
+    });
+  }
+
+  console.log(
+    JSON.stringify({ level: "warn", service: SERVICE, event: "pin_failed", pickupId, attempts }),
+  );
+
+  const attemptsRemaining = Math.max(0, PIN_MAX_ATTEMPTS - attempts);
+  if (attemptsRemaining === 0) {
+    return problem("pin_locked", `Too many wrong PINs — ${PIN_MAX_ATTEMPTS} attempts used. Issue a new PIN from the collector's phone`, {
+      pickupId,
+      attemptsRemaining: 0,
+    });
+  }
+  return problem("pin_mismatch", "That PIN does not match the collector's phone", {
+    pickupId,
+    attemptsRemaining,
+  });
+}
+
+function readPin(body) {
+  const value = body?.pin;
+  if (value === undefined || value === null || value === "") {
+    return { ok: false, message: "pin is required — the 4 digits on the collector's phone" };
+  }
+  if (!isWellFormedPin(value)) {
+    return { ok: false, message: "pin must be exactly 4 digits, as a string" };
+  }
+  return { ok: true, value };
 }
 
 function currentDay() {

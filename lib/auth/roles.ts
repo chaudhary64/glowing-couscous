@@ -110,6 +110,16 @@ export const GUARDS: readonly Guard[] = [
     paths: ["/pickups"],
   },
   {
+    // The three handoff screens drive `POST /pickups`, `/pin` and `/settle`, which the
+    // Lambda holds to `eco-operator` or above — so the screens are held to the same
+    // rank, and nobody is shown a button the API will refuse. The phone and the gate are
+    // one account in this pilot; a collector role of their own is the next step.
+    id: "handoff",
+    minRank: RANK_OPERATOR,
+    requirement: "operator or above",
+    paths: ["/handoff", "/gate", "/demo"],
+  },
+  {
     id: "collectors",
     minRank: RANK_OPERATOR,
     requirement: "operator or above",
