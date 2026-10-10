@@ -70,8 +70,10 @@ export function Receipt({
 
       <dl className="px-4 py-3">
         {lines.map((line) => (
-          <div key={line.label} className="flex items-baseline gap-2 py-1">
-            <dt className={cn("shrink-0", line.muted && "text-ink-muted")}>
+          // On a phone the detail drops under the label, so a long line cannot push the
+          // value off the paper; from `sm` up it is the one-line ledger row.
+          <div key={line.label} className="flex flex-wrap items-baseline gap-x-2 py-1 sm:flex-nowrap">
+            <dt className={cn("min-w-0", line.muted && "text-ink-muted")}>
               {line.label}
             </dt>
             <span
@@ -79,7 +81,9 @@ export function Receipt({
               className="min-w-4 flex-1 translate-y-[-3px] border-b border-dotted border-rule"
             />
             {line.detail ? (
-              <span className="shrink-0 text-[11px] text-ink-muted">{line.detail}</span>
+              <span className="order-last w-full text-[11px] text-ink-muted sm:order-none sm:w-auto sm:shrink-0">
+                {line.detail}
+              </span>
             ) : null}
             <dd
               className={cn(

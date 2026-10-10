@@ -11,8 +11,10 @@ import { cn } from "@/lib/cn";
  * The headline and receipt are server HTML and paint first; the board fades in behind
  * them once its code and model arrive, so it never holds up the largest paint. Its
  * render loop runs only while the hero is on screen. Under reduced motion it is one
- * still frame; without WebGL, or on a phone, the hero is simply the ink ground it was
- * designed on.
+ * still frame; without WebGL the hero is simply the ink ground it was designed on.
+ *
+ * Below the desktop breakpoint the board is its own block between the headline and the
+ * receipt, framed for portrait (`compact`) and drawn at a lower pixel ratio.
  */
 
 const HeroScene = dynamic(() => import("./hero-scene"), { ssr: false });
@@ -37,7 +39,7 @@ function supportsWebGL(): boolean {
 }
 const never = () => () => {};
 
-/** Large screens only: on a phone the board is a dim texture behind the copy, not worth the GPU. */
+/** Desktop composition (board behind the copy) versus the stacked phone composition. */
 const WIDE = "(min-width: 1024px)";
 function onWideChange(notify: () => void) {
   const query = window.matchMedia(WIDE);
@@ -63,9 +65,9 @@ export function HeroBoard({ className }: { className?: string }) {
 
   return (
     <div ref={holder} aria-hidden className={cn("pointer-events-none", className)}>
-      {webgl && wide ? (
+      {webgl ? (
         <div className={cn("absolute inset-0 transition-opacity duration-[1400ms] ease-out", ready ? "opacity-100" : "opacity-0")}>
-          <HeroScene live={!reduced} active={active} onReady={() => setReady(true)} />
+          <HeroScene live={!reduced} active={active} compact={!wide} onReady={() => setReady(true)} />
         </div>
       ) : null}
     </div>

@@ -174,11 +174,20 @@ const BEAM_FADE = (() => {
   return texture;
 })();
 
+/** Desktop: low and wide, behind the copy. Phone: higher and further back, the whole board in a portrait frame. */
+const FRAMING = {
+  wide: { position: [0.24, 0.74, 0.56] as [number, number, number], look: [0.03, 0, 0.02] as [number, number, number], fov: 24 },
+  compact: { position: [0.2, 0.66, 0.5] as [number, number, number], look: [0, 0.02, 0.01] as [number, number, number], fov: 30 },
+};
+
 export default function HeroScene({
   live,
   active,
+  compact = false,
   onReady,
 }: {
+  /** Portrait phone framing and a lighter render. */
+  compact?: boolean;
   /** False under reduced motion: one still frame. */
   live: boolean;
   /** False while the hero is off screen: the loop stops. */
@@ -199,14 +208,15 @@ export default function HeroScene({
   return (
     <Canvas
       frameloop={live && active ? "always" : "demand"}
-      dpr={[1, 1.75]}
-      camera={{ fov: 24, near: 0.01, far: 10, position: [0.24, 0.74, 0.56] }}
+      key={compact ? "compact" : "wide"}
+      dpr={compact ? [1, 1.5] : [1, 1.75]}
+      camera={{ fov: (compact ? FRAMING.compact : FRAMING.wide).fov, near: 0.01, far: 10, position: (compact ? FRAMING.compact : FRAMING.wide).position }}
       gl={{ antialias: false, powerPreference: "high-performance", stencil: false }}
       onCreated={({ gl, camera }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 1.25;
         gl.localClippingEnabled = true;
-        camera.lookAt(0.03, 0, 0.02);
+        camera.lookAt(...(compact ? FRAMING.compact : FRAMING.wide).look);
         onReady?.();
       }}
       aria-hidden
@@ -226,7 +236,7 @@ export default function HeroScene({
       <Suspense fallback={null}>
         <XrayBoard live={live} pointer={pointer} />
       </Suspense>
-      <EffectComposer multisampling={4}>
+      <EffectComposer multisampling={compact ? 0 : 4}>
         <Bloom mipmapBlur intensity={1.15} luminanceThreshold={1} luminanceSmoothing={0.15} radius={0.7} />
         <Noise premultiply opacity={0.35} />
       </EffectComposer>
