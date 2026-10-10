@@ -22,10 +22,12 @@ nothing has to be discovered by reading code.
 |---|---|
 | Live AI pipeline (Microsoft Foundry) | **Real** — three working endpoints, closed-list validation |
 | Authentication & roles (Cognito) | **Real** — JWKS verification, httpOnly session, enforced role matrix |
-| Product screens | **Built** — 9 role-gated screens, one of which reads the live archive; the rest render fixtures |
+| Product screens | **Built** — 9 role-gated screens; the evidence archive and the hotspot map read live data, the rest render fixtures |
 | Doc site | **Built** — 6 feature write-ups, public |
 | Media archive (S3) | **Real** — every submitted photo and voice note is written to `impact-proof-bucket` under a content-addressed key |
-| Database schema | **Applied to real RDS; one table is read by the app** — 39 tables, `media_assets` in use |
+| Intake records | **Real** — an analysed submission with evidence writes `intakes`, `items`, `material_lines`, `item_hazards`, `gatekeeper_verdicts` and, with a GPS fix, a `geopoints` row |
+| Hotspot map | **Real** — live geotagged intakes clustered on real BMC ward boundaries over an OpenStreetMap basemap; empty, and saying so, until real intakes arrive |
+| Database schema | **Applied to real RDS, partly wired** — 39 tables; media, intake and geo tables are read and written, the rest are not |
 | Money | **Simulated** — no payout, no ledger writes |
 
 ---
@@ -80,6 +82,31 @@ archive as off.
 
 Bucket, IAM policy, key layout and its honest gaps are in
 [`docs/s3-media-archive.md`](docs/s3-media-archive.md).
+
+### Spatial heatmapping
+
+`/map` clusters geotagged intakes into collection sites on Mumbai's real ward map.
+
+- **Capture.** The intake screen takes a GPS fix with one explicit tap and lets the
+  operator pick the collector (walk-in by default). `lib/intake/record.ts` files the
+  submission — intake, item, material lines, hazards, gatekeeper verdict and geopoint —
+  in one transaction, idempotent on the evidence row, and never fails the request.
+- **Wards.** The 24 BMC administrative wards with real boundaries, from DataMeet's open
+  data (CC BY-SA 2.5 India), simplified to 56 KB by `npm run geo:wards`. Points are filed
+  by point-in-polygon; there is no PostGIS.
+- **Clustering.** On every read: ~150 m geohash cells (precision 7); four or more
+  detections in 21 days make a cell hot; touching hot cells are one site. Gatekeeper-
+  rejected items never count. The rule is one pure function, `lib/heatmap/cluster.ts`,
+  covered by `npm run test:heatmap`.
+- **Map.** MapLibre GL on an OpenFreeMap basemap — open source end to end, no key.
+  Wards shaded by relative pressure, heat weighted by recency, sites at true radius.
+- **Dispatch.** Operators and above can assign a van, clear or reopen a live site
+  (`POST /api/heatmap/dispatch`, guarded at `/map/dispatch`); only that decision is stored.
+- **Real data only.** No sample, fixture or fallback. With no geotagged intakes the map is
+  empty and tells the operator how to fill it. The dashboard's hotspot figures come from
+  the same computation; the public write-up shows only the real ward geography.
+
+Design, privacy and gaps: [`docs/spatial-heatmapping.md`](docs/spatial-heatmapping.md).
 
 ### Authentication and roles
 
@@ -140,21 +167,23 @@ The design, the deletion policy, the role model and the instance details are in
 
 ## What is **not** built
 
-### The database is not wired to the app
+### The database is only partly wired to the app
 
 This is the largest remaining gap and it is deliberate, not an oversight. The schema is
-fully designed and applied to RDS, but **only the media archive reads it**:
-[`lib/s3/media-assets.ts`](lib/s3/media-assets.ts) writes `media_assets` rows as evidence
-is archived, lists them for [`/evidence`](app/(product)/evidence/page.tsx), and resolves
-an uploader's Cognito subject. Nothing else under `app/` or `lib/` imports Drizzle or
-reads `DATABASE_URL`. Every other screen — every table, receipt, stat and dashboard —
-renders hardcoded fixtures from [`lib/data/`](lib/data). `lib/types.ts` says so
-directly.
+fully designed and applied to RDS, and three parts of the app now use it:
 
-So the screens are a complete, honest interface over sample data with one real archive
-behind it, and the AI endpoints are real, but a submission has never been joined to the
-database: no `intakes` row is written, so the evidence the archive holds cannot be found
-from the valuation it priced.
+- [`lib/s3/media-assets.ts`](lib/s3/media-assets.ts) writes `media_assets` rows as evidence
+  is archived and lists them for [`/evidence`](app/(product)/evidence/page.tsx).
+- [`lib/intake/record.ts`](lib/intake/record.ts) files each analysed intake — `intakes`,
+  `items`, `material_lines`, `item_hazards`, `gatekeeper_verdicts`, `geopoints` — so the
+  evidence can now be found from the item it priced.
+- [`lib/heatmap/store.ts`](lib/heatmap/store.ts) reads those geopoints for
+  [`/map`](app/(product)/map/page.tsx) and stores dispatch decisions in `hotspot_clusters`.
+
+Everything else — valuations, pickups, credit notes, the ledger, every dashboard stat —
+still renders hardcoded fixtures from [`lib/data/`](lib/data). In particular no
+`valuations` row is written (the priced lines are stored as `material_lines`, the totals
+are not), and the pickup board does not yet read the intakes that now exist.
 
 ### Auth gaps
 
@@ -181,8 +210,8 @@ from the valuation it priced.
   business-account approval, and proves no new intelligence on stage. Ranked 06.
 - **A low-data Android app with an offline queue** is the next channel. Not started.
 - **Missed-call IVR** for feature-phone collectors is deferred.
-- **The heatmap is not geography.** Positions are normalised pilot coordinates, so it
-  cannot be overlaid on a real street map as drawn. No basemap tiles, no live van
+- **The heatmap has no road network.** Sites are on real geography, but the van round
+  is a priority order by detection count, not a driving route. No basemap tiles, no live van
   tracking, and a cluster is a routing suggestion — never an accusation about a site.
 
 ### Credibility limits, stated on the screens themselves
@@ -302,6 +331,7 @@ A raw query has to do it by hand: `Number(row.net_to_collector_paise)`.
 |---|---|
 | [`docs/ecoepr-track03.md`](docs/ecoepr-track03.md) | The ranked feature plan, the build order, and the post-build note recording what actually runs |
 | [`docs/auth.md`](docs/auth.md) | Authentication and role-based access — architecture, decisions, and gaps |
+| [`docs/spatial-heatmapping.md`](docs/spatial-heatmapping.md) | The hotspot map — capture, ward filing, the clustering rule, privacy, dispatch, and what is not built |
 | [`docs/s3-media-archive.md`](docs/s3-media-archive.md) | The media archive — the bucket, the IAM policy, the key layout, `s3:check`, and what is deliberately not built |
 | [`db/README.md`](db/README.md) | The database schema, layering rules, conventions, deletion policy and the instance |
 | `/doc` in the app | Six feature write-ups, ranked, each linked to the working screen that delivers it |

@@ -10,7 +10,7 @@ import { requireAccess } from "@/lib/auth/dal";
 import { activityFeed, activityMeta, needsAttention } from "@/lib/data/activity";
 import { intakeStats } from "@/lib/data/intake";
 import { collectors, logisticsStats, pickups } from "@/lib/data/operations";
-import { hotspots, wards } from "@/lib/data/wards";
+import { getHeatmap } from "@/lib/heatmap/store";
 import { formatInr, formatPct } from "@/lib/format";
 import { activityLabel, activityTone, pickupLabel, pickupTone } from "@/lib/tone";
 
@@ -20,8 +20,6 @@ const topCollectors = [...collectors]
   .sort((a, b) => b.creditsInr - a.creditsInr)
   .slice(0, 4);
 
-const pressureWards = [...wards].sort((a, b) => b.density - a.density).slice(0, 4);
-
 /** Loads an operator can still act on today. */
 const activePickups = pickups.filter(
   (pickup) => pickup.status !== "settled" && pickup.status !== "received",
@@ -30,12 +28,33 @@ const activePickups = pickups.filter(
 export default async function DashboardPage() {
   await requireAccess("/dashboard");
 
+  // The hotspot figures on this screen are real: computed from geotagged intakes, the
+  // same call `/map` makes. Everything else here is still a fixture and says so.
+  const heat = await getHeatmap();
+  const openSites = heat.clusters.filter((c) => c.status === "open");
+  const pressureWards = heat.wards.filter((w) => w.detections > 0).slice(0, 4);
+  const attention = [
+    ...needsAttention.filter((item) => item.id !== "queue-hotspots"),
+    ...(openSites.length
+      ? [
+          {
+            id: "queue-hotspots",
+            label: "Hotspots with no van assigned",
+            count: openSites.length,
+            detail: `${openSites.slice(0, 2).map((s) => s.label).join(" and ")}${openSites.length > 2 ? ` and ${openSites.length - 2} more` : ""}. Computed from geotagged intakes.`,
+            href: "/map",
+            tone: "hazard" as const,
+          },
+        ]
+      : []),
+  ];
+
   return (
     <div className="flex flex-col gap-10">
       <ScreenHeader
         eyebrow="Operations · Mumbai + Pune pilot"
         title="Today"
-        lede={`${intakeStats.today} intakes priced, ${formatInr(logisticsStats.creditsIssuedInr)} of simulated credits on ${logisticsStats.notesIssued} notes, and 2 hotspots still waiting for a van.`}
+        lede={`${intakeStats.today} intakes priced, ${formatInr(logisticsStats.creditsIssuedInr)} of simulated credits on ${logisticsStats.notesIssued} notes, and ${openSites.length} hotspot${openSites.length === 1 ? "" : "s"} on the live map waiting for a van.`}
         actions={
           <>
             <ButtonLink href="/intake">New intake</ButtonLink>
@@ -80,7 +99,7 @@ export default async function DashboardPage() {
         />
 
         <ul className="mt-5 grid gap-px border border-rule bg-rule sm:grid-cols-2 lg:grid-cols-4">
-          {needsAttention.map((item) => (
+          {attention.map((item) => (
             <li key={item.id} className="bg-paper-raised p-4">
               <div className="flex items-start justify-between gap-3">
                 <Dot tone={item.tone} />
@@ -217,21 +236,24 @@ export default async function DashboardPage() {
             }
           >
             <div className="flex flex-col">
+              {pressureWards.length === 0 ? (
+                <p className="text-[13px] leading-relaxed text-ink-soft">
+                  No geotagged intakes in the last {heat.rule.windowDays} days yet.
+                </p>
+              ) : null}
               {pressureWards.map((ward) => (
                 <MeterRow
-                  key={ward.id}
-                  label={`${ward.name} · ${ward.flaggedSites} flagged`}
-                  value={ward.density / 100}
-                  tone={
-                    ward.density >= 80 ? "hazard" : ward.density >= 60 ? "copper" : "lead"
-                  }
-                  display={`${ward.density}/100`}
+                  key={ward.code}
+                  label={`${ward.name} · ${ward.detections} detection${ward.detections === 1 ? "" : "s"}`}
+                  value={ward.pressure / 100}
+                  tone={ward.pressure >= 80 ? "hazard" : ward.pressure >= 50 ? "copper" : "lead"}
+                  display={`${ward.pressure}/100`}
                 />
               ))}
             </div>
             <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-              {hotspots.filter((spot) => spot.status === "open").length} clusters are
-              open with no van assigned.
+              {openSites.length} site{openSites.length === 1 ? " is" : "s are"} open with no van assigned. Pressure
+              is detections per km², relative to the busiest ward.
             </p>
           </Panel>
 

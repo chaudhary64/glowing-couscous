@@ -11,13 +11,19 @@
     "db:migrate": "drizzle-kit migrate",
     "db:check": "drizzle-kit check",
     "db:studio": "drizzle-kit studio",
-    "s3:check": "node --import ./scripts/ts-paths.mjs --env-file=.env.local scripts/s3-check.mts"
+    "s3:check": "node --import ./scripts/ts-paths.mjs --env-file=.env.local scripts/s3-check.mts",
+    "predev": "node scripts/vendor-maplibre.mjs",
+    "prebuild": "node scripts/vendor-maplibre.mjs",
+    "test:heatmap": "node --import ./scripts/ts-paths.mjs --test lib/heatmap/heatmap.test.mts",
+    "geo:wards": "node --import ./scripts/ts-paths.mjs scripts/geo-wards.mts",
+    "test:heatmap:db": "node --import ./scripts/ts-paths.mjs --test --test-concurrency=1 lib/heatmap/integration.test.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1148.0",
     "@aws-sdk/s3-request-presigner": "^3.1148.0",
     "drizzle-orm": "^0.45.4",
     "jose": "^6.2.12",
+    "maplibre-gl": "6.11.2",
     "next": "16.4.0",
     "pg": "^8.23.1",
     "react": "19.3.0",

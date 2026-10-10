@@ -14,6 +14,7 @@ import { Stamp, VerdictMark } from "@/components/ui/stamp";
 import { formatConfidence, formatInr, formatMass, formatRate, lineValue } from "@/lib/format";
 import { conditionTone, materialTone, verdictTone } from "@/lib/tone";
 import type { AiAnalysis, AiIntakeResult } from "@/lib/ai/proposal";
+import type { IntakeRecordOutcome } from "@/lib/intake/record";
 import type { Verdict } from "@/lib/types";
 
 /**
@@ -258,7 +259,25 @@ async function audioToMedia(
   };
 }
 
-export function LiveAnalysis({ mode }: { mode: LiveMode }) {
+/** A collector the intake can be filed under, as the server lists them. */
+export interface CollectorChoice {
+  id: string;
+  label: string;
+}
+
+type Located = { latitude: number; longitude: number; accuracyM: number };
+type LocateState = "idle" | "locating" | "ok" | "denied" | "unavailable";
+
+type RecordedIntake = AiIntakeResult & { recorded?: IntakeRecordOutcome };
+
+export function LiveAnalysis({
+  mode,
+  collectors = [],
+}: {
+  mode: LiveMode;
+  /** Intake only: the collectors a submission can be filed under. Empty hides the picker. */
+  collectors?: CollectorChoice[];
+}) {
   const [photo, setPhoto] = useState<Media | null>(null);
   const [audio, setAudio] = useState<Media | null>(null);
   const [audioSeconds, setAudioSeconds] = useState(0);
@@ -268,7 +287,10 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
   const [status, setStatus] = useState<"idle" | "running" | "done">("idle");
   const [failure, setFailure] = useState<Failure | null>(null);
   const [analysis, setAnalysis] = useState<AiAnalysis | null>(null);
-  const [intake, setIntake] = useState<AiIntakeResult | null>(null);
+  const [intake, setIntake] = useState<RecordedIntake | null>(null);
+  const [location, setLocation] = useState<Located | null>(null);
+  const [locate, setLocate] = useState<LocateState>("idle");
+  const [collectorId, setCollectorId] = useState("");
   const [decision, setDecision] = useState<GatekeeperDecision | null>(null);
 
   const recorder = useRef<MediaRecorder | null>(null);
@@ -279,6 +301,34 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
   const copy = COPY[mode];
   const running = status === "running";
   const hasInput = Boolean(photo || audio || note.trim());
+
+  /**
+   * One explicit tap, never an automatic prompt: the browser asks permission the first
+   * time, and a collector who says no still gets paid - the location only feeds the
+   * hotspot map. High accuracy because a ward boundary can run down the middle of a lane.
+   */
+  function captureLocation() {
+    if (!("geolocation" in navigator)) {
+      setLocate("unavailable");
+      return;
+    }
+    setLocate("locating");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracyM: position.coords.accuracy,
+        });
+        setLocate("ok");
+      },
+      (error) => {
+        setLocation(null);
+        setLocate(error.code === error.PERMISSION_DENIED ? "denied" : "unavailable");
+      },
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
+    );
+  }
 
   function reset() {
     setPhoto(null);
@@ -401,6 +451,8 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
     if (mode === "intake" && audioSeconds > 0) {
       body.durationSeconds = Math.round(audioSeconds);
     }
+    if (mode === "intake" && location) body.location = location;
+    if (mode === "intake" && collectorId) body.collectorId = collectorId;
 
     // Refused here rather than upstream. The server checks the same total, but past
     // roughly 6 MiB the hosting layer answers 413 itself, so the request never
@@ -438,7 +490,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
         return;
       }
 
-      if (mode === "intake") setIntake(payload as unknown as AiIntakeResult);
+      if (mode === "intake") setIntake(payload as unknown as RecordedIntake);
       else if (mode === "valuation") setAnalysis(payload as unknown as AiAnalysis);
       else setDecision(payload as unknown as GatekeeperDecision);
       setStatus("done");
@@ -527,6 +579,75 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
             </p>
           </Surface>
         </div>
+
+        {mode === "intake" ? (
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <Surface tone="inset" className="flex flex-col gap-3 p-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
+                Location · for the hotspot map
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="secondary" onClick={captureLocation} disabled={running || locate === "locating"}>
+                  {locate === "locating" ? "Locating…" : location ? "Update location" : "Use this device’s location"}
+                </Button>
+                {location ? (
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setLocation(null);
+                      setLocate("idle");
+                    }}
+                    disabled={running}
+                  >
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+              <p className="text-[12px] leading-snug text-ink-muted">
+                {locate === "ok" && location ? (
+                  <>
+                    <Badge tone="copper">Attached</Badge>{" "}
+                    <span className="font-mono">
+                      {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)} · ±{Math.round(location.accuracyM)} m
+                    </span>
+                  </>
+                ) : locate === "denied" ? (
+                  "Location was refused. The submission still works; it just adds no point to the map."
+                ) : locate === "unavailable" ? (
+                  "This device could not give a fix. The submission still works without one."
+                ) : (
+                  "Optional. Filed to a BMC ward and counted on the hotspot map — never shown as an exact address."
+                )}
+              </p>
+            </Surface>
+
+            {collectors.length ? (
+              <Surface tone="inset" className="flex flex-col gap-3 p-4">
+                <label className="flex flex-col gap-3">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
+                    Collector
+                  </span>
+                  <select
+                    value={collectorId}
+                    onChange={(event) => setCollectorId(event.target.value)}
+                    disabled={running}
+                    className="w-full border border-rule bg-paper-raised px-3 py-2 font-mono text-[12px] text-ink outline-none focus:border-ink"
+                  >
+                    <option value="">Walk-in (no account)</option>
+                    {collectors.map((choice) => (
+                      <option key={choice.id} value={choice.id}>
+                        {choice.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="text-[12px] leading-snug text-ink-muted">
+                  The intake is filed under this collector. Walk-in is for a first visit.
+                </p>
+              </Surface>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <label className="flex flex-col gap-2">
@@ -766,9 +887,31 @@ function ValuationResult({ analysis }: { analysis: AiAnalysis }) {
   );
 }
 
-function IntakeResult({ result }: { result: AiIntakeResult }) {
+function IntakeResult({ result }: { result: RecordedIntake }) {
+  const recorded = result.recorded;
   return (
     <div className="flex flex-col gap-6">
+      {recorded && recorded.configured ? (
+        <Surface tone="inset" className="flex flex-wrap items-center gap-2 p-4">
+          {recorded.intakeCode ? (
+            <Badge tone={recorded.inserted ? "verified" : "neutral"}>
+              {recorded.inserted ? "Filed" : "Already filed"} · {recorded.intakeCode}
+            </Badge>
+          ) : (
+            <Badge tone="hazard">Not filed</Badge>
+          )}
+          {recorded.location ? (
+            <Badge tone="copper">{recorded.location.wardName ?? "Outside the 24 BMC wards"}</Badge>
+          ) : recorded.inserted ? (
+            <Badge tone="lead">No location</Badge>
+          ) : null}
+          <span className="text-[12px] leading-snug text-ink-muted">
+            {recorded.error ??
+              recorded.skipped ??
+              (recorded.location?.wardCode ? "Counted on the hotspot map." : "Recorded as an intake.")}
+          </span>
+        </Surface>
+      ) : null}
       {result.voiceNote ? (
         <VoiceNoteCard
           voiceNote={result.voiceNote}

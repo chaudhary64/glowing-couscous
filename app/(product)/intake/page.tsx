@@ -8,6 +8,7 @@ import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
+import { listCollectorChoices } from "@/lib/intake/record";
 import { intakeSamples, intakeStats } from "@/lib/data/intake";
 import { getItem } from "@/lib/data/inventory";
 import { formatInr, formatMass, formatPct, formatTimeOfDay } from "@/lib/format";
@@ -60,6 +61,7 @@ const pipeline: { service: string; detail: string }[] = [
 
 export default async function IntakePage() {
   await requireAccess("/intake");
+  const collectors = await listCollectorChoices();
 
   const resolved = Object.fromEntries(intakeSamples.map(resolvedEntry));
 
@@ -76,7 +78,7 @@ export default async function IntakePage() {
         }
       />
 
-      <LiveAnalysis mode="intake" />
+      <LiveAnalysis mode="intake" collectors={collectors} />
 
       <StatGrid columns={4}>
         <Stat

@@ -1,114 +1,191 @@
+import Link from "next/link";
+
+import { DispatchButtons, HeatmapExplorer } from "@/components/features/heatmap/heatmap-explorer";
 import { HotspotTable } from "@/components/features/heatmap/hotspot-table";
 import { WardDensity } from "@/components/features/heatmap/ward-density";
-import { WardMap } from "@/components/features/heatmap/ward-map";
 import { VanRound } from "@/components/features/product/map/van-round";
 import { Badge } from "@/components/ui/badge";
 import { Panel, Surface } from "@/components/ui/card";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
-import { heatmapStats, hotspots, wards } from "@/lib/data/wards";
+import { canOpen } from "@/lib/auth/roles";
+import { cn } from "@/lib/cn";
+import { WARD_SOURCE } from "@/lib/geo/wards";
+import { getHeatmap } from "@/lib/heatmap/store";
+import { toHotspot, toWards } from "@/lib/heatmap/view";
 
 export const instant = false;
 
-const limits = [
-  "Positions are normalised pilot coordinates from the ward grid, not a street basemap — the place names in the table carry the geography.",
-  "It reports where pickups happened, not where vans are now; nothing here is live vehicle tracking.",
-  "A cluster is a routing suggestion for a ward officer, never an accusation about a site or a person.",
-];
+type Search = { hazardous?: string };
 
-export default async function HotspotMapPage() {
-  await requireAccess("/map");
+/**
+ * The hotspot map, on real geography.
+ *
+ * Every screen element below renders from one `getHeatmap()` call, so the map, the
+ * stats, the ward ranking and the van round can never disagree. The one switch — all items
+ * or hazardous only — is a URL parameter for the same reason: the server renders one
+ * consistent answer and a link reproduces it.
+ *
+ * Every number is computed from real geotagged intakes. There is no sample and no fixture:
+ * with no data the map is empty, and the page says what would fill it.
+ */
+export default async function HotspotMapPage({ searchParams }: { searchParams: Promise<Search> }) {
+  const user = await requireAccess("/map");
+  const params = await searchParams;
+  const canDispatch = canOpen("/map/dispatch", user.role).ok;
 
-  const topWard = wards.reduce(
-    (worst, ward) => (ward.density > worst.density ? ward : worst),
-    wards[0],
-  );
+  const hazardousOnly = params.hazardous === "1";
+  const data = await getHeatmap({ filter: { hazardousOnly } });
+
+  const wards = toWards(data);
+  const hotspots = data.clusters.map(toHotspot);
+  const byCode = new Map(data.clusters.map((c) => [c.code, c]));
+  const inWindow = data.points.filter((p) => p.ageDays <= data.rule.windowDays);
+  const wardsWithPoints = data.wards.filter((w) => w.detections > 0).length;
+  const open = data.clusters.filter((c) => c.status === "open").length;
+  const top = data.wards[0];
+  const empty = data.livePointCount === 0;
+  const href = (hazardous: boolean) => (hazardous ? "/map?hazardous=1" : "/map");
+
+  const toggle = (active: boolean) =>
+    cn(
+      "border-2 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em]",
+      active ? "border-ink bg-ink text-paper" : "border-rule bg-paper-raised text-ink hover:border-ink",
+    );
+
+  const limits = [
+    `Every point is a real intake: ${data.livePointCount} geotagged in the last ${data.rule.windowDays} days. Submissions the gatekeeper rejected are not counted — a photo of a bottle is not e-waste pressure.`,
+    "Only intakes made with \"Use this device\u2019s location\" appear. An intake without a fix is still recorded and paid; it just adds no point here.",
+    "Points are snapped to a ~38 m cell before they leave the server. The map shows where pickups cluster, never the doorway a collector stood at.",
+    "Ward pressure is relative: detections per km², scaled so the busiest ward reads 100. It ranks wards against each other; it is not an absolute measure of dumping.",
+    "It reports where pickups happened, not where vans are now — nothing here is live vehicle tracking. The van round is a priority order, not a driving route.",
+    "A site is a routing suggestion for a ward officer, never an accusation about a place or a person.",
+  ];
 
   return (
     <div className="flex flex-col gap-10">
       <ScreenHeader
         eyebrow="Network · Municipal"
         title="Hotspot map"
-        lede="Every pickup is geotagged at intake. Clustered, those points tell a ward officer where the next collection van should stand."
+        lede="Every geotagged intake is filed to a BMC ward. Where four or more land in the same ~150 m cell within three weeks, that cell is a site — and a ward officer can see where the next collection van should stand."
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <Badge tone="ink">{heatmapStats.clustering}</Badge>
-            <Badge tone="lead">
-              Pilot ward · {heatmapStats.topWard}
+            <Badge tone={data.configured ? "verified" : "hazard"}>
+              {data.configured ? "Live intakes" : "No database"}
             </Badge>
+            <Badge tone="ink">Geohash grid · 150 m cell · {data.rule.windowDays}-day window</Badge>
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
-              {wards.length} wards indexed
+              {data.wards.length} BMC wards · {data.livePointCount} geotagged intake{data.livePointCount === 1 ? "" : "s"} in window
             </span>
           </div>
         }
       />
 
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">Items</span>
+          <Link href={href(false)} className={toggle(!hazardousOnly)}>
+            All
+          </Link>
+          <Link href={href(true)} className={toggle(hazardousOnly)}>
+            Hazardous only
+          </Link>
+        </div>
+        {data.error ? <Badge tone="hazard">Database error: {data.error}</Badge> : null}
+      </div>
+
       <StatGrid columns={4}>
         <Stat
-          label="Geotagged pickups"
-          value={heatmapStats.geotaggedPickups.toLocaleString("en-IN")}
-          note="Coordinates captured at intake, not typed in afterwards."
+          label="Detections in window"
+          value={inWindow.length.toLocaleString("en-IN")}
+          note="Geotagged at intake, gatekeeper-accepted."
         />
         <Stat
-          label="Wards covered"
-          value={String(heatmapStats.wardsCovered)}
-          note="Mumbai pilot wards with at least one verified pickup."
+          label="Wards with pickups"
+          value={`${wardsWithPoints}`}
+          unit={`/ ${data.wards.length}`}
+          note="BMC administrative wards, filed by boundary."
         />
         <Stat
-          label="Open hotspots"
-          value={String(heatmapStats.openHotspots)}
+          label="Open sites"
+          value={String(open)}
           emphasis
-          note="Clusters past the detection threshold and still waiting for a van."
+          note={`Cells with ${data.rule.minDetections}+ detections in ${data.rule.windowDays} days, no van yet.`}
         />
         <Stat
           label="Highest pressure"
-          value={String(topWard.density)}
-          unit="/100"
-          note={`${topWard.name} — ${topWard.pickups} pickups, ${topWard.flaggedSites} flagged sites.`}
+          value={top && top.detections > 0 ? `${top.perKm2}` : "—"}
+          unit={top && top.detections > 0 ? "/km²" : undefined}
+          note={top && top.detections > 0 ? `${top.name} — ${top.detections} detections.` : "No detections in the window."}
         />
       </StatGrid>
 
-      <section className="grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-        <div>
-          <SectionHeader
-            eyebrow="Ward pressure"
-            title="Where the load is concentrated"
-            note="Marker area scales with density, so a glance gives the ranking before you read a number."
-          />
-          <Surface className="mt-4 p-4">
-            <WardMap wards={wards} />
-          </Surface>
-        </div>
+      {empty ? (
+        <Panel tone="inset" eyebrow="No data yet" title="The map fills from real intakes">
+          <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
+            {data.configured
+              ? "No intake with a location has been recorded in the last three weeks, so there is nothing to cluster. "
+              : "There is no database connection, so no intakes can be read. "}
+            Submit an item from{" "}
+            <Link href="/intake" className="underline decoration-rule underline-offset-2 hover:decoration-copper">
+              Intake
+            </Link>{" "}
+            and tap <span className="font-medium">Use this device\u2019s location</span>: the point is filed to its BMC ward and
+            appears here. A site is drawn once four intakes land within ~150 m of each other inside{" "}
+            {data.rule.windowDays} days.
+          </p>
+        </Panel>
+      ) : null}
 
+      <section>
+        <SectionHeader
+          eyebrow="Map"
+          title="Where the load is concentrated"
+          note="Wards shaded by pressure, heat by recency, and every detected site drawn at its true radius. Click a site to inspect it."
+        />
+        <div className="mt-4">
+          <HeatmapExplorer data={data} canDispatch={canDispatch} />
+        </div>
+      </section>
+
+      <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div>
           <SectionHeader
             eyebrow="Ward ranking"
-            title="The same numbers, sortable"
-            note="The picture briefs a ward officer; this list is what they actually work from."
+            title="Pressure by ward"
+            note="Score is detections per km², relative to the busiest ward (= 100). The note under each bar is detections and detected sites."
           />
           <Surface className="mt-4 p-4">
-            <WardDensity wards={wards} />
+            <WardDensity wards={wards.filter((w) => w.pickups > 0).slice(0, 12)} />
           </Surface>
         </div>
-      </section>
-
-      <section>
-        <SectionHeader
-          eyebrow="Action"
-          title="Turn clusters into a round"
-          note="Cleared clusters drop off the round; the rest are ordered by detection count."
-        />
-        <div className="mt-4">
-          <VanRound hotspots={hotspots} wards={wards} />
+        <div>
+          <SectionHeader eyebrow="Action" title="Turn sites into a round" note="Cleared sites drop off; the rest are ordered by detection count." />
+          <div className="mt-4">
+            <VanRound
+              hotspots={hotspots}
+              wards={wards}
+              actions={(spot) => {
+                const cluster = byCode.get(spot.id);
+                return cluster ? <DispatchButtons cluster={cluster} canDispatch={canDispatch} /> : null;
+              }}
+              note={
+                <>
+                  {hotspots.filter((h) => h.status !== "cleared").length} sites on the round, ordered by detection count — a
+                  priority list, not a driving route.
+                </>
+              }
+            />
+          </div>
         </div>
       </section>
 
       <section>
         <SectionHeader
-          eyebrow="Clusters"
-          title="Every site on record"
-          note="Four or more detections inside one geohash group, in a rolling 21-day window."
+          eyebrow="Sites"
+          title="Every site in the window"
+          note="Codes are stable: a site keeps its code across recomputes, so a van assignment survives new detections."
         />
         <Surface className="mt-4 p-4">
           <HotspotTable hotspots={hotspots} wards={wards} />
@@ -116,7 +193,7 @@ export default async function HotspotMapPage() {
       </section>
 
       <section>
-        <Panel eyebrow="Limits" title="What this screen is not">
+        <Panel eyebrow="Limits" title="What this screen is, and is not">
           <ul className="flex flex-col gap-3">
             {limits.map((limit) => (
               <li key={limit} className="flex gap-3 text-sm leading-relaxed">
@@ -125,6 +202,9 @@ export default async function HotspotMapPage() {
               </li>
             ))}
           </ul>
+          <p className="mt-4 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
+            {WARD_SOURCE.attribution}. Basemap © OpenStreetMap contributors, served by OpenFreeMap.
+          </p>
         </Panel>
       </section>
     </div>

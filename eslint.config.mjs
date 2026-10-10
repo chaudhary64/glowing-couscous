@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     // Local agent state, already in .gitignore. ESLint does not read that file, so
     // the throwaway scripts kept here would otherwise fail every lint run.
     ".freebuff/**",
+    // MapLibre's minified worker, copied from node_modules by scripts/vendor-maplibre.mjs.
+    "public/vendor/**",
   ]),
 ]);
 

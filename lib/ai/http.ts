@@ -63,6 +63,34 @@ export interface AiRequestPayload {
   note?: string;
   declaredMassGrams?: number;
   durationSeconds?: number;
+  /** Where the submission was captured, when the device gave a fix. Intake only. */
+  location?: { latitude: number; longitude: number; accuracyM?: number };
+  /** The collector chosen on the intake screen (`collectors.id`). Intake only. */
+  collectorId?: string;
+}
+
+/**
+ * A location is optional and never a reason to refuse the request: a malformed or
+ * implausible one is dropped, not rejected. The collector came to be paid, and a
+ * handset that reported nonsense coordinates is not their fault. Accuracy worse than
+ * 2 km is a cell-tower guess, which would put a pickup in the wrong ward, so it is
+ * dropped too.
+ */
+function readLocation(value: unknown): AiRequestPayload["location"] {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const latitude = Number(raw.latitude);
+  const longitude = Number(raw.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return undefined;
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return undefined;
+  if (latitude === 0 && longitude === 0) return undefined;
+  const accuracy = Number(raw.accuracyM);
+  if (Number.isFinite(accuracy) && accuracy > 2_000) return undefined;
+  return {
+    latitude: Math.round(latitude * 1e6) / 1e6,
+    longitude: Math.round(longitude * 1e6) / 1e6,
+    accuracyM: Number.isFinite(accuracy) && accuracy >= 0 ? Math.round(accuracy) : undefined,
+  };
 }
 
 export function jsonResponse(value: unknown, status = 200): NextResponse {
@@ -215,6 +243,11 @@ export function readPayload(body: unknown): { ok: true; payload: AiRequestPayloa
       note: String(raw.note ?? "").trim().slice(0, MAX_NOTE_CHARS) || undefined,
       declaredMassGrams: declaredMass,
       durationSeconds: duration,
+      location: readLocation(raw.location),
+      collectorId:
+        typeof raw.collectorId === "string" && /^[0-9a-f-]{36}$/i.test(raw.collectorId)
+          ? raw.collectorId
+          : undefined,
     },
   };
 }

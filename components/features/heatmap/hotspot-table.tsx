@@ -81,9 +81,10 @@ export function HotspotTable({
       </Table>
 
       <p className="text-[12px] leading-relaxed text-ink-muted">
-        A cluster is a geohash cell group with four or more detections in a rolling
-        21-day window. Cleared clusters stay in the log so a returning dump is
-        visible as a regression rather than a new discovery.
+        A site is a group of touching ~150 m geohash cells, each with four or more
+        detections in a rolling 21-day window. A cleared site reopens on its own when a
+        new detection lands after the clearance, so a returning dump is not hidden by an
+        old decision.
       </p>
     </div>
   );

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/ui/card";
 import { hotspotStatusLabel, hotspotStatusTone } from "@/lib/tone";
@@ -15,9 +16,15 @@ import type { HotspotCluster, Ward } from "@/lib/types";
 export function VanRound({
   hotspots,
   wards,
+  actions,
+  note,
 }: {
   hotspots: HotspotCluster[];
   wards: Ward[];
+  /** Replaces the "send a van" link per stop — the live map passes dispatch buttons. */
+  actions?: (spot: HotspotCluster) => ReactNode;
+  /** Replaces the closing note, which otherwise describes the fixture route. */
+  note?: ReactNode;
 }) {
   const route = [...hotspots]
     .filter((spot) => spot.status !== "cleared")
@@ -80,22 +87,30 @@ export function VanRound({
                 </div>
               </div>
 
-              <Link
-                href="/pickups"
-                className="mt-2.5 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-              >
-                Send a van to {ward ? ward.name : "this cluster"} →
-              </Link>
+              {actions ? (
+                <div className="mt-2.5">{actions(spot)}</div>
+              ) : (
+                <Link
+                  href="/pickups"
+                  className="mt-2.5 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
+                >
+                  Send a van to {ward ? ward.name : "this cluster"} →
+                </Link>
+              )}
             </li>
           );
         })}
       </ol>
 
       <p className="border-t-2 border-ink px-4 py-3 text-[12px] leading-relaxed text-ink-soft">
-        {route.length} clusters on the round carrying {totalDetections} detections
-        between them, {unassigned} still with no van assigned. Stops are ordered by
-        detection count, not by driving distance — the fixtures carry no road
-        network, so this is a priority list rather than a routable sequence.
+        {note ?? (
+          <>
+            {route.length} clusters on the round carrying {totalDetections} detections
+            between them, {unassigned} still with no van assigned. Stops are ordered by
+            detection count, not by driving distance — the fixtures carry no road
+            network, so this is a priority list rather than a routable sequence.
+          </>
+        )}
       </p>
     </Panel>
   );

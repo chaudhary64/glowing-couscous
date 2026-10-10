@@ -287,19 +287,23 @@ export interface Pickup {
 
 /* -------------------------------------------------------------------- geo */
 
+/**
+ * A ward as the ranking and van-round components take it. Built from live data by
+ * `lib/heatmap/view.ts`; there is no fixture behind it.
+ */
 export interface Ward {
   id: string;
   name: string;
   city: string;
-  /** Normalised dumping pressure, 0–100. */
+  /** Relative pressure, 0–100: detections per km² against the busiest ward. */
   density: number;
+  /** Detections in the window. */
   pickups: number;
+  /** Detected sites in the ward. */
   flaggedSites: number;
-  /** Normalised map coordinates, 0–100 on both axes. */
-  x: number;
-  y: number;
 }
 
+/** A detected site, as the table and van round take it. Built by `lib/heatmap/view.ts`. */
 export interface HotspotCluster {
   id: string;
   label: string;

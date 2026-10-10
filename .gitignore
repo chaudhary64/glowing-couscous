@@ -53,3 +53,9 @@ amplog*.err
 buildlog.json
 buildlog.err
 dev.log
+
+# MapLibre worker, copied from node_modules by scripts/vendor-maplibre.mjs
+/public/vendor/
+
+# scratch for regenerating ward boundaries
+/.tmp-geo/

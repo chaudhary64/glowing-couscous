@@ -1,6 +1,7 @@
 import { analyseIntake } from "@/lib/ai/analyse";
 import { aiErrorResponse, authorizeUser, jsonResponse, readPayload } from "@/lib/ai/http";
 import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
+import { intakeRecordWarning, recordIntake } from "@/lib/intake/record";
 import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
 
 /**
@@ -82,10 +83,31 @@ export async function POST(request: Request) {
 
   const storage = kept?.storage ?? null;
   const records = kept?.records ?? null;
+
+  /**
+   * Filing the intake comes last, after both halves above have settled, because it
+   * needs both: the priced item from the model and the evidence row from the archive.
+   * It is the moment the submission becomes an `intakes` row — and, when the handset
+   * gave a fix, a geopoint the hotspot map can count. Like the archive, it reports and
+   * never fails the request (see `lib/intake/record.ts`).
+   */
+  const recorded = await recordIntake({
+    result: analysed.value,
+    storage,
+    records,
+    location: parsed.payload.location,
+    collectorId: parsed.payload.collectorId,
+    note: parsed.payload.note,
+  });
+
   const warnings = [...analysed.value.warnings];
-  for (const warning of [storage ? archiveWarning(storage) : null, records ? recordWarning(records) : null]) {
+  for (const warning of [
+    storage ? archiveWarning(storage) : null,
+    records ? recordWarning(records) : null,
+    intakeRecordWarning(recorded),
+  ]) {
     if (warning) warnings.push(warning);
   }
 
-  return jsonResponse({ ...analysed.value, warnings, storage, records });
+  return jsonResponse({ ...analysed.value, warnings, storage, records, recorded });
 }
