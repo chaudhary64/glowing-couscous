@@ -116,7 +116,7 @@ export default function LandingPage() {
         <HeroBoard className="absolute inset-0 -z-10 lg:left-[18%]" />
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(90deg,var(--color-ink)_0%,color-mix(in_oklab,var(--color-ink)_82%,transparent)_34%,transparent_62%)] max-lg:bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-ink)_70%,transparent)_0%,var(--color-ink)_75%)]"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(90deg,var(--color-ink)_0%,var(--color-ink)_34%,color-mix(in_oklab,var(--color-ink)_90%,transparent)_46%,color-mix(in_oklab,var(--color-ink)_45%,transparent)_58%,transparent_70%)] max-lg:bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-ink)_70%,transparent)_0%,var(--color-ink)_75%)]"
         />
         <div className="mx-auto grid w-full max-w-6xl gap-10 px-5 py-14 sm:px-8 lg:min-h-[calc(100dvh-56px)] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-center lg:gap-12 lg:py-20">
           <div className="min-w-0">

@@ -6,6 +6,7 @@ import { Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
 
 import { MODEL_URL } from "./board-model";
+import { boardMaterial } from "./board-material";
 import { explodeAttributes, footprint, partition } from "./board-parts";
 
 /**
@@ -60,7 +61,7 @@ type ExplodeShader = { uniforms: { uExplode: ExplodeUniform } };
  * Adds the per-part lift to a glTF material, keeping all of its PBR maps. The uniform is
  * read through the ref when the shader compiles, so one animated value drives both meshes.
  */
-function withExplode(material: THREE.MeshStandardMaterial, uniform: RefObject<ExplodeUniform>) {
+function withExplode(material: THREE.MeshPhysicalMaterial, uniform: RefObject<ExplodeUniform>) {
   material.onBeforeCompile = (shader) => {
     (shader as unknown as ExplodeShader).uniforms.uExplode = uniform.current;
     shader.vertexShader = shader.vertexShader
@@ -84,7 +85,7 @@ transformed += aOffset * (eLocal * eLocal * (3.0 - 2.0 * eLocal));`,
 
 function Board({ progress, live }: { progress: RefObject<number>; live: boolean }) {
   const { scene } = useGLTF(MODEL_URL);
-  const { camera, invalidate } = useThree();
+  const { camera, gl, invalidate } = useThree();
   const explode = useRef<ExplodeUniform>({ value: 0 });
   const look = useRef(new THREE.Vector3());
   const ready = useRef(false);
@@ -103,7 +104,8 @@ function Board({ progress, live }: { progress: RefObject<number>; live: boolean 
     const partitions = arrays.map((a) => partition(a));
     const board = footprint(partitions.map((p) => p.parts));
 
-    const materials: THREE.MeshStandardMaterial[] = [];
+    const materials: THREE.MeshPhysicalMaterial[] = [];
+    const maxAniso = gl.capabilities.getMaxAnisotropy();
     meshes.forEach((mesh, i) => {
       const geometry = mesh.geometry.clone();
       const { offset: o, delay } = explodeAttributes(arrays[i], partitions[i], board);
@@ -111,14 +113,7 @@ function Board({ progress, live }: { progress: RefObject<number>; live: boolean 
       geometry.setAttribute("aDelay", new THREE.BufferAttribute(delay, 1));
       mesh.geometry = geometry;
 
-      const material = (mesh.material as THREE.MeshStandardMaterial).clone();
-      // The PCB ships as alpha *blend*, which sorts badly against its own parts once
-      // they separate. A cut-out is exact for a board with drilled holes.
-      if (material.transparent) {
-        material.transparent = false;
-        material.alphaTest = 0.5;
-        material.depthWrite = true;
-      }
+      const material = boardMaterial(mesh.material as THREE.MeshStandardMaterial, maxAniso);
       material.envMapIntensity = 1.1;
       materials.push(material);
       mesh.material = material;
@@ -129,7 +124,7 @@ function Board({ progress, live }: { progress: RefObject<number>; live: boolean 
 
     // Sit the board on the ground at the origin.
     return { object: root, offset: [-board.centre[0], -board.floor, -board.centre[1]] as const, materials };
-  }, [scene]);
+  }, [scene, gl]);
 
   // Hooked up after render: the shader reads the animated value through the ref.
   useEffect(() => {

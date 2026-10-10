@@ -31,9 +31,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
+    // Browser extensions write attributes onto <html> before React loads (e.g. a
+    // focus extension's id). This silences that one element's attribute check only;
+    // everything inside it is still verified.
     <html
       lang="en"
       className={`${anton.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="min-h-full">{children}</body>
     </html>

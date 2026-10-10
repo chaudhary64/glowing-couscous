@@ -27,11 +27,13 @@
     "@aws-sdk/s3-request-presigner": "^3.1148.0",
     "@react-three/drei": "10.7.9",
     "@react-three/fiber": "9.8.1",
+    "@react-three/postprocessing": "3.1.2",
     "drizzle-orm": "^0.45.4",
     "jose": "^6.2.12",
     "maplibre-gl": "6.11.2",
     "next": "16.4.0",
     "pg": "^8.23.1",
+    "postprocessing": "6.39.5",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "three": "0.186.1"
