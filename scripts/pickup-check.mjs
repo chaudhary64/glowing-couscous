@@ -26,6 +26,8 @@
  *                       read from DynamoDB — so the check cannot agree with a bug
  *   idempotence         settling twice returns the first note, and a second settle with
  *                       a *different* mass still returns it unchanged
+ *   the handoff PIN     settlement needs the PIN routing returned; a wrong one is a 403
+ *                       with the attempts left, and never settles
  *
  * It exits non-zero on the first thing that is wrong, like `scripts/s3-check.mts`, and
  * it cleans up in a `finally` so a failure does not leave a probe user behind.
@@ -41,7 +43,7 @@ import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { FACILITIES, STREAMS } from "../aws/pickup/catalogue.mjs";
 import { buildNote, priceLoad } from "../aws/pickup/credits.mjs";
-import { deleteCreditNote, deletePickup } from "../aws/pickup/repository.mjs";
+import { deleteCreditNote, deleteEvents, deletePickup } from "../aws/pickup/repository.mjs";
 
 const API = (process.env.PICKUP_API_URL ?? "").replace(/\/+$/, "");
 const REGION = process.env.PICKUP_REGION ?? process.env.AWS_REGION ?? "ap-south-1";
@@ -405,9 +407,21 @@ try {
   section("Settlement and the credit note");
   const pickupId = load.pickupId;
   const weighedMassG = 2380;
+  const pin = hazardous.body.handoff?.pin;
+  check("routing returned a 4-digit handoff PIN", /^\d{4}$/.test(pin ?? ""), String(pin));
+  const wrongPin = String((Number(pin) + 1) % 10000).padStart(4, "0");
+  const refusedPin = await call("POST", `/pickups/${pickupId}/settle`, {
+    token,
+    body: { weighedMassG, settledVia: "upi", pin: wrongPin },
+  });
+  check(
+    "a wrong PIN is a 403 with the attempts left, and does not settle",
+    refusedPin.status === 403 && refusedPin.body?.error?.code === "pin_mismatch" && refusedPin.body.error.attemptsRemaining === 4,
+    `${refusedPin.status} ${JSON.stringify(refusedPin.body)?.slice(0, 200)}`,
+  );
   const settled = await call("POST", `/pickups/${pickupId}/settle`, {
     token,
-    body: { weighedMassG, settledVia: "upi" },
+    body: { weighedMassG, settledVia: "upi", pin },
   });
   check("settlement succeeds", settled.status === 200, `${settled.status} ${JSON.stringify(settled.body)?.slice(0, 300)}`);
   const note = settled.body.creditNote;
@@ -457,7 +471,7 @@ try {
   section("Settling twice");
   const again = await call("POST", `/pickups/${pickupId}/settle`, {
     token,
-    body: { weighedMassG: weighedMassG + 9000, settledVia: "cash" },
+    body: { weighedMassG: weighedMassG + 9000, settledVia: "cash", pin },
   });
   check(
     "a second settlement is reported, not refused",
@@ -516,7 +530,7 @@ try {
 
   const missingSettle = await call("POST", "/pickups/PU-2026-9999/settle", {
     token,
-    body: { weighedMassG: 100 },
+    body: { weighedMassG: 100, pin: "0000" },
   });
   check(
     "settling an unknown load is a 404 as well",
@@ -570,8 +584,9 @@ try {
   }
   for (const pickupId of created.pickups) {
     try {
+      await deleteEvents(pickupId);
       await deletePickup(pickupId);
-      console.log(`  removed pickup ${pickupId}`);
+      console.log(`  removed pickup ${pickupId} and its events`);
     } catch (error) {
       console.error(`  could not remove pickup ${pickupId}: ${error.message}`);
       process.exitCode = 1;
