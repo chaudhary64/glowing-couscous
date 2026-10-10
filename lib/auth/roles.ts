@@ -80,8 +80,8 @@ export type Guard = {
 };
 
 /**
- * Who may open what. `/` and `/doc` are absent on purpose: the landing page and the
- * feature write-ups are the public half of this project, meant to be read by anyone.
+ * Who may open what. `/` is absent on purpose: the landing page is the public half of
+ * this project, meant to be read by anyone.
  * The dashboard is gated at `/dashboard` so the two never share a path.
  */
 export const GUARDS: readonly Guard[] = [
@@ -201,7 +201,6 @@ export const isAuthPage = (pathname: string): boolean =>
 export const isPublicPath = (pathname: string): boolean => {
   const path = normalise(pathname);
   if (path === "/") return true;
-  if (path === "/doc" || path.startsWith("/doc/")) return true;
   return isAuthPage(path);
 };
 

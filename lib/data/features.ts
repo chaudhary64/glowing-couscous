@@ -5,16 +5,13 @@ import type { Feature, FeatureSlug } from "@/lib/types";
  * pipeline: identify a thing, price it, police it, move it, map the pressure,
  * then the channel that comes later.
  *
- * Each capability has two addresses: `productHref` is the working screen an
- * operator uses, `docHref` is the write-up explaining why it is built that way.
- * `rank` is the priority from docs/ecoepr-track03.md — a different axis from
- * build order. The nav shows both, the doc index sorts by rank.
+ * `productHref` is the working screen an operator uses, and `rank` is the
+ * priority order — a different axis from build order.
  */
 export const features: Feature[] = [
   {
     rank: 2,
     slug: "intake",
-    docHref: "/doc/features/intake",
     productHref: "/intake",
     productName: "New intake",
     name: "Multi-modal identification",
@@ -30,7 +27,6 @@ export const features: Feature[] = [
   {
     rank: 1,
     slug: "valuation",
-    docHref: "/doc/features/valuation",
     productHref: "/valuation",
     productName: "Valuations",
     name: "Metal & EPR valuation",
@@ -46,7 +42,6 @@ export const features: Feature[] = [
   {
     rank: 3,
     slug: "gatekeeper",
-    docHref: "/doc/features/gatekeeper",
     productHref: "/validation",
     productName: "Validation queue",
     name: "Fraud-prevention gatekeeper",
@@ -62,7 +57,6 @@ export const features: Feature[] = [
   {
     rank: 4,
     slug: "pickup",
-    docHref: "/doc/features/pickup",
     productHref: "/pickups",
     productName: "Pickups",
     name: "Smart pickup & digital credit",
@@ -78,7 +72,6 @@ export const features: Feature[] = [
   {
     rank: 5,
     slug: "heatmap",
-    docHref: "/doc/features/heatmap",
     productHref: "/map",
     productName: "Hotspot map",
     name: "Spatial heatmapping",
@@ -94,7 +87,6 @@ export const features: Feature[] = [
   {
     rank: 6,
     slug: "roadmap",
-    docHref: "/doc/features/roadmap",
     // Deliberately no product screen: this capability is deferred by choice.
     productHref: null,
     productName: null,

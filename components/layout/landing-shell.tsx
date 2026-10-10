@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
  *
  * The landing is the one page a brand buyer reaches before they hold an account, so
  * its nav has a different job from the product rail: it points at the pitch (the two
- * in-page sections), the public write-ups, and the two ways in. There is no session
+ * in-page sections), and the two ways in. There is no session
  * read here on purpose — the page is static, and the same CTAs are correct whether or
  * not someone is already signed in.
  */
@@ -19,14 +19,6 @@ const footerLinks: { heading: string; links: { label: string; href: string }[] }
       { label: "Open the app", href: "/dashboard" },
       { label: "Sign in", href: "/login" },
       { label: "Create an account", href: "/signup" },
-    ],
-  },
-  {
-    heading: "Read",
-    links: [
-      { label: "Feature write-ups", href: "/doc" },
-      { label: "Valuation", href: "/doc/features/valuation" },
-      { label: "Gatekeeper", href: "/doc/features/gatekeeper" },
     ],
   },
 ];
@@ -65,12 +57,6 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
             >
               How it works
             </a>
-            <Link
-              href="/doc"
-              className="font-mono text-[11px] uppercase tracking-[0.14em] text-paper/70 underline decoration-paper/30 underline-offset-4 hover:text-paper hover:decoration-copper"
-            >
-              Documentation
-            </Link>
             <Link
               href="/login"
               className="font-mono text-[11px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-4 hover:decoration-copper"

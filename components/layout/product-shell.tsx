@@ -1,11 +1,8 @@
-import Link from "next/link";
 import { connection } from "next/server";
 
 import { ProductNav } from "@/components/layout/product-nav";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { roleLabel } from "@/lib/auth/roles";
-import { intakeStats } from "@/lib/data/intake";
-import { logisticsStats } from "@/lib/data/operations";
 
 /**
  * Shell for the working app. Same ink rail and square rules as the docs, but the
@@ -52,11 +49,6 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
             <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
               Mumbai + Pune pilot
             </span>
-            <span className="hidden h-3 w-px bg-rule sm:block" />
-            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
-              {intakeStats.today} intakes today · {logisticsStats.notesIssued} credit
-              notes
-            </span>
 
             <span className="ml-auto inline-flex items-center gap-2 border border-review/40 bg-review-tint px-2 py-0.5">
               <span aria-hidden className="size-1.5 bg-review" />
@@ -95,14 +87,7 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
             <p className="max-w-3xl text-[12px] leading-relaxed text-ink-muted">
               Every figure on these screens is a fixture, not a live reading. Credits
               are simulated, this is not a payout system, and we route to
-              CPCB-registered recyclers rather than processing waste ourselves.{" "}
-              <Link
-                href="/doc"
-                className="underline decoration-rule underline-offset-2 hover:decoration-copper"
-              >
-                Read how each capability was built
-              </Link>
-              .
+              CPCB-registered recyclers rather than processing waste ourselves.
             </p>
           </div>
         </footer>

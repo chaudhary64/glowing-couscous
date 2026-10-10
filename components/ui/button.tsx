@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
-import type { AuthHref, DocHref, ProductHref } from "@/lib/types";
+import type { AuthHref, ProductHref } from "@/lib/types";
 
 /**
  * Square, mono, uppercase. Actions invert on hover and never round a corner —
@@ -53,8 +53,8 @@ export function ButtonLink({
   className,
   title,
 }: {
-  /** Product, docs, or the sign-in flow — the landing page links to all three. */
-  href: ProductHref | DocHref | AuthHref;
+  /** A working screen or the sign-in flow — the two places a CTA can point. */
+  href: ProductHref | AuthHref;
   children: React.ReactNode;
   variant?: ButtonVariant;
   className?: string;

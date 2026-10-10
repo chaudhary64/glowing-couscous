@@ -36,9 +36,6 @@ export type ProductHref =
   | "/recyclers"
   | "/evidence";
 
-/** The feature write-ups. */
-export type DocHref = "/doc" | `/doc/features/${FeatureSlug}`;
-
 /**
  * The sign-in flow. Public: these are the pages a landing CTA is allowed to send a
  * brand buyer to, and the only routes that render before a session exists.
@@ -56,8 +53,6 @@ export type FeatureStatus = "core" | "supporting" | "deferred";
 export interface Feature {
   rank: Rank;
   slug: FeatureSlug;
-  /** Where the capability is written up. */
-  docHref: DocHref;
   /**
    * The working screen that delivers the capability, or null when the capability
    * is deferred and has no product surface yet (WhatsApp intake).

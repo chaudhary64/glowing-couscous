@@ -12,22 +12,6 @@ test.describe("public pages", () => {
     await expect(page.locator('a[href="/login"]').first()).toBeVisible();
   });
 
-  for (const path of [
-    "/doc",
-    "/doc/features/valuation",
-    "/doc/features/intake",
-    "/doc/features/gatekeeper",
-    "/doc/features/pickup",
-    "/doc/features/heatmap",
-    "/doc/features/roadmap",
-  ]) {
-    test(`${path} is public`, async ({ page }) => {
-      const response = await page.goto(path);
-      expect(response?.status()).toBe(200);
-      await expect(page).toHaveURL(new RegExp(`${path.replace(/\//g, "\\/")}$`));
-      await expect(page.locator("h1").first()).toBeVisible();
-    });
-  }
 });
 
 test.describe("signed out", () => {

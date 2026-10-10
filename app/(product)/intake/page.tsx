@@ -188,18 +188,6 @@ export default async function IntakePage() {
             </ol>
           </Panel>
 
-          <Panel eyebrow="Step back" title="Written up in detail">
-            <p className="text-sm leading-relaxed text-ink-soft">
-              The ranking, the fraud controls and why vernacular voice matters are
-              argued in the feature write-up.
-            </p>
-            <Link
-              href="/doc/features/intake"
-              className="mt-4 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-            >
-              Read the intake write-up →
-            </Link>
-          </Panel>
         </aside>
       </div>
 

@@ -80,14 +80,6 @@ export async function AuthShell({ children }: { children: React.ReactNode }) {
           </div>
         </dl>
 
-        <div className="mt-auto hidden border-t border-paper/20 px-6 py-5 lg:block">
-          <Link
-            href="/doc"
-            className="font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-          >
-            Feature documentation →
-          </Link>
-        </div>
       </aside>
 
       <div className="flex min-w-0 flex-col">

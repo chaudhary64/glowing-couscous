@@ -77,14 +77,7 @@ export default async function LoginPage({
         <p className="mt-2 max-w-md text-[12px] leading-relaxed text-ink-muted">
           Accounts are created here, but a role is not. A new account lands with no
           group, sees nothing but this refusal screen, and is given a role from the
-          Cognito console.{" "}
-          <a
-            href="/doc"
-            className="underline decoration-rule underline-offset-2 hover:decoration-copper"
-          >
-            The access matrix is written up here
-          </a>
-          .
+          Cognito console.
         </p>
       </div>
     </div>

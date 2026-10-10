@@ -155,12 +155,6 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
           </button>
         </form>
 
-        <Link
-          href="/doc"
-          className="mt-4 block border-t border-paper/20 pt-4 font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-        >
-          Feature documentation →
-        </Link>
       </div>
     </nav>
   );

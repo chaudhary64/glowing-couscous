@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
@@ -57,20 +56,14 @@ const gaps = [
   {
     title: "The collection is invisible",
     body: "Over 90% of e-waste is bought by informal collectors. Nothing is geotagged, weighed or receipted, so the tonnage never reaches a compliance file.",
-    href: "/doc/features/intake" as const,
-    linkLabel: "Multi-modal identification",
   },
   {
     title: "Any photo can claim a credit",
     body: "Without a gate in front of payout, a picture of a plastic bottle earns the same note as a laptop mainboard. That is a gameable system, not a compliance system.",
-    href: "/doc/features/gatekeeper" as const,
-    linkLabel: "Fraud-prevention gatekeeper",
   },
   {
     title: "Rates rest on trust",
     body: "Ask a language model for a scrap price and it invents a rupee figure no auditor can reconstruct. A valuation you cannot check line by line is theatre.",
-    href: "/doc/features/valuation" as const,
-    linkLabel: "Metal & EPR valuation",
   },
 ];
 
@@ -105,13 +98,10 @@ export default function LandingPage() {
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <ButtonLink href="/dashboard">Open the app</ButtonLink>
-              <ButtonLink href="/doc" variant="secondary">
-                Read the feature write-ups
-              </ButtonLink>
             </div>
 
             <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
-              Documentation is public · the working screens need an account
+              The working screens need an account
             </p>
           </div>
 
@@ -195,12 +185,6 @@ export default function LandingPage() {
                 <p className="mt-2 flex-1 text-[13px] leading-relaxed text-ink-soft">
                   {gap.body}
                 </p>
-                <Link
-                  href={gap.href}
-                  className="mt-4 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-                >
-                  {gap.linkLabel} →
-                </Link>
               </li>
             ))}
           </ul>
@@ -228,12 +212,6 @@ export default function LandingPage() {
                 <p className="mt-2 flex-1 text-[13px] leading-snug text-ink-soft">
                   {feature.tagline}
                 </p>
-                <Link
-                  href={feature.docHref}
-                  className="mt-4 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-                >
-                  Read the write-up →
-                </Link>
               </li>
             ))}
           </ol>
@@ -371,20 +349,13 @@ export default function LandingPage() {
           </h2>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-paper/70">
             Intake, valuation, the gatekeeper and pickup routing all run against a live
-            multimodal model. Sign in with a demo account to work the queue, or read the
-            write-ups first — they are public.
+            multimodal model. Sign in with a demo account to work the queue.
           </p>
 
           <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3">
             <ButtonLink href="/dashboard" variant="inverse">
               Open the app
             </ButtonLink>
-            <Link
-              href="/doc"
-              className="font-mono text-[11px] uppercase tracking-[0.14em] text-paper underline decoration-paper/40 underline-offset-4 hover:decoration-copper"
-            >
-              Read the documentation
-            </Link>
           </div>
         </div>
       </section>
