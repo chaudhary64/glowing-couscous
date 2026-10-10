@@ -823,6 +823,14 @@ body {
 /* ------------------------------------------------------------- 3D UI layer
    The page is a set of objects in the world, not a flat sheet. */
 
+/* 3D transforms (a panel rising in perspective, a tilting card) can project past the
+   viewport's edge for a moment. Clipped on <main> rather than <body>: overflow set on
+   body is handed to the viewport and stops applying to body itself. clip, unlike
+   hidden, adds no scroll container, so sticky headers keep working. */
+main {
+  overflow-x: clip;
+}
+
 /* Glass panels rise into place as they scroll in: tilted back and lower, then level —
    cards lifting off the board. Scroll-driven, so no script runs per frame; where the
    browser has no view timelines they simply sit still. Results that arrive on screen

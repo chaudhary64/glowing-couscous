@@ -3,6 +3,8 @@
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { useLayoutEffect, useRef } from "react";
+
+import { WorldToggle } from "@/components/world/world-toggle";
 import { productNav } from "@/lib/data/product-nav";
 import { pickups } from "@/lib/data/operations";
 import { validationQueue } from "@/lib/data/model";
@@ -123,7 +125,9 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
                         active
                           ? // On the rail the sliding block is the background; the label turns dark
                             // only as the block arrives under it, never dark-on-dark mid-slide.
-                            "bg-paper text-ink lg:bg-transparent lg:text-paper lg:delay-200"
+                            // On phones the active tab is copper glass with a lit underline,
+                            // matching the rail's sliding block on desktop.
+                            "bg-[rgb(232_137_77/0.16)] text-paper shadow-[inset_0_-2px_0_#e8894d] lg:bg-transparent lg:shadow-none lg:delay-200"
                           : "text-paper/80 hover:bg-paper/10 hover:text-paper",
                       ].join(" ")}
                     >
@@ -176,14 +180,17 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
           </p>
         ) : null}
 
-        <form method="post" action="/api/auth/sign-out" className="mt-4">
-          <button
-            type="submit"
-            className="font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-          >
-            Sign out
-          </button>
-        </form>
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+          <form method="post" action="/api/auth/sign-out">
+            <button
+              type="submit"
+              className="font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
+            >
+              Sign out
+            </button>
+          </form>
+          <WorldToggle />
+        </div>
 
         <Link
           href="/doc"

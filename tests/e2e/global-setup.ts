@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { request, type FullConfig } from "@playwright/test";
 
@@ -12,6 +13,12 @@ import { ACCOUNTS, password, stateFile, type RoleName } from "./accounts";
 export default async function globalSetup(config: FullConfig) {
   const baseURL = config.projects[0].use.baseURL as string;
   mkdirSync("tests/e2e/.auth", { recursive: true });
+
+  // Start the pickup tests on an empty day in DynamoDB Local: each handoff routes 37.5 kg
+  // to a line licensed for 4,000 kg a day, so ~15 full runs would otherwise fill it and
+  // the router would (rightly) refuse the next load. The script refuses non-local
+  // endpoints, so the deployed tables can never be touched from here.
+  execFileSync(process.execPath, ["scripts/pickup-local-reset.mjs"], { stdio: "inherit" });
 
   // Every saved state starts as a returning visitor who has already answered the
   // cookie and location prompt, so the banner does not sit over the screen under test.

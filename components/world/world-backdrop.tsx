@@ -10,7 +10,10 @@ import type { WorldTier } from "./world-scene";
  * Mounts the 3D world behind every page (root layout), and decides how much of it a
  * device gets:
  *
- *   no WebGL         nothing — the page stands on the CSS ground in globals.css
+ *   no WebGL, or WebGL only in software (SwiftShader, llvmpipe, a VM's basic
+ *                    renderer — measured at 1 fps here, against 60 on the GPU):
+ *                    nothing; the page stands on the CSS ground in globals.css
+ *   switched off     the sidebar's "3D world" switch (cookie `ecoepr.world=off`)
  *   reduced motion   one still frame at the page's station
  *   phone / tablet   one still frame ("low"): a lit board, no running loop
  *   desktop          the live world; "high" with bloom on 8+ cores, "mid" without
@@ -26,26 +29,53 @@ type Mode = "off" | `${WorldTier}:${"live" | "still"}`;
 
 const QUERIES = ["(prefers-reduced-motion: reduce)", "(pointer: coarse)", "(max-width: 900px)"];
 
+/** Fired by the 3D world switch (world-toggle.tsx) after it writes the cookie. */
+export const WORLD_EVENT = "ecoepr:world";
+export const WORLD_COOKIE = "ecoepr.world";
+
 function subscribe(notify: () => void) {
   const lists = QUERIES.map((query) => window.matchMedia(query));
   lists.forEach((list) => list.addEventListener("change", notify));
-  return () => lists.forEach((list) => list.removeEventListener("change", notify));
+  window.addEventListener(WORLD_EVENT, notify);
+  return () => {
+    lists.forEach((list) => list.removeEventListener("change", notify));
+    window.removeEventListener(WORLD_EVENT, notify);
+  };
 }
 
-let webgl: boolean | undefined;
-function hasWebGL(): boolean {
-  if (webgl === undefined) {
+export function worldSwitchedOff(): boolean {
+  return document.cookie.split("; ").includes(`${WORLD_COOKIE}=off`);
+}
+
+const SOFTWARE = /swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/i;
+
+let gpu: boolean | undefined;
+/**
+ * WebGL on real graphics hardware. `failIfMajorPerformanceCaveat` makes the browser
+ * refuse a context it would have to emulate in software; the renderer string catches
+ * the browsers that hand one out anyway.
+ */
+function hasGpuWebGL(): boolean {
+  if (gpu === undefined) {
     try {
-      webgl = Boolean(document.createElement("canvas").getContext("webgl2"));
+      const gl = document.createElement("canvas").getContext("webgl2", { failIfMajorPerformanceCaveat: true });
+      if (!gl) {
+        gpu = false;
+      } else {
+        const info = gl.getExtension("WEBGL_debug_renderer_info");
+        const renderer = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "";
+        gpu = !SOFTWARE.test(renderer);
+        gl.getExtension("WEBGL_lose_context")?.loseContext();
+      }
     } catch {
-      webgl = false;
+      gpu = false;
     }
   }
-  return webgl;
+  return gpu;
 }
 
 function snapshot(): Mode {
-  if (!hasWebGL()) return "off";
+  if (worldSwitchedOff() || !hasGpuWebGL()) return "off";
   const [reduced, coarse, narrow] = QUERIES.map((query) => window.matchMedia(query).matches);
   if (coarse || narrow) return "low:still";
   const cores = navigator.hardwareConcurrency ?? 4;
