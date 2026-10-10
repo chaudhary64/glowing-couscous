@@ -1,3 +1,5 @@
+import { ViewTransition } from "react";
+
 import { AuthShell } from "@/components/layout/auth-shell";
 
 /**
@@ -7,6 +9,13 @@ import { AuthShell } from "@/components/layout/auth-shell";
  */
 export const instant = false;
 
+// Crossing into this section swaps the whole layout, and React only animates a
+// <ViewTransition> that is the outermost thing added or removed, so the shell itself
+// carries the tear. Moves within the section are the template's.
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  return <AuthShell>{children}</AuthShell>;
+  return (
+    <ViewTransition enter="print" exit="tear" default="none">
+      <AuthShell>{children}</AuthShell>
+    </ViewTransition>
+  );
 }

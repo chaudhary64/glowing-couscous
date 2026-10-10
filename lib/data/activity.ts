@@ -130,15 +130,6 @@ export const needsAttention: AttentionItem[] = [
     tone: "review",
   },
   {
-    id: "queue-hotspots",
-    label: "Hotspots with no van assigned",
-    count: 2,
-    detail:
-      "Kurla scrap lane and Andheri back plots. Both crossed four detections this week.",
-    href: "/map",
-    tone: "hazard",
-  },
-  {
     id: "queue-pickups",
     label: "Loads moving right now",
     count: 2,

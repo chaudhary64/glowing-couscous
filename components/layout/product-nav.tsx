@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { productNav } from "@/lib/data/product-nav";
-import { hotspots } from "@/lib/data/wards";
 import { pickups } from "@/lib/data/operations";
 import { validationQueue } from "@/lib/data/model";
 import { canOpen, roleLabel, type Role } from "@/lib/auth/roles";
@@ -19,7 +18,6 @@ const workCounts: Partial<Record<ProductHref, number>> = {
   "/pickups": pickups.filter(
     (pickup) => pickup.status === "in-transit" || pickup.status === "assigned",
   ).length,
-  "/map": hotspots.filter((spot) => spot.status === "open").length,
 };
 
 export interface NavViewer {

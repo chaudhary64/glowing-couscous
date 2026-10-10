@@ -1,4 +1,5 @@
 import { DocNav } from "@/components/layout/doc-nav";
+import { ScannerCursor } from "@/components/motion/scanner-cursor";
 import { TopBar } from "@/components/layout/top-bar";
 
 /** Shell for the feature write-ups under /doc. */
@@ -27,6 +28,7 @@ export function DocShell({ children }: { children: React.ReactNode }) {
           </div>
         </footer>
       </div>
+      <ScannerCursor />
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
 import { needsAttention } from "@/lib/data/activity";
 import { collectors, pickups } from "@/lib/data/operations";
-import { hotspots, wards } from "@/lib/data/wards";
+import { getHeatmap } from "@/lib/heatmap/store";
 import { formatInr, formatPct, formatTimestamp } from "@/lib/format";
 import { listRecentEvents, storedCounts } from "@/lib/records/queues";
 import { activityLabel, activityTone, pickupLabel, pickupTone } from "@/lib/tone";
@@ -30,8 +30,10 @@ export const instant = false;
  * - **Pickups and credit notes.** Feature 04, Smart Pickup & Digital Credit, routes to a
  *   recycler and mints a credit note, and nothing writes `pickups`, `credit_notes` or
  *   `ledger_entries`. The "Loads in play" board is the sample board from `lib/data`.
- * - **Ward pressure and collector standing.** Hotspot clusters and the roster have no
- *   writer either. Both panels say so in their own notes.
+ * - **Collector standing.** The roster has no writer yet; the panel says so.
+ *
+ * Ward pressure and open hotspots *are* counted: they come from the same
+ * `getHeatmap()` call `/map` makes, over geotagged intakes.
  *
  * Saying that plainly is the point. A dashboard that mixes counted rows with authored
  * ones and calls them all "today" is a dashboard nobody can trust twice.
@@ -40,8 +42,6 @@ export const instant = false;
 const topCollectors = [...collectors]
   .sort((a, b) => b.creditsInr - a.creditsInr)
   .slice(0, 4);
-
-const pressureWards = [...wards].sort((a, b) => b.density - a.density).slice(0, 4);
 
 /** Loads an operator can still act on today. Sample data — see the note on the board. */
 const activePickups = pickups.filter(
@@ -53,10 +53,14 @@ const sampleAttention = needsAttention.filter((item) => item.id !== "queue-valid
 export default async function DashboardPage() {
   await requireAccess("/dashboard");
 
-  const [snapshot, events] = await Promise.all([
+  const [snapshot, events, heat] = await Promise.all([
     storedCounts(),
     listRecentEvents(8),
+    getHeatmap(),
   ]);
+  const openSites = heat.clusters.filter((c) => c.status === "open");
+  // Across India, by district: the busiest four, each with its state.
+  const pressureWards = heat.districts.slice(0, 4);
   const counts = snapshot.counts;
   const configured = snapshot.configured;
 
@@ -149,7 +153,7 @@ export default async function DashboardPage() {
         <SectionHeader
           eyebrow="Work queue"
           title="Needs attention"
-          note="The first two are counted from the record. The rest depend on pickups, credit notes and hotspots, which nothing writes yet — they are sample values and say so."
+          note="Decisions and hotspots are counted from the record. The rest depend on pickups and credit notes, which nothing writes yet — they are sample values and say so."
         />
 
         <ul className="mt-5 grid gap-px border border-rule bg-rule sm:grid-cols-2 lg:grid-cols-4">
@@ -202,6 +206,34 @@ export default async function DashboardPage() {
             </p>
             <Link
               href="/validation"
+              className="mt-3 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
+            >
+              Open →
+            </Link>
+          </li>
+
+          <li className="bg-paper-raised p-4">
+            <div className="flex items-start justify-between gap-3">
+              <Dot tone="hazard" />
+              <span className="font-display text-2xl leading-none tracking-tight text-copper">
+                {heat.configured ? openSites.length : "—"}
+              </span>
+            </div>
+            <h3 className="mt-3 text-sm font-medium leading-snug">
+              <Link href="/map" className="hover:text-copper">
+                Hotspots with no van assigned
+              </Link>
+            </h3>
+            <p className="mt-1.5 text-[12px] leading-snug text-ink-muted">
+              {openSites.length
+                ? `${openSites.slice(0, 2).map((site) => site.label).join(" and ")}${openSites.length > 2 ? ` and ${openSites.length - 2} more` : ""}.`
+                : `No site has four geotagged intakes within ~150 m in the last ${heat.rule.windowDays} days.`}
+            </p>
+            <p className="mt-3 flex items-center gap-2">
+              <Badge tone="verified">Counted</Badge>
+            </p>
+            <Link
+              href="/map"
               className="mt-3 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
             >
               Open →
@@ -344,7 +376,7 @@ export default async function DashboardPage() {
           </section>
 
           <Panel
-            eyebrow="Sample data · Ward pressure"
+            eyebrow="District pressure · India"
             title="Where to send the next van"
             actions={
               <Link
@@ -356,22 +388,25 @@ export default async function DashboardPage() {
             }
           >
             <div className="flex flex-col">
+              {pressureWards.length === 0 ? (
+                <p className="text-[13px] leading-relaxed text-ink-soft">
+                  No geotagged intakes in the last {heat.rule.windowDays} days yet.
+                </p>
+              ) : null}
               {pressureWards.map((ward) => (
                 <MeterRow
-                  key={ward.id}
-                  label={`${ward.name} · ${ward.flaggedSites} flagged`}
-                  value={ward.density / 100}
-                  tone={
-                    ward.density >= 80 ? "hazard" : ward.density >= 60 ? "copper" : "lead"
-                  }
-                  display={`${ward.density}/100`}
+                  key={ward.code}
+                  label={`${ward.name}${ward.state ? `, ${ward.state}` : ""} · ${ward.detections} detection${ward.detections === 1 ? "" : "s"}`}
+                  value={ward.pressure / 100}
+                  tone={ward.pressure >= 80 ? "hazard" : ward.pressure >= 60 ? "copper" : "lead"}
+                  display={`${ward.pressure}/100`}
                 />
               ))}
             </div>
             <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-              Hotspot clusters have no writer — feature 05 — so this list is the authored
-              sample. {hotspots.filter((spot) => spot.status === "open").length} clusters
-              are shown as open with no van assigned.
+              Counted from geotagged intakes across India. Pressure is detections per km²,
+              relative to the busiest district. {openSites.length} site{openSites.length === 1 ? " is" : "s are"} open
+              with no van assigned.
             </p>
           </Panel>
 

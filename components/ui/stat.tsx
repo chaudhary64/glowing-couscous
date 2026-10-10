@@ -28,6 +28,7 @@ export function Stat({
       </p>
       <p className="mt-1 flex items-baseline gap-1.5">
         <span
+          data-motion="print"
           className={cn(
             "font-display text-3xl leading-none tracking-tight sm:text-4xl",
             emphasis ? "text-copper" : "text-ink",

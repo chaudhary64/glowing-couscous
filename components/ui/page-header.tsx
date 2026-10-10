@@ -32,7 +32,7 @@ export function PageHeader({
         </Badge>
       </div>
 
-      <h1 className="mt-3 font-display text-4xl uppercase leading-[0.95] tracking-tight sm:text-5xl">
+      <h1 data-motion="scan" className="mt-3 font-display text-4xl uppercase leading-[0.95] tracking-tight sm:text-5xl">
         {feature.name}
       </h1>
 
@@ -126,7 +126,7 @@ export function SectionHeader({
             {eyebrow}
           </p>
         ) : null}
-        <h2 className="font-display text-xl uppercase leading-tight tracking-tight">
+        <h2 data-motion="scan" className="font-display text-xl uppercase leading-tight tracking-tight">
           {title}
         </h2>
       </div>

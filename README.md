@@ -22,10 +22,12 @@ nothing has to be discovered by reading code.
 |---|---|
 | Live AI pipeline (Microsoft Foundry) | **Real** — three working endpoints, closed-list validation |
 | Authentication & roles (Cognito) | **Real** — JWKS verification, httpOnly session, enforced role matrix |
-| Product screens | **Built** — 9 role-gated screens, one of which reads the live archive; the rest render fixtures |
+| Product screens | **Built** — 9 role-gated screens; the evidence archive and the hotspot map read live data, the rest render fixtures |
 | Doc site | **Built** — 6 feature write-ups, public |
 | Media archive (S3) | **Real** — every submitted photo and voice note is written to `impact-proof-bucket` under a content-addressed key |
-| Database schema | **Applied to real RDS; one table is read by the app** — 39 tables, `media_assets` in use |
+| Intake records | **Real** — a priced submission writes `intakes` (`lib/s3/intakes.ts`) and its item, assay, valuation and verdict (`lib/records/items.ts`); with a GPS fix, `lib/intake/location.ts` adds the `geopoints` row `/map` counts |
+| Hotspot map | **Real** — live geotagged intakes clustered on real BMC ward boundaries over an OpenStreetMap basemap; empty, and saying so, until real intakes arrive |
+| Database schema | **Applied to real RDS, partly wired** — 39 tables; media, intake and geo tables are read and written, the rest are not |
 | Money | **Simulated** — no payout, no ledger writes |
 
 ---
@@ -80,6 +82,34 @@ archive as off.
 
 Bucket, IAM policy, key layout and its honest gaps are in
 [`docs/s3-media-archive.md`](docs/s3-media-archive.md).
+
+### Spatial heatmapping
+
+`/map` clusters geotagged intakes into collection sites across India, by district, with
+Mumbai's BMC wards as the finer city layer.
+
+- **Capture.** The intake screen takes a GPS fix with one explicit tap. After the
+  submission and its priced item are recorded, `lib/intake/location.ts` files the point
+  to its area, stamps it and the coordinates on that intake and item, and writes one
+  `geopoints` row — idempotent per intake, and never able to fail the request. An intake
+  sent with no fix asks once, inline, whether to add one.
+- **Areas.** India's 735 districts (geoBoundaries / LGD, ODbL 1.0, built by
+  `npm run geo:districts`) everywhere, and Mumbai's 24 BMC wards (DataMeet, CC BY-SA 2.5
+  India, `npm run geo:wards`) inside Mumbai. Points are filed by point-in-polygon; there
+  is no PostGIS.
+- **Clustering.** On every read: ~150 m geohash cells (precision 7); four or more
+  detections in 21 days make a cell hot; touching hot cells are one site. Gatekeeper-
+  rejected items never count. The rule is one pure function, `lib/heatmap/cluster.ts`,
+  covered by `npm run test:heatmap`.
+- **Map.** MapLibre GL on an OpenFreeMap basemap — open source end to end, no key.
+  Wards shaded by relative pressure, heat weighted by recency, sites at true radius.
+- **Dispatch.** Operators and above can assign a van, clear or reopen a live site
+  (`POST /api/heatmap/dispatch`, guarded at `/map/dispatch`); only that decision is stored.
+- **Real data only.** No sample, fixture or fallback. With no geotagged intakes the map is
+  empty and tells the operator how to fill it. The dashboard's hotspot figures come from
+  the same computation; the public write-up shows only the real ward geography.
+
+Design, privacy and gaps: [`docs/spatial-heatmapping.md`](docs/spatial-heatmapping.md).
 
 ### Authentication and roles
 
@@ -140,21 +170,23 @@ The design, the deletion policy, the role model and the instance details are in
 
 ## What is **not** built
 
-### The database is not wired to the app
+### The database is only partly wired to the app
 
-This is the largest remaining gap and it is deliberate, not an oversight. The schema is
-fully designed and applied to RDS, but **only the media archive reads it**:
-[`lib/s3/media-assets.ts`](lib/s3/media-assets.ts) writes `media_assets` rows as evidence
-is archived, lists them for [`/evidence`](app/(product)/evidence/page.tsx), and resolves
-an uploader's Cognito subject. Nothing else under `app/` or `lib/` imports Drizzle or
-reads `DATABASE_URL`. Every other screen — every table, receipt, stat and dashboard —
-renders hardcoded fixtures from [`lib/data/`](lib/data). `lib/types.ts` says so
-directly.
+The schema is applied to RDS and these parts of the app use it:
 
-So the screens are a complete, honest interface over sample data with one real archive
-behind it, and the AI endpoints are real, but a submission has never been joined to the
-database: no `intakes` row is written, so the evidence the archive holds cannot be found
-from the valuation it priced.
+- [`lib/s3/media-assets.ts`](lib/s3/media-assets.ts) and [`lib/s3/intakes.ts`](lib/s3/intakes.ts)
+  record each archived object and the submission it belongs to.
+- [`lib/records/`](lib/records) writes the priced record — `items`, `material_lines`,
+  `item_hazards`, `valuations`, `gatekeeper_verdicts`, `verdict_signals`, `intake_fields`
+  — and officers' `validation_decisions`, and reads them back for the dashboard and queues.
+- [`lib/intake/location.ts`](lib/intake/location.ts) and
+  [`lib/heatmap/store.ts`](lib/heatmap/store.ts) write `geopoints` and read them for
+  [`/map`](app/(product)/map/page.tsx), storing dispatch decisions in `hotspot_clusters`.
+
+Pickups and credit notes run on the pickup API (API Gateway + Lambda + DynamoDB,
+`scripts/pickup-*`), not on these tables. What still renders fixtures from
+[`lib/data/`](lib/data) says so on screen — the collector roster among them, since
+nothing provisions a collector at submission time yet.
 
 ### Auth gaps
 
@@ -181,8 +213,8 @@ from the valuation it priced.
   business-account approval, and proves no new intelligence on stage. Ranked 06.
 - **A low-data Android app with an offline queue** is the next channel. Not started.
 - **Missed-call IVR** for feature-phone collectors is deferred.
-- **The heatmap is not geography.** Positions are normalised pilot coordinates, so it
-  cannot be overlaid on a real street map as drawn. No basemap tiles, no live van
+- **The heatmap has no road network.** Sites are on real geography, but the van round
+  is a priority order by detection count, not a driving route. No basemap tiles, no live van
   tracking, and a cluster is a routing suggestion — never an accusation about a site.
 
 ### Credibility limits, stated on the screens themselves
@@ -228,8 +260,10 @@ screens live behind the guards and start at `/dashboard`.
 [`.env.example`](.env.example) names every variable and carries no values. Four groups:
 
 - **`NEXT_PUBLIC_COGNITO_*` / `COGNITO_*`** — pool and app client settings. Not secrets;
-  a public browser client ships them. Only four names may be copied to disk during a
-  deployment, which `amplify.yml` does and explains.
+  a public browser client ships them. Amplify's SSR compute receives no environment
+  variables at runtime, so `amplify.yml` copies an explicit list of names — including
+  `DATABASE_URL`, which `/evidence`, intake recording and `/map` need — into
+  `.env.production` at build time, and explains the cost of each.
 - **`AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_API_KEY` / `AZURE_OPENAI_DEPLOYMENT`** —
   the Microsoft Foundry endpoint, a real secret key, and the deployment name. The key
   belongs in `.env.local` (gitignored) and never in the template. Without them, live
@@ -302,6 +336,7 @@ A raw query has to do it by hand: `Number(row.net_to_collector_paise)`.
 |---|---|
 | [`docs/ecoepr-track03.md`](docs/ecoepr-track03.md) | The ranked feature plan, the build order, and the post-build note recording what actually runs |
 | [`docs/auth.md`](docs/auth.md) | Authentication and role-based access — architecture, decisions, and gaps |
+| [`docs/spatial-heatmapping.md`](docs/spatial-heatmapping.md) | The hotspot map — capture, ward filing, the clustering rule, privacy, dispatch, and what is not built |
 | [`docs/s3-media-archive.md`](docs/s3-media-archive.md) | The media archive — the bucket, the IAM policy, the key layout, `s3:check`, and what is deliberately not built |
 | [`db/README.md`](db/README.md) | The database schema, layering rules, conventions, deletion policy and the instance |
 | `/doc` in the app | Six feature write-ups, ranked, each linked to the working screen that delivers it |

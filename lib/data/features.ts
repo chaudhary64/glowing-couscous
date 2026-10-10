@@ -87,7 +87,7 @@ export const features: Feature[] = [
     pageJob:
       "Tell a ward officer where the next collection van should stand.",
     status: "supporting",
-    aws: ["OpenSearch (run locally)", "DynamoDB", "Next.js"],
+    aws: ["RDS Postgres", "MapLibre + OpenFreeMap", "Next.js"],
     proof:
       "Strong municipal pitch and a good visual, but it serves a second customer and sits downstream of the core loop.",
   },

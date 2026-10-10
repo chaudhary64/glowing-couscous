@@ -33,6 +33,27 @@
   --font-display: var(--font-anton), "Arial Narrow", Impact, sans-serif;
   --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, "Courier New", monospace;
+
+  /* The stamp lands once, with weight: lifted and large, a hard strike, a settle. */
+  --animate-stamp-press: stamp-press 520ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+@keyframes stamp-press {
+  0% {
+    opacity: 0;
+    transform: translateY(-18px) scale(1.9);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(0) scale(0.94);
+  }
+  72% {
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 html {
@@ -83,3 +104,293 @@ body {
 }
 .handoff-upi { animation: handoff-upi-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .handoff-upi-check { animation: handoff-upi-check 520ms 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+
+/* ------------------------------------------------------------------ motion
+   The site's motion vocabulary, all of it drawn from the product: a scan line, a
+   receipt printer, a perforated tear, a rubber stamp. Scroll reveals (scan, rows,
+   print, stamp) are opted into with `data-motion` and run by
+   components/motion/motion-observer.tsx through the Web Animations API; what is here
+   is the motion CSS can own outright. */
+
+:root {
+  --ease-print: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Trace: a copper PCB trace draws itself around a card on hover. */
+.trace-card {
+  position: relative;
+  isolation: isolate;
+}
+.trace-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--color-copper), var(--color-copper)) top left / 0% 2px no-repeat,
+    linear-gradient(var(--color-copper), var(--color-copper)) top right / 2px 0% no-repeat,
+    linear-gradient(var(--color-copper), var(--color-copper)) bottom right / 0% 2px no-repeat,
+    linear-gradient(var(--color-copper), var(--color-copper)) bottom left / 2px 0% no-repeat;
+}
+/* Hovered, the trace runs clockwise: top, right side, bottom, left side. */
+.trace-card:hover::before,
+.trace-card:focus-within::before {
+  animation: trace-draw 560ms linear forwards;
+}
+@keyframes trace-draw {
+  0% { background-size: 0% 2px, 2px 0%, 0% 2px, 2px 0%; }
+  25% { background-size: 100% 2px, 2px 0%, 0% 2px, 2px 0%; }
+  50% { background-size: 100% 2px, 2px 100%, 0% 2px, 2px 0%; }
+  75% { background-size: 100% 2px, 2px 100%, 100% 2px, 2px 0%; }
+  100% { background-size: 100% 2px, 2px 100%, 100% 2px, 2px 100%; }
+}
+
+/* Loop trace (components/motion/loop-trace.tsx): down the left edge while the steps
+   stack, along the top once they sit in one row. Its length is --trace (0..1). */
+.loop-trace__line {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  top: 0;
+  width: 2px;
+  height: calc(var(--trace, 1) * 100%);
+  background: var(--color-copper);
+  box-shadow: 0 0 10px 1px color-mix(in oklab, var(--color-copper) 65%, transparent);
+  pointer-events: none;
+}
+@media (min-width: 1024px) {
+  .loop-trace__line {
+    top: -1px;
+    height: 2px;
+    width: calc(var(--trace, 1) * 100%);
+  }
+}
+.loop-trace li {
+  transition: opacity 400ms var(--ease-print);
+}
+.loop-trace[data-live] li:not([data-lit]) {
+  opacity: 0.4;
+}
+
+/* ------------------------------------------------------- page transitions
+   The old page is torn off along a perforation; the new one feeds in from the top in
+   printer steps. Only page content takes part (each section's template.tsx); the rails and
+   header stay where they are. */
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-old(.tear) {
+  animation: tear-off 360ms cubic-bezier(0.55, 0, 0.75, 0.3) both;
+}
+::view-transition-new(.print) {
+  animation: feed-in 560ms steps(9, end) 160ms both;
+}
+@keyframes tear-off {
+  from { clip-path: polygon(0% 0%, 100% 0%, 100% calc(100% + 14px), 100.000% calc(calc(100% + 14px) - 0%), 96.429% calc(calc(100% + 14px) - 14px), 92.857% calc(calc(100% + 14px) - 0%), 89.286% calc(calc(100% + 14px) - 14px), 85.714% calc(calc(100% + 14px) - 0%), 82.143% calc(calc(100% + 14px) - 14px), 78.571% calc(calc(100% + 14px) - 0%), 75.000% calc(calc(100% + 14px) - 14px), 71.429% calc(calc(100% + 14px) - 0%), 67.857% calc(calc(100% + 14px) - 14px), 64.286% calc(calc(100% + 14px) - 0%), 60.714% calc(calc(100% + 14px) - 14px), 57.143% calc(calc(100% + 14px) - 0%), 53.571% calc(calc(100% + 14px) - 14px), 50.000% calc(calc(100% + 14px) - 0%), 46.429% calc(calc(100% + 14px) - 14px), 42.857% calc(calc(100% + 14px) - 0%), 39.286% calc(calc(100% + 14px) - 14px), 35.714% calc(calc(100% + 14px) - 0%), 32.143% calc(calc(100% + 14px) - 14px), 28.571% calc(calc(100% + 14px) - 0%), 25.000% calc(calc(100% + 14px) - 14px), 21.429% calc(calc(100% + 14px) - 0%), 17.857% calc(calc(100% + 14px) - 14px), 14.286% calc(calc(100% + 14px) - 0%), 10.714% calc(calc(100% + 14px) - 14px), 7.143% calc(calc(100% + 14px) - 0%), 3.571% calc(calc(100% + 14px) - 14px), 0.000% calc(calc(100% + 14px) - 0%)); transform: none; }
+  to { clip-path: polygon(0% 0%, 100% 0%, 100% 0%, 100.000% calc(0% - 0%), 96.429% calc(0% - 14px), 92.857% calc(0% - 0%), 89.286% calc(0% - 14px), 85.714% calc(0% - 0%), 82.143% calc(0% - 14px), 78.571% calc(0% - 0%), 75.000% calc(0% - 14px), 71.429% calc(0% - 0%), 67.857% calc(0% - 14px), 64.286% calc(0% - 0%), 60.714% calc(0% - 14px), 57.143% calc(0% - 0%), 53.571% calc(0% - 14px), 50.000% calc(0% - 0%), 46.429% calc(0% - 14px), 42.857% calc(0% - 0%), 39.286% calc(0% - 14px), 35.714% calc(0% - 0%), 32.143% calc(0% - 14px), 28.571% calc(0% - 0%), 25.000% calc(0% - 14px), 21.429% calc(0% - 0%), 17.857% calc(0% - 14px), 14.286% calc(0% - 0%), 10.714% calc(0% - 14px), 7.143% calc(0% - 0%), 3.571% calc(0% - 14px), 0.000% calc(0% - 0%)); transform: translateY(-18px) rotate(-0.6deg); opacity: 0.6; }
+}
+@keyframes feed-in {
+  from { clip-path: inset(0 0 100% 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}
+
+/* ------------------------------------------------------------ show pieces */
+
+/* Hero headline: each line rises out of its own mask, the copy after it. */
+.rise-line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.04em;
+}
+.rise-line > span {
+  display: block;
+  animation: rise 900ms var(--ease-print) both;
+  animation-delay: calc(var(--n, 0) * 110ms + 120ms);
+}
+.rise-after {
+  animation: rise-fade 800ms var(--ease-print) both;
+  animation-delay: calc(var(--n, 0) * 90ms + 420ms);
+}
+@keyframes rise {
+  from { transform: translateY(105%); }
+  to { transform: none; }
+}
+@keyframes rise-fade {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Receipt printer: the receipt feeds out of a slot, line by line, as the page opens. */
+.receipt-printer {
+  position: relative;
+  padding-top: 14px;
+}
+.receipt-printer::before {
+  /* the slot */
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: -10px;
+  right: -10px;
+  height: 14px;
+  background: linear-gradient(#05080a, #1b2228);
+  border: 1px solid #2b3138;
+  box-shadow: 0 6px 14px -6px rgb(0 0 0 / 0.8);
+}
+.receipt-printer::after {
+  /* the status LED: blinks while printing, settles green */
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: 4px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-verified);
+  box-shadow: 0 0 8px var(--color-verified);
+  animation: printer-led 1900ms steps(1, end) 300ms both;
+}
+.receipt-printer > .receipt-paper {
+  animation: receipt-feed 1700ms steps(22, end) 350ms both;
+}
+@keyframes receipt-feed {
+  from { clip-path: inset(0 0 100% 0); transform: translateY(-42px); }
+  to { clip-path: inset(0 0 0 0); transform: none; }
+}
+@keyframes printer-led {
+  0%, 20%, 40%, 60%, 80% { background: var(--color-copper); box-shadow: 0 0 10px var(--color-copper); }
+  10%, 30%, 50%, 70%, 90% { background: #3a2a20; box-shadow: none; }
+  100% { background: var(--color-verified); box-shadow: 0 0 8px var(--color-verified); }
+}
+
+/* Rate ticker (components/motion/rate-ticker.tsx). */
+.rate-ticker__track {
+  animation: ticker 60s linear infinite;
+}
+.rate-ticker:hover .rate-ticker__track {
+  animation-play-state: paused;
+}
+@keyframes ticker {
+  to { transform: translateX(-50%); }
+}
+
+/* Spotlight: a hidden PCB pattern under dark sections, lit where the pointer is. */
+.spotlight-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' fill='none' stroke='%23d9783f' stroke-width='1.4'%3E%3Cpath d='M0 40h40l20 20h40l20-20h40M40 0v20l20 20M120 160v-30l-20-20H60l-20-20V60M160 100h-30l-10 10v50M0 120h30l10-10'/%3E%3Ccircle cx='40' cy='40' r='3'/%3E%3Ccircle cx='120' cy='40' r='3'/%3E%3Ccircle cx='60' cy='110' r='3'/%3E%3Ccircle cx='130' cy='100' r='3'/%3E%3Crect x='86' y='76' width='22' height='14'/%3E%3Cpath d='M90 76v-6M97 76v-6M104 76v-6M90 90v6M97 90v6M104 90v6'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  opacity: 0;
+  transition: opacity 400ms;
+  mask-image: radial-gradient(circle 220px at var(--mx, -999px) var(--my, -999px), #000 0%, rgb(0 0 0 / 0.35) 45%, transparent 75%);
+}
+@media (pointer: fine) {
+  [data-spotlight]:hover > .spotlight-layer {
+    opacity: 0.55;
+  }
+}
+
+/* Scanner reticle (components/motion/scanner-cursor.tsx). */
+.scanner-reticle {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 60;
+  width: 34px;
+  height: 34px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 250ms;
+  mix-blend-mode: normal;
+}
+.scanner-reticle[data-on] {
+  opacity: 1;
+}
+.scanner-reticle__corner {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-color: var(--color-copper);
+  border-style: solid;
+  border-width: 0;
+  transition: width 200ms, height 200ms;
+}
+.scanner-reticle__corner[data-c="tl"] { left: 0; top: 0; border-left-width: 2px; border-top-width: 2px; }
+.scanner-reticle__corner[data-c="tr"] { right: 0; top: 0; border-right-width: 2px; border-top-width: 2px; }
+.scanner-reticle__corner[data-c="bl"] { left: 0; bottom: 0; border-left-width: 2px; border-bottom-width: 2px; }
+.scanner-reticle__corner[data-c="br"] { right: 0; bottom: 0; border-right-width: 2px; border-bottom-width: 2px; }
+.scanner-reticle[data-locked] .scanner-reticle__readout {
+  /* Locked, the readout sits above the frame so it never covers a neighbour. */
+  left: 0;
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+.scanner-reticle[data-locked] .scanner-reticle__corner {
+  width: 14px;
+  height: 14px;
+  filter: drop-shadow(0 0 4px color-mix(in oklab, var(--color-copper) 80%, transparent));
+}
+.scanner-reticle__readout {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: calc(100% + 4px);
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--color-copper);
+  background: color-mix(in oklab, var(--color-ink) 82%, transparent);
+  padding: 2px 5px;
+}
+
+/* Footer wordmark: an outline that fills with copper as it scrolls into view. Where
+   scroll-driven animations are unsupported it simply stays an outline. */
+.wordmark {
+  color: transparent;
+  -webkit-text-stroke: 1px color-mix(in oklab, var(--color-paper) 28%, transparent);
+  background: linear-gradient(90deg, var(--color-copper) 0 50%, transparent 50% 100%) no-repeat;
+  background-size: 200% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+@supports (animation-timeline: view()) {
+  .wordmark {
+    animation: wordmark-fill linear both;
+    animation-timeline: view();
+    /* Filled by the time the word is fully on screen: it is the last thing on the page. */
+    animation-range: entry 0% entry 75%;
+  }
+}
+@keyframes wordmark-fill {
+  to { background-position: 0% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-line > span,
+  .rise-after,
+  .receipt-printer > .receipt-paper,
+  .receipt-printer::after,
+  .rate-ticker__track {
+    animation: none !important;
+  }
+  .wordmark {
+    animation: none !important;
+    background-position: 0% 0;
+  }
+}

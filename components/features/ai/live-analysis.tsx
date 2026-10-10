@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ExtractionTable } from "@/components/features/intake/extraction-table";
 import { VoiceNoteCard } from "@/components/features/intake/voice-note-card";
@@ -11,9 +11,11 @@ import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { Field, FieldList } from "@/components/ui/field-list";
 import { Meter } from "@/components/ui/meter";
 import { Stamp, VerdictMark } from "@/components/ui/stamp";
+import { saveConsent, useConsent } from "@/lib/consent";
 import { formatConfidence, formatInr, formatMass, formatRate, lineValue } from "@/lib/format";
 import { conditionTone, materialTone, verdictTone } from "@/lib/tone";
 import type { AiAnalysis, AiIntakeResult } from "@/lib/ai/proposal";
+import type { LocationOutcome } from "@/lib/intake/location";
 import type { Verdict } from "@/lib/types";
 
 /**
@@ -57,6 +59,7 @@ const FAILURE_LABELS: Record<string, string> = {
   empty_request: "Nothing attached",
   bad_request: "Request rejected",
   mic_denied: "Microphone refused",
+  no_recorder: "Recording unavailable",
   network: "No connection",
 };
 
@@ -109,6 +112,12 @@ const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
  * a bare HTTP 413 the server never produced.
  */
 const MAX_AUDIO_BYTES = 3 * 1024 * 1024;
+
+/**
+ * A recording stops itself here. 16 kHz mono WAV is 32 KB a second, so a minute is
+ * about 1.9 MB - inside `MAX_AUDIO_BYTES` with room for a photo in the same request.
+ */
+const MAX_RECORDING_SECONDS = 60;
 
 /**
  * Both attachments together, in base64 characters.
@@ -263,32 +272,162 @@ async function audioToMedia(
   };
 }
 
+type Located = { latitude: number; longitude: number; accuracyM: number };
+type LocateState = "idle" | "locating" | "ok" | "denied" | "unavailable";
+
+/** The intake response, with what the server recorded alongside the analysis. */
+type RecordedIntake = AiIntakeResult & {
+  submission?: { configured: boolean; submission: { code: string } | null; error: string | null } | null;
+  location?: LocationOutcome | null;
+};
+
 export function LiveAnalysis({ mode }: { mode: LiveMode }) {
   const [photo, setPhoto] = useState<Media | null>(null);
   const [audio, setAudio] = useState<Media | null>(null);
   const [audioSeconds, setAudioSeconds] = useState(0);
   const [recording, setRecording] = useState(false);
+  /** Seconds into the current recording, for the on-screen counter. */
+  const [recordingFor, setRecordingFor] = useState(0);
+  /** A clip is being decoded and re-encoded; nothing is attached yet. */
+  const [processingAudio, setProcessingAudio] = useState(false);
   const [note, setNote] = useState("");
   const [declaredMass, setDeclaredMass] = useState("");
   const [status, setStatus] = useState<"idle" | "running" | "done">("idle");
   const [failure, setFailure] = useState<Failure | null>(null);
   const [analysis, setAnalysis] = useState<AiAnalysis | null>(null);
-  const [intake, setIntake] = useState<AiIntakeResult | null>(null);
+  const [intake, setIntake] = useState<RecordedIntake | null>(null);
+  const [location, setLocation] = useState<Located | null>(null);
+  const [locate, setLocate] = useState<LocateState>("idle");
+  /** Intake submitted with no fix yet: ask once, inline, before sending. */
+  const [askLocation, setAskLocation] = useState(false);
+  const consent = useConsent();
   const [decision, setDecision] = useState<GatekeeperDecision | null>(null);
 
   const recorder = useRef<MediaRecorder | null>(null);
+  const stream = useRef<MediaStream | null>(null);
   const chunks = useRef<Blob[]>([]);
   const photoInput = useRef<HTMLInputElement>(null);
   const audioInput = useRef<HTMLInputElement>(null);
+  /**
+   * Bumped whenever the voice slot is replaced or emptied. Decoding is async, so a clip
+   * that finishes after the collector removed it (or started another) checks this and
+   * is dropped instead of reattaching itself.
+   */
+  const audioGeneration = useRef(0);
+
+  // Leaving the page mid-recording releases the microphone.
+  useEffect(
+    () => () => {
+      audioGeneration.current += 1;
+      if (recorder.current?.state === "recording") recorder.current.stop();
+      stream.current?.getTracks().forEach((track) => track.stop());
+    },
+    [],
+  );
+
+  // The counter, and the hard stop at MAX_RECORDING_SECONDS.
+  useEffect(() => {
+    if (!recording) return;
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      const seconds = (Date.now() - started) / 1000;
+      setRecordingFor(seconds);
+      if (seconds >= MAX_RECORDING_SECONDS) stopRecording();
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [recording]);
 
   const copy = COPY[mode];
   const running = status === "running";
   const hasInput = Boolean(photo || audio || note.trim());
 
-  function reset() {
+  /**
+   * Always a tap, never an automatic prompt: the browser asks permission the first
+   * time, and a collector who says no still gets paid - the location only feeds the
+   * hotspot map. High accuracy because a ward or district boundary can run down the
+   * middle of a lane. Resolves with the fix (or null) so a submit can use it at once.
+   */
+  function captureLocation(): Promise<Located | null> {
+    if (!("geolocation" in navigator)) {
+      setLocate("unavailable");
+      return Promise.resolve(null);
+    }
+    setLocate("locating");
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const fix = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracyM: position.coords.accuracy,
+          };
+          setLocation(fix);
+          setLocate("ok");
+          resolve(fix);
+        },
+        (error) => {
+          setLocation(null);
+          setLocate(error.code === error.PERMISSION_DENIED ? "denied" : "unavailable");
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
+      );
+    });
+  }
+
+  /**
+   * With location consented to (the cookie notice), the intake screen captures the
+   * position as it opens: silently if the browser already allows it, with the browser's
+   * own one-time prompt if it has not been asked, and not at all if it was blocked -
+   * then the screen says so instead of asking again.
+   */
+  const autoLocated = useRef(false);
+  useEffect(() => {
+    if (mode !== "intake" || !consent?.location || autoLocated.current) return;
+    autoLocated.current = true;
+    const query = navigator.permissions?.query({ name: "geolocation" as PermissionName });
+    void (query ?? Promise.resolve(null))
+      .then((status) => {
+        if (status?.state === "denied") setLocate("denied");
+        else void captureLocation();
+      })
+      .catch(() => void captureLocation());
+  }, [mode, consent]);
+
+  /** A collector who adds a location by hand, before any choice was recorded, has made one. */
+  function locateByHand() {
+    if (consent === null) saveConsent(true);
+    return captureLocation();
+  }
+
+  /**
+   * Submit. An intake with no fix, where the device has not already refused or failed
+   * to give one, first asks once - inline, never a browser dialog - whether to add it.
+   */
+  function submit() {
+    if (mode === "intake" && !location && locate !== "denied" && locate !== "unavailable") {
+      setAskLocation(true);
+      return;
+    }
+    void run();
+  }
+
+  function removePhoto() {
     setPhoto(null);
+    if (photoInput.current) photoInput.current.value = "";
+  }
+
+  function removeAudio() {
+    audioGeneration.current += 1;
     setAudio(null);
     setAudioSeconds(0);
+    setProcessingAudio(false);
+    if (audioInput.current) audioInput.current.value = "";
+  }
+
+  function reset() {
+    removePhoto();
+    removeAudio();
     setNote("");
     setDeclaredMass("");
     setAnalysis(null);
@@ -296,91 +435,122 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
     setDecision(null);
     setFailure(null);
     setStatus("idle");
-    if (photoInput.current) photoInput.current.value = "";
-    if (audioInput.current) audioInput.current.value = "";
   }
 
-  async function pickPhoto(file: File | undefined) {
+  async function pickPhoto(input: HTMLInputElement) {
+    const file = input.files?.[0];
     if (!file) return;
     if (file.size > MAX_PHOTO_BYTES) {
+      // Empty the picker too, so it never names a file that is not the one attached.
+      input.value = "";
       setFailure({
         code: "payload_too_large",
-        message: `That photo is ${Math.round(file.size / 1024 / 1024)} MB. Keep it under 3 MB so the upload survives a patchy connection.`,
+        message: `That photo is ${(file.size / 1024 / 1024).toFixed(1)} MB. Keep it under 3 MB so the upload survives a patchy connection.`,
       });
       return;
     }
     setFailure(null);
-    setPhoto(await readFile(file));
+    try {
+      setPhoto(await readFile(file));
+    } catch {
+      input.value = "";
+      setFailure({ code: "unsupported_media", message: "That photo could not be read. Try another file." });
+    }
   }
 
-  async function pickAudio(file: File | undefined) {
-    if (!file) return;
-    if (file.size > MAX_AUDIO_BYTES) {
-      setFailure({
-        code: "payload_too_large",
-        message: `That clip is ${Math.round(file.size / 1024 / 1024)} MB. Keep it under 3 MB — ten seconds of speech is plenty.`,
-      });
-      return;
-    }
+  /**
+   * Decode, re-encode and attach a clip - from the picker or the recorder alike. The
+   * size limit is checked on the WAV that is actually sent, not the source file: a small
+   * compressed clip can decode to far more than it started as.
+   */
+  async function attachAudio(source: Blob, label: string, origin: "file" | "recording") {
+    const generation = ++audioGeneration.current;
     setFailure(null);
-    const converted = await audioToMedia(file, file.name || "clip");
+    setProcessingAudio(true);
+    const converted = await audioToMedia(source, label);
+    if (generation !== audioGeneration.current) return; // removed or replaced meanwhile
+    setProcessingAudio(false);
+    const clear = () => {
+      if (audioInput.current) audioInput.current.value = "";
+    };
     if (!converted) {
+      clear();
       setFailure({
         code: "unsupported_media",
         message:
-          "That audio could not be decoded in this browser. Record the note instead, or attach a WAV or MP3 clip.",
+          origin === "recording"
+            ? "That recording could not be decoded. Try again, or attach a WAV or MP3 clip."
+            : "That audio could not be decoded in this browser. Record the note instead, or attach a WAV or MP3 clip.",
       });
       return;
     }
+    if ((converted.media.dataBase64.length * 3) / 4 > MAX_AUDIO_BYTES) {
+      clear();
+      setFailure({
+        code: "payload_too_large",
+        message: `That clip runs ${Math.round(converted.seconds)} s, which is over 3 MB once prepared for upload. Keep it under about ${MAX_RECORDING_SECONDS} seconds.`,
+      });
+      return;
+    }
+    // A recording replaces whatever the picker held, so the picker must not still name it.
+    if (origin === "recording") clear();
     setAudio(converted.media);
     setAudioSeconds(converted.seconds);
   }
 
-  async function toggleRecording() {
-    if (recording) {
-      recorder.current?.stop();
-      setRecording(false);
+  async function pickAudio(input: HTMLInputElement) {
+    const file = input.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_AUDIO_BYTES) {
+      input.value = "";
+      setFailure({
+        code: "payload_too_large",
+        message: `That clip is ${(file.size / 1024 / 1024).toFixed(1)} MB. Keep it under 3 MB — ten seconds of speech is plenty.`,
+      });
       return;
     }
-    if (!navigator.mediaDevices?.getUserMedia) {
+    await attachAudio(file, file.name || "clip", "file");
+  }
+
+  function stopRecording() {
+    if (recorder.current?.state === "recording") recorder.current.stop();
+    setRecording(false);
+  }
+
+  async function toggleRecording() {
+    if (recording) {
+      stopRecording();
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       setFailure({
         code: "no_recorder",
-        message: "This browser will not record audio. Attach a clip instead.",
+        // Browsers hide the microphone entirely on plain http (anything but localhost).
+        message: window.isSecureContext
+          ? "This browser will not record audio. Attach a clip instead."
+          : "Recording needs a secure (https) connection, and this page was opened over plain http. Attach a clip instead, or open the site over https.",
       });
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const active = new MediaRecorder(stream);
+      const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const active = new MediaRecorder(mic);
+      stream.current = mic;
       chunks.current = [];
       active.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.current.push(event.data);
       };
-      active.onstop = async () => {
-        stream.getTracks().forEach((track) => track.stop());
+      active.onstop = () => {
+        mic.getTracks().forEach((track) => track.stop());
+        if (stream.current === mic) stream.current = null;
         const blob = new Blob(chunks.current, { type: active.mimeType || "audio/webm" });
+        chunks.current = [];
         if (blob.size === 0) return;
-        if (blob.size > MAX_AUDIO_BYTES) {
-          setFailure({
-            code: "payload_too_large",
-            message: "That recording is over 3 MB. Keep it under about a minute.",
-          });
-          return;
-        }
-        const converted = await audioToMedia(blob, "voice-note.wav");
-        if (!converted) {
-          setFailure({
-            code: "unsupported_media",
-            message:
-              "That recording could not be decoded. Try again, or attach a WAV or MP3 clip.",
-          });
-          return;
-        }
-        setAudio(converted.media);
-        setAudioSeconds(converted.seconds);
+        void attachAudio(blob, "voice-note.wav", "recording");
       };
       recorder.current = active;
       active.start();
+      setRecordingFor(0);
       setRecording(true);
       setFailure(null);
     } catch {
@@ -392,7 +562,8 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
     }
   }
 
-  async function run() {
+  async function run(fix: Located | null = location) {
+    setAskLocation(false);
     setStatus("running");
     setFailure(null);
 
@@ -406,6 +577,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
     if (mode === "intake" && audioSeconds > 0) {
       body.durationSeconds = Math.round(audioSeconds);
     }
+    if (mode === "intake" && fix) body.location = fix;
 
     // Refused here rather than upstream. The server checks the same total, but past
     // roughly 6 MiB the hosting layer answers 413 itself, so the request never
@@ -443,7 +615,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
         return;
       }
 
-      if (mode === "intake") setIntake(payload as unknown as AiIntakeResult);
+      if (mode === "intake") setIntake(payload as unknown as RecordedIntake);
       else if (mode === "valuation") setAnalysis(payload as unknown as AiAnalysis);
       else setDecision(payload as unknown as GatekeeperDecision);
       setStatus("done");
@@ -481,19 +653,34 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
               ref={photoInput}
               type="file"
               accept="image/jpeg,image/png,image/webp,image/heic"
-              onChange={(event) => void pickPhoto(event.target.files?.[0])}
+              onChange={(event) => void pickPhoto(event.currentTarget)}
+              disabled={running}
               className="block w-full border border-rule bg-paper px-3 py-2 font-mono text-[11px] text-ink file:mr-3 file:border-0 file:bg-ink file:px-3 file:py-1.5 file:font-mono file:text-[10px] file:uppercase file:tracking-[0.14em] file:text-paper"
             />
-            <p className="text-[12px] leading-snug text-ink-muted">
-              {photo ? (
-                <>
+            {photo ? (
+              <div className="flex items-center gap-3">
+                {/* A data URL the browser already holds; next/image has nothing to optimise. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`data:${photo.mimeType};base64,${photo.dataBase64}`}
+                  alt="The attached photo"
+                  className="h-14 w-14 shrink-0 border border-rule bg-paper object-cover"
+                  onError={(event) => {
+                    // HEIC will not preview outside Safari; the file is still attached.
+                    event.currentTarget.style.display = "none";
+                  }}
+                />
+                <p className="min-w-0 flex-1 text-[12px] leading-snug text-ink-muted">
                   <Badge tone="copper">Attached</Badge>{" "}
-                  <span className="font-mono">{photo.label}</span>
-                </>
-              ) : (
-                "JPEG, PNG, WebP or HEIC, up to 3 MB."
-              )}
-            </p>
+                  <span className="break-all font-mono">{photo.label}</span>
+                </p>
+                <Button variant="ghost" onClick={removePhoto} disabled={running} aria-label="Remove the photo">
+                  Remove
+                </Button>
+              </div>
+            ) : (
+              <p className="text-[12px] leading-snug text-ink-muted">JPEG, PNG, WebP or HEIC, up to 3 MB.</p>
+            )}
           </Surface>
 
           {/* voice */}
@@ -505,33 +692,100 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
               <Button
                 variant={recording ? "danger" : "secondary"}
                 onClick={() => void toggleRecording()}
-                disabled={running}
+                disabled={running || processingAudio}
               >
-                {recording ? "Stop recording" : "Record"}
+                {recording
+                  ? `Stop · ${Math.floor(recordingFor)} / ${MAX_RECORDING_SECONDS} s`
+                  : audio
+                    ? "Record again"
+                    : "Record"}
               </Button>
               <input
                 ref={audioInput}
                 type="file"
                 accept="audio/webm,audio/ogg,audio/wav,audio/mpeg,audio/mp4"
-                onChange={(event) => void pickAudio(event.target.files?.[0])}
+                onChange={(event) => void pickAudio(event.currentTarget)}
+                disabled={running || recording || processingAudio}
                 className="block max-w-[16rem] border border-rule bg-paper px-3 py-2 font-mono text-[11px] text-ink"
               />
             </div>
-            <p className="text-[12px] leading-snug text-ink-muted">
-              {audio ? (
-                <>
-                  <Badge tone="copper">Attached</Badge>{" "}
-                  <span className="font-mono">
-                    {audio.label}
-                    {audioSeconds > 0 ? ` · ${Math.round(audioSeconds)} s` : ""}
-                  </span>
-                </>
-              ) : (
-                "WAV, 16 kHz mono. A recording is re-encoded here and transcribed server-side."
-              )}
-            </p>
+            {recording ? (
+              <p className="flex items-center gap-2 text-[12px] leading-snug text-ink" role="status">
+                <span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-hazard" />
+                Recording. It stops by itself at {MAX_RECORDING_SECONDS} seconds.
+              </p>
+            ) : processingAudio ? (
+              <p className="text-[12px] leading-snug text-ink-muted" role="status">
+                Preparing the clip…
+              </p>
+            ) : audio ? (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  <p className="min-w-0 flex-1 text-[12px] leading-snug text-ink-muted">
+                    <Badge tone="copper">Attached</Badge>{" "}
+                    <span className="break-all font-mono">
+                      {audio.label}
+                      {audioSeconds > 0 ? ` · ${Math.max(1, Math.round(audioSeconds))} s` : ""}
+                    </span>
+                  </p>
+                  <Button variant="ghost" onClick={removeAudio} disabled={running} aria-label="Remove the voice note">
+                    Remove
+                  </Button>
+                </div>
+                {/* Play it back before sending: the collector can hear what will be transcribed. */}
+                <audio controls preload="metadata" src={`data:${audio.mimeType};base64,${audio.dataBase64}`} className="h-9 w-full" />
+              </div>
+            ) : (
+              <p className="text-[12px] leading-snug text-ink-muted">
+                Up to {MAX_RECORDING_SECONDS} seconds. A recording is re-encoded here as 16 kHz WAV and transcribed server-side.
+              </p>
+            )}
           </Surface>
         </div>
+
+        {mode === "intake" ? (
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <Surface tone="inset" className="flex flex-col gap-3 p-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
+                Location · for the hotspot map
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="secondary" onClick={() => void locateByHand()} disabled={running || locate === "locating"}>
+                  {locate === "locating" ? "Locating…" : location ? "Update location" : "Use this device’s location"}
+                </Button>
+                {location ? (
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setLocation(null);
+                      setLocate("idle");
+                    }}
+                    disabled={running}
+                  >
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+              <p className="text-[12px] leading-snug text-ink-muted">
+                {locate === "ok" && location ? (
+                  <>
+                    <Badge tone="copper">Attached</Badge>{" "}
+                    <span className="font-mono">
+                      {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)} · ±{Math.round(location.accuracyM)} m
+                    </span>
+                  </>
+                ) : locate === "denied" ? (
+                  "Location was refused. The submission still works; it just adds no point to the map."
+                ) : locate === "unavailable" ? (
+                  "This device could not give a fix. The submission still works without one."
+                ) : (
+                  "Optional. Filed to its district (its BMC ward in Mumbai) and counted on the hotspot map — never shown as an exact address."
+                )}
+              </p>
+            </Surface>
+
+          </div>
+        ) : null}
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <label className="flex flex-col gap-2">
@@ -567,15 +821,42 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-3 border-t-2 border-ink pt-4">
-          <Button onClick={() => void run()} disabled={running || !hasInput}>
+          <Button onClick={submit} disabled={running || !hasInput || askLocation || recording || processingAudio}>
             {running ? "Analysing…" : copy.action}
           </Button>
           <span className="text-[12px] leading-snug text-ink-muted">
-            {hasInput
+            {recording
+              ? "Stop the recording first, so it goes with the submission."
+              : processingAudio
+                ? "Waiting for the clip to be prepared…"
+                : hasInput
               ? "The model names the materials; the rate card prices them on the server."
               : "Attach a photo, record a note, or describe the item."}
           </span>
         </div>
+
+        {askLocation ? (
+          <div role="group" aria-label="Add a location" className="mt-4 border-2 border-copper bg-copper-tint p-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-copper">No location yet</p>
+            <p className="mt-1.5 text-sm leading-relaxed text-ink">
+              Add this device&apos;s location? It files the intake to its district (its BMC ward in Mumbai) and counts it
+              on the hotspot map. The collector is paid either way.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                onClick={() => {
+                  void locateByHand().then((fix) => run(fix));
+                }}
+                disabled={locate === "locating"}
+              >
+                {locate === "locating" ? "Finding location…" : "Add location and submit"}
+              </Button>
+              <Button variant="secondary" onClick={() => void run(null)} disabled={locate === "locating"}>
+                Submit without
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {failure ? (
           <div className="mt-4 border-2 border-hazard bg-hazard-tint p-4">
@@ -771,9 +1052,34 @@ function ValuationResult({ analysis }: { analysis: AiAnalysis }) {
   );
 }
 
-function IntakeResult({ result }: { result: AiIntakeResult }) {
+function IntakeResult({ result }: { result: RecordedIntake }) {
   return (
     <div className="flex flex-col gap-6">
+      {result.submission?.configured || result.location?.configured ? (
+        <Surface tone="inset" className="flex flex-wrap items-center gap-2 p-4">
+          {result.submission?.submission ? (
+            <Badge tone="verified">Filed · {result.submission.submission.code}</Badge>
+          ) : (
+            <Badge tone="hazard">Not filed</Badge>
+          )}
+          {result.location?.recorded || result.location?.skipped ? (
+            <Badge tone="copper">
+              {result.location.wardName
+                ? `${result.location.wardName}${result.location.areaKind === "ward" ? " · Mumbai" : result.location.stateName ? ` · ${result.location.stateName}` : ""}`
+                : "Outside India"}
+            </Badge>
+          ) : (
+            <Badge tone="lead">No location</Badge>
+          )}
+          <span className="text-[12px] leading-snug text-ink-muted">
+            {result.location?.error ??
+              result.location?.skipped ??
+              (result.location?.recorded && result.location.wardCode
+                ? "Counted on the hotspot map."
+                : "Recorded as an intake.")}
+          </span>
+        </Surface>
+      ) : null}
       {result.voiceNote ? (
         <VoiceNoteCard
           voiceNote={result.voiceNote}
