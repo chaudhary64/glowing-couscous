@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Anton, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
+import { ConsentBanner } from "@/components/layout/consent-banner";
 import { MotionObserver } from "@/components/motion/motion-observer";
 
 const anton = Anton({
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         {children}
         <MotionObserver />
+        <ConsentBanner />
       </body>
     </html>
   );

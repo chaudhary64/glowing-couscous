@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ExtractionTable } from "@/components/features/intake/extraction-table";
 import { VoiceNoteCard } from "@/components/features/intake/voice-note-card";
@@ -11,6 +11,7 @@ import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { Field, FieldList } from "@/components/ui/field-list";
 import { Meter } from "@/components/ui/meter";
 import { Stamp, VerdictMark } from "@/components/ui/stamp";
+import { saveConsent, useConsent } from "@/lib/consent";
 import { formatConfidence, formatInr, formatMass, formatRate, lineValue } from "@/lib/format";
 import { conditionTone, materialTone, verdictTone } from "@/lib/tone";
 import type { AiAnalysis, AiIntakeResult } from "@/lib/ai/proposal";
@@ -288,6 +289,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
   const [locate, setLocate] = useState<LocateState>("idle");
   /** Intake submitted with no fix yet: ask once, inline, before sending. */
   const [askLocation, setAskLocation] = useState(false);
+  const consent = useConsent();
   const [decision, setDecision] = useState<GatekeeperDecision | null>(null);
 
   const recorder = useRef<MediaRecorder | null>(null);
@@ -331,6 +333,31 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
         { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
       );
     });
+  }
+
+  /**
+   * With location consented to (the cookie notice), the intake screen captures the
+   * position as it opens: silently if the browser already allows it, with the browser's
+   * own one-time prompt if it has not been asked, and not at all if it was blocked -
+   * then the screen says so instead of asking again.
+   */
+  const autoLocated = useRef(false);
+  useEffect(() => {
+    if (mode !== "intake" || !consent?.location || autoLocated.current) return;
+    autoLocated.current = true;
+    const query = navigator.permissions?.query({ name: "geolocation" as PermissionName });
+    void (query ?? Promise.resolve(null))
+      .then((status) => {
+        if (status?.state === "denied") setLocate("denied");
+        else void captureLocation();
+      })
+      .catch(() => void captureLocation());
+  }, [mode, consent]);
+
+  /** A collector who adds a location by hand, before any choice was recorded, has made one. */
+  function locateByHand() {
+    if (consent === null) saveConsent(true);
+    return captureLocation();
   }
 
   /**
@@ -602,7 +629,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
                 Location · for the hotspot map
               </p>
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="secondary" onClick={() => void captureLocation()} disabled={running || locate === "locating"}>
+                <Button variant="secondary" onClick={() => void locateByHand()} disabled={running || locate === "locating"}>
                   {locate === "locating" ? "Locating…" : location ? "Update location" : "Use this device’s location"}
                 </Button>
                 {location ? (
@@ -693,7 +720,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 onClick={() => {
-                  void captureLocation().then((fix) => run(fix));
+                  void locateByHand().then((fix) => run(fix));
                 }}
                 disabled={locate === "locating"}
               >
