@@ -27,7 +27,7 @@ export function Table({
 
 export function THead({ children }: { children: React.ReactNode }) {
   return (
-    <thead className="border-b-2 border-ink">
+    <thead className="rule-light border-b-2 border-ink">
       {children}
     </thead>
   );

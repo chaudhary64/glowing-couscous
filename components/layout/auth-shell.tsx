@@ -36,7 +36,7 @@ export async function AuthShell({ children }: { children: React.ReactNode }) {
     // percentage min-height against an auto-height body collapses, which leaves the ink
     // rail stopping half way down the page with paper below it.
     <div className="flex min-h-dvh flex-col lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
-      <aside className="flex flex-col border-ink bg-ink text-paper">
+      <aside className="tone-chrome chrome-glass flex flex-col border-ink bg-ink text-paper">
         <div className="border-b border-paper/20 px-5 py-5 lg:px-6 lg:py-6">
           <Link
             href="/"

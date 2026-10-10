@@ -21,7 +21,7 @@ export function DocNav() {
   return (
     <nav
       aria-label="Feature write-ups"
-      className="flex flex-col border-ink bg-ink text-paper lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto"
+      className="tone-chrome chrome-glass flex flex-col border-ink bg-ink text-paper lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto"
     >
       <div className="border-b border-paper/20 px-5 py-5 lg:px-6">
         <Link href="/" className="font-display text-2xl leading-none tracking-tight text-paper">

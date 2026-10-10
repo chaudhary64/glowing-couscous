@@ -24,7 +24,7 @@ export function RateTicker() {
     ));
 
   return (
-    <section aria-label="Rate card" className="rate-ticker relative overflow-hidden border-b-2 border-ink bg-ink py-3 text-paper">
+    <section aria-label="Rate card" className="tone-chrome rate-ticker relative overflow-hidden border-b-2 border-ink bg-ink py-3 text-paper">
       <ul className="rate-ticker__track flex w-max">
         {run(0)}
         {run(1)}

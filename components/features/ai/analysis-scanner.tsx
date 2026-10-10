@@ -66,7 +66,7 @@ export function AnalysisScanner({
       role="status"
       aria-live="polite"
       aria-label={`Analysing: ${steps[active]}`}
-      className="analysis-scanner mt-4 grid gap-4 border-2 border-ink bg-ink p-4 text-paper md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]"
+      className="tone-chrome analysis-scanner mt-4 grid gap-4 border-2 border-ink bg-ink p-4 text-paper md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]"
     >
       <div className="analysis-scanner__frame relative aspect-[4/3] overflow-hidden bg-[#0b0f12]">
         {photo ? (

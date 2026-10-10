@@ -1,34 +1,46 @@
 @import "tailwindcss";
 
 /*
-  EcoEPR design tokens.
-  Palette is drawn from the materials this product actually handles, not from
-  generic "eco green": PCB graphite for ink, cool ledger paper, copper trace for
-  the accent, and stamp green reserved strictly for a valid verdict.
+  EcoEPR design tokens — dark.
+  The site is set inside the machine: a near-black ground (the 3D world shows through
+  it), glass panels, warm off-white text, and copper that glows. The palette is still
+  drawn from the material — solder-mask black, copper trace, stamp green kept strictly
+  for a valid verdict — only now it is lit from within instead of printed on paper.
+
+  Token meanings are unchanged, so every screen turned dark at once:
+    ink*          text (and, for emphasis, a light block: primary buttons, solid chips)
+    paper         the ground; paper-raised the glass panels
+    rule*         hairlines
+    void          absolute black, for device bezels
+  Contrast (measured): every text tone is WCAG AA on the glass panels (lowest:
+  ink-muted 5.8:1); chrome copper on a paper-white receipt is 3.5:1, AA for large text,
+  which is the only place receipts use it (the net figure).
 */
 @theme {
-  --color-ink: #12171b;
-  --color-ink-soft: #2b3138;
-  --color-ink-muted: #6d747c;
+  --color-ink: #e9ece6;
+  --color-ink-soft: #bcc4ca;
+  --color-ink-muted: #85909a;
 
-  --color-paper: #e7e9e2;
-  --color-paper-raised: #f5f6f1;
-  --color-rule: #c6cabd;
-  --color-rule-soft: #d9dcd2;
+  --color-paper: #05080b;
+  --color-paper-raised: rgb(14 20 26 / 0.74);
+  --color-rule: #26313b;
+  --color-rule-soft: #18212a;
 
-  --color-copper: #a2542a;
-  --color-copper-tint: #f0e3d9;
+  --color-copper: #e8894d;
+  --color-copper-tint: #2a190f;
 
-  --color-verified: #1d5c3c;
-  --color-verified-tint: #dde8e0;
+  --color-verified: #48c38a;
+  --color-verified-tint: #0d2a1d;
 
-  --color-hazard: #b0311c;
-  --color-hazard-tint: #f2ded8;
+  --color-hazard: #ff6f52;
+  --color-hazard-tint: #2f1411;
 
-  --color-review: #8a6108;
-  --color-review-tint: #f1e8d3;
+  --color-review: #e6b84a;
+  --color-review-tint: #2a2210;
 
-  --color-lead: #5a6470;
+  --color-lead: #8f9cab;
+
+  --color-void: #020406;
 
   --font-display: var(--font-anton), "Arial Narrow", Impact, sans-serif;
   --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
@@ -60,8 +72,18 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
-body {
+html {
+  color-scheme: dark;
   background-color: var(--color-paper);
+}
+
+body {
+  /* The ground under the 3D world (components/world). Without WebGL this gradient is
+     what the site stands on: a dark board, lit warm from above. */
+  background:
+    radial-gradient(1200px 700px at 70% -10%, rgb(232 137 77 / 0.10), transparent 60%),
+    radial-gradient(900px 600px at 0% 100%, rgb(72 195 138 / 0.05), transparent 60%),
+    var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-sans);
   /* Ledger figures must not shift column width when they change. */
@@ -70,7 +92,48 @@ body {
 
 ::selection {
   background-color: var(--color-copper);
-  color: var(--color-paper-raised);
+  color: #05080b;
+}
+
+/* ---------------------------------------------------------------- chrome tone
+   The site's frames — sidebars, headers, footers, the landing hero, the rate ticker,
+   the analysis scanner — were drawn as dark blocks (bg-ink, text-paper) on a light
+   site. Inside .tone-chrome the tokens keep that original light-site meaning, so those
+   blocks render exactly as designed: dark frame, light type, paper-white receipts. */
+.tone-chrome {
+  --color-ink: #0a0f13;
+  --color-ink-soft: #2b3138;
+  --color-ink-muted: #6d747c;
+  --color-paper: #e9ece6;
+  --color-paper-raised: #f6f7f2;
+  --color-rule: #c6cabd;
+  --color-rule-soft: #d9dcd2;
+  --color-copper: #c66a35;
+  --color-copper-tint: #f0e3d9;
+  --color-verified: #1d5c3c;
+  --color-verified-tint: #dde8e0;
+  --color-hazard: #b0311c;
+  --color-hazard-tint: #f2ded8;
+  --color-review: #8a6108;
+  --color-review-tint: #f1e8d3;
+  --color-lead: #5a6470;
+}
+/* The frame itself is glass, so the 3D world moves faintly behind the chrome too. */
+.tone-chrome.chrome-glass {
+  background-color: rgb(8 12 16 / 0.82);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+
+/* ---------------------------------------------------------------------- glass
+   Panels float over the 3D world as frosted glass: a lit top edge, a soft depth
+   shadow. Applied by components/ui/card.tsx. */
+.glass {
+  backdrop-filter: blur(12px) saturate(1.15);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 24px 48px -28px rgb(0 0 0 / 0.75);
 }
 
 :focus-visible {
@@ -717,4 +780,29 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .empty-trace, .empty-chip { animation: none; }
+}
+
+/* ------------------------------------------------------------ dark: light lines
+   Structural rules (page headers, panel headers, stat tiles, table heads) are a copper
+   line of light that fades out, instead of a flat 2px bar: the dark site's version of
+   the weighbridge form's heavy rule. */
+.rule-light {
+  border-image: linear-gradient(90deg, var(--color-copper) 0%, rgb(232 137 77 / 0.38) 28%, rgb(233 236 230 / 0.08) 72%, rgb(233 236 230 / 0.04) 100%) 1;
+}
+
+/* Sidebar: the active block is copper glass with a lit edge (was a paper slab). */
+.tone-chrome .nav-marker {
+  background: linear-gradient(90deg, rgb(232 137 77 / 0.22), rgb(232 137 77 / 0.06));
+  box-shadow:
+    inset 3px 0 0 #e8894d,
+    inset 0 0 24px rgb(232 137 77 / 0.10);
+}
+
+/* Device bezels: black glass with a lit rim, so a phone reads against the dark site. */
+.bezel-lit {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.10),
+    inset 0 0 0 1px rgb(255 255 255 / 0.06),
+    0 40px 80px -30px rgb(0 0 0 / 0.9),
+    0 0 60px -20px rgb(232 137 77 / 0.25);
 }

@@ -72,7 +72,7 @@ export function HandoffShowcase() {
       </ol>
 
       <div className="mx-auto w-full max-w-[300px]" aria-hidden>
-        <div className="rounded-[2rem] border-[9px] border-ink bg-ink shadow-[0_30px_60px_-30px_rgba(18,23,27,0.7)]">
+        <div className="bezel-lit rounded-[2rem] border-[9px] border-void bg-void shadow-[0_30px_60px_-30px_rgba(18,23,27,0.7)]">
           <div className="relative h-[520px] overflow-hidden rounded-[1.45rem] bg-paper-raised">
             <div className="flex items-center justify-between border-b border-rule px-4 py-2 font-mono text-[9px] uppercase tracking-[0.14em] text-ink-muted">
               <span>EcoEPR · Collector</span>

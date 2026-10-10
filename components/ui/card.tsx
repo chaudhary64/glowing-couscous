@@ -1,8 +1,9 @@
 import { cn } from "@/lib/cn";
 
 /**
- * A ruled box. No radius, no shadow — separation comes from border weight, which
- * is how a weighbridge form separates its fields.
+ * A ruled box. No radius — separation comes from border weight, which is how a
+ * weighbridge form separates its fields. On the dark site a plain surface is frosted
+ * glass over the 3D world (`.glass` in globals.css).
  */
 export function Surface({
   children,
@@ -18,9 +19,9 @@ export function Surface({
     <div
       className={cn(
         "border",
-        tone === "plain" && "border-rule bg-paper-raised",
+        tone === "plain" && "glass border-rule bg-paper-raised",
         tone === "inset" && "border-rule-soft bg-paper",
-        tone === "ink" && "border-ink bg-ink text-paper",
+        tone === "ink" && "tone-chrome border-ink bg-ink text-paper",
         className,
       )}
     >
@@ -58,6 +59,7 @@ export function Panel({
         <div
           className={cn(
             "flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b-2 px-4 py-3",
+            tone !== "ink" && "rule-light",
             tone === "ink" ? "border-paper/30" : "border-ink",
           )}
         >

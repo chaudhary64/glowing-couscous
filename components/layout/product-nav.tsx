@@ -82,7 +82,7 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
   return (
     <nav
       aria-label="App sections"
-      className="flex flex-col border-ink bg-ink text-paper lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto"
+      className="tone-chrome chrome-glass flex flex-col border-ink bg-ink text-paper lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto"
     >
       <div className="border-b border-paper/20 px-5 py-5 lg:px-6">
         {/*
@@ -123,7 +123,7 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
                         active
                           ? // On the rail the sliding block is the background; the label turns dark
                             // only as the block arrives under it, never dark-on-dark mid-slide.
-                            "bg-paper text-ink lg:bg-transparent lg:delay-200"
+                            "bg-paper text-ink lg:bg-transparent lg:text-paper lg:delay-200"
                           : "text-paper/80 hover:bg-paper/10 hover:text-paper",
                       ].join(" ")}
                     >

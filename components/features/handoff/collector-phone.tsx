@@ -244,7 +244,7 @@ function Countdown({ until }: { until: string }) {
  */
 export function PhoneFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-[380px] rounded-[2.25rem] border-[10px] border-ink bg-ink shadow-[0_24px_48px_-24px_rgba(18,23,27,0.6)]">
+    <div className="mx-auto w-full max-w-[380px] bezel-lit rounded-[2.25rem] border-[10px] border-void bg-void shadow-[0_24px_48px_-24px_rgba(18,23,27,0.6)]">
       <div className="relative h-[720px] max-h-[calc(100svh-10rem)] min-h-[600px] overflow-hidden rounded-[1.6rem]">
         {children}
       </div>

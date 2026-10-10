@@ -22,7 +22,7 @@ export function HandoffDemo({ load }: { load: DemoLoad }) {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b-2 border-ink pb-4">
+      <header className="flex flex-wrap items-end justify-between gap-4 rule-light border-b-2 border-ink pb-4">
         <div>
           <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-copper">Feature 04 · live demo</p>
           <h1 className="mt-1 font-display text-3xl uppercase leading-[0.95] tracking-tight sm:text-4xl">

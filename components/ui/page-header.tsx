@@ -17,7 +17,7 @@ export function PageHeader({
   meta?: React.ReactNode;
 }) {
   return (
-    <header className="border-b-2 border-ink pb-6">
+    <header className="rule-light border-b-2 border-ink pb-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-copper">
           Feature {String(feature.rank).padStart(2, "0")}
@@ -81,7 +81,7 @@ export function ScreenHeader({
   className?: string;
 }) {
   return (
-    <header className={cn("border-b-2 border-ink pb-5", className)}>
+    <header className={cn("rule-light border-b-2 border-ink pb-5", className)}>
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
         <div className="min-w-0 max-w-3xl">
           {eyebrow ? (

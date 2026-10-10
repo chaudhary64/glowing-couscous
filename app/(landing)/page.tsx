@@ -120,7 +120,7 @@ export default function LandingPage() {
         content and a veil keeps the headline legible over it; without WebGL the section
         is exactly this ground and nothing is missing.
       */}
-      <section data-spotlight className="relative isolate overflow-hidden border-b-2 border-ink bg-ink text-paper">
+      <section data-spotlight className="tone-chrome relative isolate overflow-hidden border-b-2 border-ink bg-ink text-paper">
         <SpotlightLayer className="-z-[5]" />
         <div
           aria-hidden
@@ -451,7 +451,7 @@ export default function LandingPage() {
 
       {/* ------------------------------------------------------------- cta */}
       {/* The board returns for the close: all X-ray now, turning slowly. */}
-      <section data-node data-spotlight className="relative isolate overflow-hidden bg-ink text-paper">
+      <section data-node data-spotlight className="tone-chrome relative isolate overflow-hidden bg-ink text-paper">
         <SpotlightLayer className="-z-[5]" />
         <HeroBoard
           mode="xray"

@@ -36,7 +36,7 @@ const footerLinks: { heading: string; links: { label: string; href: string }[] }
 export function LandingShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-20 border-b-2 border-ink bg-ink text-paper">
+      <header className="tone-chrome chrome-glass sticky top-0 z-20 border-b-2 border-ink bg-ink text-paper">
         <nav
           aria-label="Primary"
           className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-5 gap-y-2 px-5 py-3 sm:px-8"
@@ -100,7 +100,7 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
 
       {/* The last section of the landing page is an ink block too, so the footer's
           rule has to be drawn in paper rather than ink to read as a boundary. */}
-      <footer data-spotlight className="relative isolate overflow-hidden border-t-2 border-paper/25 bg-ink text-paper">
+      <footer data-spotlight className="tone-chrome relative isolate overflow-hidden border-t-2 border-paper/25 bg-ink text-paper">
         <SpotlightLayer className="-z-[5]" />
         <div className="mx-auto grid w-full max-w-6xl gap-8 px-5 py-10 sm:px-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
           <div>

@@ -32,16 +32,23 @@ import type { HeatmapCluster, HeatmapPoint, HeatmapWard } from "@/lib/heatmap/st
  * `scripts/vendor-maplibre.mjs`.
  */
 
-const STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
+// The dark basemap, to sit inside the dark site; overlays below are tuned for it.
+const STYLE_URL = "https://tiles.openfreemap.org/styles/dark";
 const MAPLIBRE_VERSION = "6.11.2";
 
 /** The design tokens, as MapLibre needs them: canvas paint cannot read CSS variables. */
 const COLORS = {
-  ink: "#12171b",
-  copper: "#a2542a",
-  hazard: "#b0311c",
-  verified: "#1d5c3c",
-  lead: "#5a6470",
+  // Light strokes and dots on the dark basemap.
+  ink: "#e9ece6",
+  copper: "#e8894d",
+  hazard: "#ff6f52",
+  verified: "#48c38a",
+  lead: "#8f9cab",
+  /** A district or ward with no pressure yet: one step above the dark land. */
+  calm: "#26313b",
+  /** Count bubbles stay dark so their white figures read. */
+  bubble: "#0a0f13",
+  ground: "#05080b",
 };
 
 /**
@@ -233,7 +240,7 @@ export function HotspotMap({
 
           // India, by district: shaded only where there are detections.
           const hasData = [">", ["coalesce", ["feature-state", "detections"], 0], 0];
-          const districtRamp = ["interpolate", ["linear"], ["coalesce", ["feature-state", "pressure"], 0], 0, "#d9dcd2", 50, COLORS.copper, 100, COLORS.hazard];
+          const districtRamp = ["interpolate", ["linear"], ["coalesce", ["feature-state", "pressure"], 0], 0, COLORS.calm, 50, COLORS.copper, 100, COLORS.hazard];
           map.addLayer({
             id: "district-fill",
             type: "fill",
@@ -294,7 +301,7 @@ export function HotspotMap({
             source: "wards",
             layout: { visibility: "none" },
             paint: {
-              "fill-extrusion-color": ["interpolate", ["linear"], ["get", "pressure"], 0, "#d9dcd2", 50, COLORS.copper, 100, COLORS.hazard],
+              "fill-extrusion-color": ["interpolate", ["linear"], ["get", "pressure"], 0, COLORS.calm, 50, COLORS.copper, 100, COLORS.hazard],
               "fill-extrusion-height": ["*", ["get", "pressure"], WARD_HEIGHT_PER_PRESSURE_M],
               "fill-extrusion-opacity": 0.78,
               "fill-extrusion-vertical-gradient": true,
@@ -368,10 +375,10 @@ export function HotspotMap({
             maxzoom: GROUP_MAX_ZOOM + 1,
             filter: isGroup as never,
             paint: {
-              "circle-color": COLORS.ink,
+              "circle-color": COLORS.bubble,
               "circle-radius": ["step", ["get", "point_count"], 13, 4, 16, 10, 20, 50, 25] as never,
               "circle-stroke-width": 2,
-              "circle-stroke-color": "#f5f6f1",
+              "circle-stroke-color": COLORS.copper,
               "circle-opacity": 0.9,
             },
           });
@@ -435,7 +442,7 @@ export function HotspotMap({
             type: "symbol",
             source: "ward-labels",
             layout: { "text-field": ["get", "letter"], "text-size": 12, "text-font": ["Noto Sans Bold"], "text-allow-overlap": false },
-            paint: { "text-color": COLORS.ink, "text-halo-color": "#f5f6f1", "text-halo-width": 1.5 },
+            paint: { "text-color": COLORS.ink, "text-halo-color": COLORS.ground, "text-halo-width": 1.5 },
           });
 
           map.on("click", "cluster-fill", (event: MapLayerMouseEvent) => {
