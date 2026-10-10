@@ -21,6 +21,8 @@ import type { HeatmapCluster, HeatmapPoint, HeatmapWard } from "@/lib/heatmap/st
  *   shaded the same way relative to the busiest ward.
  * - **Heat:** every point in the window, weighted by recency so a site that went quiet
  *   fades instead of lingering. Points arrive snapped to a ~38 m cell by the server.
+ * - **Groups:** zoomed out, nearby intakes merge into numbered bubbles (a tap zooms in
+ *   until they split); a lone intake is a dot. Past zoom 13 each point is drawn alone.
  * - **Sites:** each hotspot as a true-scale circle of its computed radius, coloured by
  *   status — hazard red when open, copper with a van assigned, green when cleared.
  *
@@ -67,6 +69,8 @@ const toBounds = (b: Box): [[number, number], [number, number]] => [
   [b.east, b.north],
 ];
 const SITE_HEIGHT_PER_DETECTION_M = 110;
+/** Last zoom at which intakes are grouped into bubbles; past it each is its own dot (`points-dot`). */
+const GROUP_MAX_ZOOM = 13;
 const TILT = { pitch: 55, bearing: -18 };
 
 const STATUS_COLOR: Record<HeatmapCluster["status"], string> = {
@@ -214,6 +218,16 @@ export function HotspotMap({
           map.addSource("wards", { type: "geojson", data: wardFeatures([]) });
           map.addSource("ward-labels", { type: "geojson", data: wardLabels() });
           map.addSource("points", { type: "geojson", data: pointFeatures([]) });
+          // The same points, grouped on screen: zoomed out, nearby intakes merge into a
+          // numbered bubble, so two or three of them read as a group long before they are
+          // a hotspot. Display only - sites are still the server's 4-within-150 m rule.
+          map.addSource("point-groups", {
+            type: "geojson",
+            data: pointFeatures([]),
+            cluster: true,
+            clusterRadius: 44,
+            clusterMaxZoom: GROUP_MAX_ZOOM,
+          });
           // promoteId: feature-state (the selected outline) is keyed by the string site code.
           map.addSource("clusters", { type: "geojson", data: clusterFeatures([]), promoteId: "code" });
 
@@ -345,6 +359,76 @@ export function HotspotMap({
               "fill-extrusion-opacity": 0.92,
             },
           });
+          // Groups and lone intakes, below the zoom where each point is drawn on its own.
+          const isGroup = ["has", "point_count"];
+          map.addLayer({
+            id: "group-bubble",
+            type: "circle",
+            source: "point-groups",
+            maxzoom: GROUP_MAX_ZOOM + 1,
+            filter: isGroup as never,
+            paint: {
+              "circle-color": COLORS.ink,
+              "circle-radius": ["step", ["get", "point_count"], 13, 4, 16, 10, 20, 50, 25] as never,
+              "circle-stroke-width": 2,
+              "circle-stroke-color": "#f5f6f1",
+              "circle-opacity": 0.9,
+            },
+          });
+          map.addLayer({
+            id: "group-count",
+            type: "symbol",
+            source: "point-groups",
+            maxzoom: GROUP_MAX_ZOOM + 1,
+            filter: isGroup as never,
+            layout: {
+              "text-field": ["get", "point_count_abbreviated"] as never,
+              "text-font": ["Noto Sans Bold"],
+              "text-size": 12,
+              "text-allow-overlap": true,
+            },
+            paint: { "text-color": "#f5f6f1" },
+          });
+          map.addLayer({
+            id: "group-single",
+            type: "circle",
+            source: "point-groups",
+            maxzoom: GROUP_MAX_ZOOM + 1,
+            filter: ["!", isGroup] as never,
+            paint: {
+              "circle-radius": 5,
+              "circle-color": ["case", ["==", ["get", "hazardous"], 1], COLORS.hazard, COLORS.ink] as never,
+              "circle-stroke-width": 1.5,
+              "circle-stroke-color": "#f5f6f1",
+            },
+          });
+
+          // A bubble opens to the zoom at which it splits apart.
+          map.on("click", "group-bubble", (event: MapLayerMouseEvent) => {
+            const feature = event.features?.[0];
+            const id = feature?.properties?.cluster_id as number | undefined;
+            const source = map?.getSource("point-groups") as GeoJSONSource | undefined;
+            if (!map || id === undefined || !source || feature?.geometry.type !== "Point") return;
+            const center = feature.geometry.coordinates as [number, number];
+            void source
+              .getClusterExpansionZoom(id)
+              .then((zoom) => map?.easeTo({ center, zoom: Math.min(zoom + 0.25, 17), duration: 600 }))
+              .catch(() => map?.easeTo({ center, zoom: map.getZoom() + 2, duration: 600 }));
+          });
+          for (const layer of ["group-bubble", "group-single"]) {
+            map.on("mouseenter", layer, () => {
+              if (map) map.getCanvas().style.cursor = "pointer";
+            });
+            map.on("mouseleave", layer, () => {
+              if (map) map.getCanvas().style.cursor = "";
+            });
+          }
+          map.on("click", "group-single", (event: MapLayerMouseEvent) => {
+            const feature = event.features?.[0];
+            if (!map || feature?.geometry.type !== "Point") return;
+            map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: Math.max(map.getZoom() + 2, 14), duration: 600 });
+          });
+
           map.addLayer({
             id: "ward-letter",
             minzoom: CITY_ZOOM + 0.5,
@@ -389,7 +473,9 @@ export function HotspotMap({
     const map = mapRef.current;
     if (state !== "ready" || !map) return;
     (map.getSource("wards") as GeoJSONSource | undefined)?.setData(wardFeatures(wards));
-    (map.getSource("points") as GeoJSONSource | undefined)?.setData(pointFeatures(points));
+    const pointData = pointFeatures(points);
+    (map.getSource("points") as GeoJSONSource | undefined)?.setData(pointData);
+    (map.getSource("point-groups") as GeoJSONSource | undefined)?.setData(pointData);
     (map.getSource("clusters") as GeoJSONSource | undefined)?.setData(clusterFeatures(clusters));
   }, [state, points, clusters, wards]);
 

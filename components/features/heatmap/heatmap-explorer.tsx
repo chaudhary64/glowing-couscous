@@ -115,7 +115,7 @@ export function HeatmapExplorer({ data, canDispatch }: { data: HeatmapData; canD
                 ? "No geotagged intakes yet. A site appears here once four intakes with a location land within ~150 m of each other inside three weeks."
                 : data.filter.hazardousOnly
                   ? "No site contains a hazardous item in the window."
-                  : `No ~150 m cell has reached ${data.rule.minDetections} detections in the last ${data.rule.windowDays} days.`}
+                  : `No spot has ${data.rule.minDetections} detections within ${data.rule.radiusM} m of each other in the last ${data.rule.windowDays} days.`}
             </p>
           ) : (
             <ol className="flex max-h-72 flex-col overflow-y-auto">

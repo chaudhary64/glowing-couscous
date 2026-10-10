@@ -81,8 +81,8 @@ export function HotspotTable({
       </Table>
 
       <p className="text-[12px] leading-relaxed text-ink-muted">
-        A site is a group of touching ~150 m geohash cells, each with four or more
-        detections in a rolling 21-day window. A cleared site reopens on its own when a
+        A site is four or more detections within 150 m of each other in a rolling
+        21-day window, wherever they fall on the map grid. A cleared site reopens on its own when a
         new detection lands after the clearance, so a returning dump is not hidden by an
         old decision.
       </p>

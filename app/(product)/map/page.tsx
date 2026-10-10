@@ -71,13 +71,13 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
       <ScreenHeader
         eyebrow="Network · Municipal"
         title="Hotspot map"
-        lede="Every geotagged intake anywhere in India is filed to its district (and, in Mumbai, to its BMC ward). Where four or more land in the same ~150 m cell within three weeks, that cell is a site, and an operator can see where the next collection van should stand."
+        lede="Every geotagged intake anywhere in India is filed to its district (and, in Mumbai, to its BMC ward). Where four or more land within 150 m of each other within three weeks, that spot is a site, and an operator can see where the next collection van should stand."
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={data.configured ? "verified" : "hazard"}>
               {data.configured ? "Live intakes" : "No database"}
             </Badge>
-            <Badge tone="ink">Geohash grid · 150 m cell · {data.rule.windowDays}-day window</Badge>
+            <Badge tone="ink">4 within {data.rule.radiusM} m · {data.rule.windowDays}-day window</Badge>
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
               {DISTRICTS.length} districts · {data.livePointCount} geotagged intake{data.livePointCount === 1 ? "" : "s"} in window
             </span>

@@ -26,7 +26,7 @@ export default function HeatmapPage() {
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone="lead">Supporting · rank 05</Badge>
-            <Badge tone="ink">Geohash grid · 150 m cell · {HOTSPOT_RULE.windowDays}-day window</Badge>
+            <Badge tone="ink">4 within {HOTSPOT_RULE.radiusM} m · {HOTSPOT_RULE.windowDays}-day window</Badge>
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">24 BMC wards</span>
           </div>
         }

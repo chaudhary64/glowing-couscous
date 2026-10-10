@@ -175,20 +175,60 @@ describe("hotspot detection", () => {
     assert.equal(detectHotspots(points, NOW).length, 0);
   });
 
-  it("joins touching hot cells into one site and keeps separate ones apart", () => {
-    const cell = geohashBounds(encodeGeohash(base.latitude, base.longitude, 7));
-    const east = { latitude: base.latitude, longitude: cell.east + (cell.east - cell.west) / 2 };
+  it("joins groups within the radius into one site and keeps separate ones apart", () => {
+    // 100 m east: within the radius, so one site. ~220 m east: its own site. 2 km north: its own.
+    const metresEast = (m: number) => base.longitude + m / (111_320 * Math.cos((base.latitude * Math.PI) / 180));
+    const near = { latitude: base.latitude, longitude: metresEast(100) };
+    const apart = { latitude: base.latitude, longitude: metresEast(320) };
     const far = { latitude: base.latitude + 0.02, longitude: base.longitude };
     const pts = [
       ...[1, 2, 3, 4].map((i) => point(`a${i}`, base.latitude, base.longitude)),
-      ...[1, 2, 3, 4].map((i) => point(`b${i}`, east.latitude, east.longitude)),
+      ...[1, 2, 3, 4].map((i) => point(`b${i}`, near.latitude, near.longitude)),
+      ...[1, 2, 3, 4].map((i) => point(`d${i}`, apart.latitude, apart.longitude)),
       ...[1, 2, 3, 4, 5].map((i) => point(`c${i}`, far.latitude, far.longitude)),
     ];
     const found = detectHotspots(pts, NOW);
-    assert.equal(found.length, 2);
-    assert.equal(found[0].detections.length, 8); // busiest first
+    assert.deepEqual(
+      found.map((c) => c.detections.length),
+      [8, 5, 4], // busiest first
+    );
+    assert.deepEqual(found[0].detections.map((p) => p.id[0]).sort().join(""), "aaaabbbb");
+  });
+
+  it("finds a site that straddles a cell edge (the grid-line bug)", () => {
+    // Two detections a few metres west of a cell's east edge, two a few metres east of
+    // it: 2 + 2 per cell, which the old per-cell count never called a site.
+    const cell = geohashBounds(encodeGeohash(base.latitude, base.longitude, 7));
+    const mid = (cell.south + cell.north) / 2;
+    const step = 0.00005; // ~5 m
+    const pts = [
+      point("w1", mid, cell.east - step),
+      point("w2", mid + step, cell.east - step),
+      point("e1", mid, cell.east + step),
+      point("e2", mid + step, cell.east + step),
+    ];
+    const found = detectHotspots(pts, NOW);
+    assert.equal(found.length, 1);
+    assert.equal(found[0].detections.length, 4);
     assert.equal(found[0].cells.length, 2);
-    assert.equal(found[1].detections.length, 5);
+  });
+
+  it("does not call four scattered detections a site", () => {
+    // Each ~300 m from the next: never four within the radius of any one of them.
+    const pts = [0, 1, 2, 3].map((i) => point(`s${i}`, base.latitude + i * 0.0027, base.longitude));
+    assert.equal(detectHotspots(pts, NOW).length, 0);
+  });
+
+  it(`joins detections within ${HOTSPOT_RULE.radiusM} m and leaves one further out alone`, () => {
+    const metre = 1 / 111_320;
+    const pts = [
+      ...[0, 1, 2, 3].map((i) => point(`n${i}`, base.latitude + i * 30 * metre, base.longitude)), // 0–90 m
+      point("edge", base.latitude + 200 * metre, base.longitude), // 110 m past the last: a border point
+      point("out", base.latitude + 600 * metre, base.longitude), // far: not part of it
+    ];
+    const [site, ...rest] = detectHotspots(pts, NOW);
+    assert.equal(rest.length, 0);
+    assert.deepEqual(site.detections.map((p) => p.id).sort(), ["edge", "n0", "n1", "n2", "n3"]);
   });
 
   it("reports hazard share, dominant category and first/last sighting", () => {

@@ -3,29 +3,53 @@ import {
   distanceMetres,
   encodeGeohash,
   geohashBounds,
-  geohashNeighbours,
 } from "@/lib/geo/geohash";
 import type { MaterialCategory } from "@/lib/types";
 
 /**
  * Hotspot detection: pure, deterministic, and the only place the rule lives.
  *
- * The rule is the one `/map` has always printed: **four or more detections inside one
- * geohash cell (~150 m) in a rolling 21-day window** make that cell hot. Hot cells that
- * touch — including diagonally — are one site, because a dumping ground does not stop
- * at a grid line. Everything else here is reporting on that set: where its middle is,
- * how wide it is, what dominates it, and when it was first and last seen.
+ * The rule: **four or more detections within 150 m of each other in a rolling 21-day
+ * window** make a site. Precisely (density clustering, DBSCAN): a detection with at least
+ * four detections — itself included — within 150 m is a *core*; cores within 150 m of
+ * each other are one site, and a detection within 150 m of a core joins that site.
+ *
+ * Distance, not a grid. The first version counted detections per ~150 m geohash cell, so
+ * four pickups twenty metres apart on either side of a cell edge counted as two and two
+ * and never made a site — and phone GPS (±10–50 m) put real pickups across edges all the
+ * time. The geohash grid is still used, but only as an index to find nearby points fast,
+ * and to name a site (`HS-` + its lowest cell) so the code is stable across recomputes.
  *
  * No database, no clock, no I/O. The caller passes the window's end as `now`, which is
  * what lets the tests pin an exact answer and lets a recompute be re-run and agree.
  */
 
 export const HOTSPOT_RULE = {
-  /** Detections a cell needs, inside the window, to count as hot. */
+  /** Detections needed within `radiusM` of a point, itself included, inside the window. */
   minDetections: 4,
+  /** How close detections must be to count toward the same site. */
+  radiusM: 150,
   windowDays: 21,
   cellPrecision: CELL_PRECISION,
 } as const;
+
+type Rule = { minDetections: number; radiusM?: number; windowDays: number; cellPrecision: number };
+
+/**
+ * Cells around `cell` within `rings` steps (a (2r+1)² block, the cell itself included).
+ * Stepped from the cell's bounds and re-encoded, like `geohashNeighbours`.
+ */
+function cellBlock(cell: string, rings: number): string[] {
+  const b = geohashBounds(cell);
+  const height = b.north - b.south;
+  const width = b.east - b.west;
+  const lat = (b.south + b.north) / 2;
+  const lng = (b.west + b.east) / 2;
+  const out = new Set<string>();
+  for (let i = -rings; i <= rings; i++)
+    for (let j = -rings; j <= rings; j++) out.add(encodeGeohash(lat + i * height, lng + j * width, cell.length));
+  return [...out];
+}
 
 export interface DetectionPoint {
   /** A stable id (geopoint id); used for detection rows and for deduping. */
@@ -83,45 +107,93 @@ function mostCommon<T>(values: T[]): T | null {
   return best;
 }
 
-export function detectHotspots(
-  allPoints: DetectionPoint[],
-  now: Date,
-  rule: { minDetections: number; windowDays: number; cellPrecision: number } = HOTSPOT_RULE,
-): ClusterResult[] {
-  const points = withinWindow(allPoints, now, rule.windowDays);
+export function detectHotspots(allPoints: DetectionPoint[], now: Date, rule: Rule = HOTSPOT_RULE): ClusterResult[] {
+  const radiusM = rule.radiusM ?? HOTSPOT_RULE.radiusM;
+  // Sorted by id so every step below visits points in one fixed order: the same input in
+  // any order gives the same sites, codes and memberships.
+  const points = withinWindow(allPoints, now, rule.windowDays).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
-  const byCell = new Map<string, DetectionPoint[]>();
-  for (const p of points) {
-    const cell = encodeGeohash(p.latitude, p.longitude, rule.cellPrecision);
+  // Spatial index: points by cell. A cell's shortest side bounds how many rings of cells
+  // a `radiusM` search has to look through (two at precision 7 anywhere in India).
+  const cellOf = points.map((p) => encodeGeohash(p.latitude, p.longitude, rule.cellPrecision));
+  const byCell = new Map<string, number[]>();
+  cellOf.forEach((cell, i) => {
     const list = byCell.get(cell);
-    if (list) list.push(p);
-    else byCell.set(cell, [p]);
-  }
+    if (list) list.push(i);
+    else byCell.set(cell, [i]);
+  });
+  const ringsFor = new Map<string, number>();
+  const rings = (cell: string) => {
+    let r = ringsFor.get(cell);
+    if (r === undefined) {
+      const b = geohashBounds(cell);
+      const mid = (b.south + b.north) / 2;
+      const side = Math.min(
+        distanceMetres({ latitude: b.south, longitude: b.west }, { latitude: b.north, longitude: b.west }),
+        distanceMetres({ latitude: mid, longitude: b.west }, { latitude: mid, longitude: b.east }),
+      );
+      r = Math.max(1, Math.ceil(radiusM / side));
+      ringsFor.set(cell, r);
+    }
+    return r;
+  };
 
-  const hot = new Set([...byCell].filter(([, list]) => list.length >= rule.minDetections).map(([cell]) => cell));
+  // Every point's neighbours within the radius, itself included.
+  const near: number[][] = points.map((p, i) => {
+    const out: number[] = [];
+    for (const cell of cellBlock(cellOf[i], rings(cellOf[i])))
+      for (const j of byCell.get(cell) ?? []) if (distanceMetres(p, points[j]) <= radiusM) out.push(j);
+    return out.sort((a, b) => a - b);
+  });
+  const core = near.map((list) => list.length >= rule.minDetections);
 
-  // Connected components over hot cells, 8-neighbourhood.
-  const seen = new Set<string>();
-  const clusters: ClusterResult[] = [];
-  for (const start of [...hot].sort()) {
-    if (seen.has(start)) continue;
-    const cells: string[] = [];
+  // Sites: connected components over core points.
+  const site = new Array<number>(points.length).fill(-1);
+  let sites = 0;
+  for (let start = 0; start < points.length; start++) {
+    if (!core[start] || site[start] !== -1) continue;
+    const id = sites++;
+    site[start] = id;
     const queue = [start];
-    seen.add(start);
     while (queue.length) {
-      const cell = queue.shift()!;
-      cells.push(cell);
-      for (const next of geohashNeighbours(cell)) {
-        if (hot.has(next) && !seen.has(next)) {
-          seen.add(next);
-          queue.push(next);
+      const i = queue.shift()!;
+      for (const j of near[i]) {
+        if (core[j] && site[j] === -1) {
+          site[j] = id;
+          queue.push(j);
         }
       }
     }
-    cells.sort();
-    const detections = cells.flatMap((cell) => byCell.get(cell) ?? []);
-    clusters.push(summarise(cells, detections));
   }
+
+  // Border points join the site of their nearest core (ties: the lower index).
+  for (let i = 0; i < points.length; i++) {
+    if (core[i]) continue;
+    let best = -1;
+    let bestDistance = Infinity;
+    for (const j of near[i]) {
+      if (!core[j]) continue;
+      const d = distanceMetres(points[i], points[j]);
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = j;
+      }
+    }
+    if (best !== -1) site[i] = site[best];
+  }
+
+  const members = Array.from({ length: sites }, () => [] as number[]);
+  site.forEach((id, i) => {
+    if (id !== -1) members[id].push(i);
+  });
+
+  const clusters = members
+    // Border points split between two sites can leave one short; it is not a site then.
+    .filter((list) => list.length >= rule.minDetections)
+    .map((list) => {
+      const cells = [...new Set(list.map((i) => cellOf[i]))].sort();
+      return summarise(cells, list.map((i) => points[i]));
+    });
 
   // Busiest first: that is the order a van round should take.
   return clusters.sort((a, b) => b.detections.length - a.detections.length || a.code.localeCompare(b.code));
