@@ -13,6 +13,15 @@ import { sameOrigin } from "./fixtures";
 test.describe.configure({ mode: "serial" });
 test.use({ storageState: stateFile("operator") });
 
+// The cookie and location notice is answered up front (intake.spec.ts walks through it
+// from a fresh browser); left open, it sits over the phone's "Hand over e-waste" button.
+test.beforeEach(async ({ context, baseURL }) => {
+  const consent = { v: 1, location: false, at: new Date().toISOString() };
+  await context.addCookies([
+    { name: "ecoepr.consent", value: encodeURIComponent(JSON.stringify(consent)), url: baseURL! },
+  ]);
+});
+
 const phone = (page: Page) => page.getByRole("region", { name: "Collector's phone" });
 const gate = (page: Page) => page.getByRole("region", { name: "Recycler's gate terminal" });
 
