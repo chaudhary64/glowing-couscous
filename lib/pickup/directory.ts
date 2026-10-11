@@ -1,5 +1,3 @@
-import type { AuthUser } from "@/lib/auth/token";
-
 import { pickupApiConfigured, requestPickupApi } from "@/lib/pickup/api";
 import { isApiError, type PickupEvent, type PickupView } from "@/lib/pickup/types";
 
@@ -125,16 +123,16 @@ interface DestinationRow {
  * are keyed by stream code and the labels come from here rather than from the
  * authorisation snapshot.
  */
-async function readStreams(user: AuthUser): Promise<StreamRow[]> {
-  const result = await requestPickupApi(user, "GET", "/streams");
+async function readStreams(): Promise<StreamRow[]> {
+  const result = await requestPickupApi("GET", "/streams");
   if (result?.status !== 200) throw new Error(problemMessage(result?.body));
   const body = result.body as { streams?: StreamRow[] } | null;
   return body?.streams ?? [];
 }
 
 /** The facilities as they are registered — the directory of record, not an auth snapshot. */
-async function readFacilities(user: AuthUser): Promise<FacilityRow[]> {
-  const result = await requestPickupApi(user, "GET", "/recyclers");
+async function readFacilities(): Promise<FacilityRow[]> {
+  const result = await requestPickupApi("GET", "/recyclers");
   if (result?.status !== 200) throw new Error(problemMessage(result?.body));
   const body = result.body as { facilities?: FacilityRow[] } | null;
   return body?.facilities ?? [];
@@ -145,11 +143,8 @@ async function readFacilities(user: AuthUser): Promise<FacilityRow[]> {
  * compliance officer's question is answered from, so the page and the router cannot
  * disagree about whether a facility is authorised for a hazardous stream.
  */
-async function readDestinationsForStream(
-  user: AuthUser,
-  stream: string,
-): Promise<DestinationRow[]> {
-  const result = await requestPickupApi(user, "GET", "/recyclers", { query: { stream } });
+async function readDestinationsForStream(stream: string): Promise<DestinationRow[]> {
+  const result = await requestPickupApi("GET", "/recyclers", { query: { stream } });
   if (result?.status !== 200) throw new Error(problemMessage(result?.body));
   const body = result.body as { destinations?: DestinationRow[] } | null;
   return body?.destinations ?? [];
@@ -167,17 +162,15 @@ async function readDestinationsForStream(
  * useful fact — it is registered but not authorised — and dropping it would make an
  * unlicensed site look like a site that does not exist.
  */
-export async function listDestinations(
-  user: AuthUser,
-): Promise<PickupRead<Destination>> {
+export async function listDestinations(): Promise<PickupRead<Destination>> {
   if (!pickupApiConfigured()) return notConfigured<Destination>();
   try {
     const [streams, facilities] = await Promise.all([
-      readStreams(user),
-      readFacilities(user),
+      readStreams(),
+      readFacilities(),
     ]);
     const authorisations = await Promise.all(
-      streams.map((stream) => readDestinationsForStream(user, stream.code)),
+      streams.map((stream) => readDestinationsForStream(stream.code)),
     );
 
     const byId = new Map<string, Destination>();
@@ -231,13 +224,10 @@ export async function listDestinations(
  * A load that has not settled carries its handoff state (`handoff`), which is the
  * question an operator asks of an open row; the PIN itself is never in a read.
  */
-export async function listLoads(
-  user: AuthUser,
-  limit = 25,
-): Promise<PickupRead<PickupView>> {
+export async function listLoads(limit = 25): Promise<PickupRead<PickupView>> {
   if (!pickupApiConfigured()) return notConfigured<PickupView>();
   try {
-    const result = await requestPickupApi(user, "GET", "/pickups", {
+    const result = await requestPickupApi("GET", "/pickups", {
       query: { limit: String(limit) },
     });
     if (result?.status !== 200) {
@@ -283,10 +273,9 @@ export interface CollectorActivity {
  * the grouping into a query when it stops being one.
  */
 export async function listCollectorActivity(
-  user: AuthUser,
   limit = 25,
 ): Promise<PickupRead<CollectorActivity>> {
-  const board = await listLoads(user, 100);
+  const board = await listLoads(100);
   if (!board.configured) return notConfigured<CollectorActivity>();
   if (board.error) {
     return { configured: true, error: board.error, rows: [] };
@@ -349,12 +338,11 @@ export async function listCollectorActivity(
  * without inventing the steps between them.
  */
 export async function listLoadEvents(
-  user: AuthUser,
   pickupId: string,
 ): Promise<PickupRead<PickupEvent>> {
   if (!pickupApiConfigured()) return notConfigured<PickupEvent>();
   try {
-    const result = await requestPickupApi(user, "GET", `/pickups/${pickupId}/events`);
+    const result = await requestPickupApi("GET", `/pickups/${pickupId}/events`);
     if (result?.status !== 200) {
       return { configured: true, error: problemMessage(result?.body), rows: [] };
     }
@@ -367,12 +355,11 @@ export async function listLoadEvents(
 
 /** One load with its credit note, for a screen that opens a single row. */
 export async function getLoad(
-  user: AuthUser,
   pickupId: string,
 ): Promise<{ configured: boolean; error: string | null; load: PickupView | null }> {
   if (!pickupApiConfigured()) return { configured: false, error: null, load: null };
   try {
-    const result = await requestPickupApi(user, "GET", `/pickups/${pickupId}`);
+    const result = await requestPickupApi("GET", `/pickups/${pickupId}`);
     if (result?.status !== 200) {
       return { configured: true, error: problemMessage(result?.body), load: null };
     }

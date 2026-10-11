@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const access = await authorizePickup(request, "/handoff");
   if (!access.ok) return access.denied;
 
-  return callPickupApi(access.user, "POST", "/pickups", {
+  return callPickupApi("POST", "/pickups", {
     body: {
       itemCode: DEMO_LOAD.itemCode,
       collectorId: DEMO_LOAD.collectorId,

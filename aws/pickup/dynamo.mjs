@@ -37,25 +37,24 @@ let client = null;
  * check scripts import it before they know whether the environment is configured.
  */
 export function db() {
-  if (!client) client = new DynamoDBClient(localConfig() ?? {});
+  if (!client) client = new DynamoDBClient(regionConfig());
   return client;
 }
 
 /**
- * DynamoDB Local, when `PICKUP_DYNAMODB_ENDPOINT` names one — `npm run pickup:local`
- * sets it. Named for this feature rather than read from the SDK's generic
- * `AWS_ENDPOINT_URL_DYNAMODB`, so pointing the pickup tables at a laptop cannot quietly
- * redirect any other DynamoDB client the app grows. Local accepts any credentials; the
- * placeholders keep the SDK from searching for real ones.
+ * The region the feature's tables live in, named rather than inherited.
+ *
+ * Two kinds of caller share this module: the Lambda, where the runtime sets
+ * `AWS_REGION` for us, and the operator's own tooling (`npm run pickup:seed`, and the
+ * table reads `npm run pickup:check` cleans up with), which runs from a terminal with
+ * no region context and reads `PICKUP_REGION` from `.env.local`. Absent both, the SDK's
+ * own chain decides, exactly as it does for every other AWS client in the app. There is
+ * deliberately no endpoint override here: the feature reads the deployed tables, not a
+ * copy of them on a laptop.
  */
-function localConfig() {
-  const endpoint = process.env.PICKUP_DYNAMODB_ENDPOINT?.trim();
-  if (!endpoint) return null;
-  return {
-    endpoint,
-    region: process.env.PICKUP_REGION?.trim() || "ap-south-1",
-    credentials: { accessKeyId: "local", secretAccessKey: "local" },
-  };
+function regionConfig() {
+  const region = process.env.PICKUP_REGION?.trim() || process.env.AWS_REGION?.trim();
+  return region ? { region } : {};
 }
 
 /* --------------------------------------------------------------- marshalling */

@@ -1,5 +1,3 @@
-import type { AuthUser } from "@/lib/auth/token";
-
 import { listLoads } from "@/lib/pickup/directory";
 import type { PickupView } from "@/lib/pickup/types";
 
@@ -27,8 +25,8 @@ export interface HandoffContext {
   newest: PickupView | null;
 }
 
-export async function readHandoffContext(user: AuthUser): Promise<HandoffContext> {
-  const board = await listLoads(user, 25);
+export async function readHandoffContext(): Promise<HandoffContext> {
+  const board = await listLoads(25);
   if (!board.configured) {
     return { configured: false, error: null, openCount: 0, newest: null };
   }

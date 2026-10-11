@@ -4,9 +4,10 @@ import { defineConfig, devices } from "@playwright/test";
  * End-to-end tests for every feature on `main`. See tests/e2e/README.md.
  *
  * These run **live**: real Cognito sign-ins, real Azure Foundry calls for the AI
- * features (paid), and real writes to the shared RDS database and S3 bucket that the
- * deployed site uses. The smart-pickup tests run against DynamoDB Local, which this
- * config starts alongside the app.
+ * features (paid), and real writes to the shared RDS database, S3 bucket and
+ * smart-pickup tables that the deployed site uses. The pickup screens go through the
+ * deployed API rather than a local stand-in, so a green run is evidence about the
+ * deployment and not about a fixture.
  */
 
 // `.env.local` holds the Cognito, Azure, S3 and RDS settings, plus E2E_PASSWORD for the
@@ -46,26 +47,13 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: process.env.E2E_BASE_URL
     ? undefined
-    : [
-        {
-          // DynamoDB Local + tables + seed + the payout stream relay, for smart pickup.
-          command: "npm run pickup:local",
-          url: "http://127.0.0.1:8000",
-          reuseExistingServer: true,
-          timeout: 60_000,
-        },
-        {
-          // A production build, so the tests exercise what Amplify serves rather than
-          // the dev server's on-demand compilation. `npm run build`, not `next build`,
-          // so the `prebuild` hook vendors the map's worker and stylesheet first.
-          command: `npm run build && npx next start -p ${PORT}`,
-          url: BASE_URL,
-          reuseExistingServer: true,
-          timeout: 300_000,
-          env: {
-            PICKUP_LOCAL: "true",
-            PICKUP_DYNAMODB_ENDPOINT: "http://127.0.0.1:8000",
-          },
-        },
-      ],
+    : {
+        // A production build, so the tests exercise what Amplify serves rather than
+        // the dev server's on-demand compilation. `npm run build`, not `next build`,
+        // so the `prebuild` hook vendors the map's worker and stylesheet first.
+        command: `npm run build && npx next start -p ${PORT}`,
+        url: BASE_URL,
+        reuseExistingServer: true,
+        timeout: 300_000,
+      },
 });

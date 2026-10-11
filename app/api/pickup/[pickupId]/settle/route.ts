@@ -21,7 +21,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/pick
     return pickupJson({ error: { code: "invalid_request", message: "Body must be JSON." } }, 400);
   }
 
-  return callPickupApi(access.user, "POST", `/pickups/${pickupId}/settle`, {
+  return callPickupApi("POST", `/pickups/${pickupId}/settle`, {
     body: {
       pin: body.pin,
       weighedMassG: body.weighedMassG,

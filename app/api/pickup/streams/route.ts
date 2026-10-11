@@ -8,5 +8,5 @@ import { authorizePickup, callPickupApi } from "@/lib/pickup/api";
 export async function GET(request: Request) {
   const access = await authorizePickup(request, "/gate");
   if (!access.ok) return access.denied;
-  return callPickupApi(access.user, "GET", "/streams");
+  return callPickupApi("GET", "/streams");
 }

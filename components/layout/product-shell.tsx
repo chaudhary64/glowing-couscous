@@ -50,7 +50,7 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
   */
   const [holds, loads] = await Promise.all([
     user ? listPendingHolds(100) : null,
-    user ? listLoads(user, 100) : null,
+    user ? listLoads(100) : null,
   ]);
   const counts: Partial<Record<ProductHref, number>> = {};
   if (holds?.configured && holds.rows.length > 0) {

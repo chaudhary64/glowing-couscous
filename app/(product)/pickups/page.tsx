@@ -54,13 +54,13 @@ function isOpen(load: PickupView): boolean {
 export default async function PickupsPage() {
   const user = await requireAccess("/pickups");
 
-  const board = await listLoads(user, 50);
+  const board = await listLoads(50);
   const loads = board.rows;
   const openLoads = loads.filter(isOpen);
   // The load the panel opens on: the newest one still moving, because that is the row an
   // operator can still act on. With everything settled it falls back to the newest load.
   const focus = openLoads[0] ?? loads[0] ?? null;
-  const trail = focus ? await listLoadEvents(user, focus.pickupId) : null;
+  const trail = focus ? await listLoadEvents(focus.pickupId) : null;
 
   const hazardous = loads.filter((load) => load.hazardous);
   const settledInr =

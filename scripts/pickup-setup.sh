@@ -344,6 +344,13 @@ awsd iam attach-role-policy \
 # routing index belongs to. A `Resource: "*"` here would let a bug in this function read
 # the archive's metadata or any table added later, and the whole point of a dedicated
 # role is that the mistake is bounded.
+#
+# The action list is what the routes actually issue, and `dynamodb:Scan` earns its place
+# in it: the operator's board — `GET /pickups` with no `collectorId` — is a full read of
+# the loads table, which is the one question its keys cannot answer (see the note above
+# `scan` in `aws/pickup/dynamo.mjs`). It was missing when that read shipped, and the
+# omission reached the operator as a 500 on a route whose code was correct, which is why
+# the list is here rather than only in the handler's head.
 cat > "${TMPDIR_SETUP}/policy.json" <<JSON
 {
   "Version": "2012-10-17",
@@ -356,6 +363,7 @@ cat > "${TMPDIR_SETUP}/policy.json" <<JSON
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
         "dynamodb:Query",
+        "dynamodb:Scan",
         "dynamodb:ConditionCheckItem",
         "dynamodb:TransactWriteItems"
       ],

@@ -9,8 +9,8 @@ export const instant = false;
 
 /** The collector's phone, on its own — open it on a real handset next to `/gate`. */
 export default async function HandoffPage() {
-  const user = await requireAccess("/handoff");
-  const context = await readHandoffContext(user);
+  await requireAccess("/handoff");
+  const context = await readHandoffContext();
 
   return (
     <div className="space-y-6">

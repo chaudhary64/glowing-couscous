@@ -182,16 +182,16 @@ Environment variables, grouped as they appear in [`.env.example`](.env.example):
 | AI | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_SPEECH_REGION` | Vision model for the photo, Speech for Hindi |
 | Database | `DATABASE_URL` | Secret. `sslmode=no-verify` against RDS |
 | Archive | `S3_BUCKET`, `S3_REGION`, `S3_PREFIX`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Leave the bucket empty and the archive is simply off |
-| Pickup | `PICKUP_API_URL` | The private API behind Cognito |
-| Local pickup | `PICKUP_LOCAL`, `PICKUP_DYNAMODB_ENDPOINT` | Run the handoff screens without AWS |
+| Pickup | `PICKUP_API_URL` | The private API behind Cognito; the only pickup setting the app reads |
 
 `.env.example` is committed on purpose — it carries key names, never values.
 
-### Running the handoff demo without AWS
+### Running the handoff screens
 
-`PICKUP_LOCAL=true` runs the Lambda's own handler in-process against DynamoDB Local, which
-`npm run pickup:local` starts, seeds and relays the payout stream for. That gives you
-`/handoff`, `/gate` and `/demo` on a laptop with no AWS account.
+`/handoff`, `/gate` and `/demo` go through the deployed API, so a laptop needs the same
+`PICKUP_API_URL` a deployment has and nothing else. The board a laptop shows is the rows
+in the deployed tables — the loads, PINs and credit notes the pilot is actually running on
+— rather than a second copy of them that can drift from what a demo shows.
 
 ## 9. Scripts
 
@@ -203,7 +203,7 @@ Environment variables, grouped as they appear in [`.env.example`](.env.example):
 | `npm run s3:check` | Verify the media archive can read and write |
 | `npm run test:e2e` | Playwright end-to-end suite (needs a production build) |
 | `npm run test:heatmap` / `test:heatmap:db` | Hotspot clustering unit and integration tests |
-| `npm run pickup:setup` / `seed` / `check` / `local` / `test` | Provision or exercise the smart-pickup service |
+| `npm run pickup:setup` / `seed` / `check` | Provision, seed or exercise the deployed smart-pickup service |
 | `npm run geo:wards` / `geo:districts` | Regenerate boundary data |
 
 `predev` and `prebuild` copy the MapLibre worker into `public/vendor/` from `node_modules`.
@@ -211,8 +211,8 @@ Environment variables, grouped as they appear in [`.env.example`](.env.example):
 ## 10. Testing
 
 The Playwright suite in [`tests/e2e`](tests/e2e) (83 tests in 10 files) runs against a production build with real
-Cognito sign-ins, live Azure calls, and real S3 and RDS writes; the pickup tests run against
-DynamoDB Local. It covers auth and public pages, per-role access, the dashboard, intake,
+Cognito sign-ins, live Azure calls, and real S3, RDS and smart-pickup writes. It covers
+auth and public pages, per-role access, the dashboard, intake,
 the gatekeeper verdicts, valuation, pickup and settlement, and the team screen.
 
 On Amplify, `amplify.yml` copies the server-side variables into `.env.production` before the

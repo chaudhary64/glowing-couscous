@@ -33,11 +33,11 @@ export const instant = false;
  * make a table look complete.
  */
 export default async function CollectorsPage() {
-  const user = await requireAccess("/collectors");
+  await requireAccess("/collectors");
 
   const [activity, board] = await Promise.all([
-    listCollectorActivity(user, 25),
-    listLoads(user, 50),
+    listCollectorActivity(25),
+    listLoads(50),
   ]);
   const collectors = activity.rows;
   const loads = board.rows;

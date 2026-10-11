@@ -7,7 +7,7 @@ import { sameOrigin } from "./fixtures";
  * Feature 4 — smart pickup & digital credit — through the split-screen demo, as the
  * video shows it: the collector's phone routes the load and shows a PIN, the recycler's
  * gate weighs it and types the PIN, the DynamoDB Stream pays the collector and the phone
- * turns green. Runs against DynamoDB Local (`npm run pickup:local`, started by the config).
+ * turns green. Runs against the deployed API, like every other test in this suite.
  */
 
 test.describe.configure({ mode: "serial" });

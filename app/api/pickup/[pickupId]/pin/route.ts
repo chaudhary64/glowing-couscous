@@ -12,5 +12,5 @@ export async function POST(request: Request, { params }: RouteContext<"/api/pick
   if (!pickupId) {
     return pickupJson({ error: { code: "invalid_request", message: "Pickup ids look like PU-2026-0001." } }, 400);
   }
-  return callPickupApi(access.user, "POST", `/pickups/${pickupId}/pin`);
+  return callPickupApi("POST", `/pickups/${pickupId}/pin`);
 }

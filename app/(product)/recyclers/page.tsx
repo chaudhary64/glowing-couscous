@@ -28,11 +28,11 @@ export const instant = false;
  * rows this table does.
  */
 export default async function RecyclersPage() {
-  const user = await requireAccess("/recyclers");
+  await requireAccess("/recyclers");
 
   const [directory, board] = await Promise.all([
-    listDestinations(user),
-    listLoads(user, 50),
+    listDestinations(),
+    listLoads(50),
   ]);
   const destinations = directory.rows;
   const loads = board.rows;

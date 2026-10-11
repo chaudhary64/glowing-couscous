@@ -2,27 +2,23 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { authorizeUser } from "@/lib/ai/http";
-import { SESSION_COOKIE, type AuthUser } from "@/lib/auth/token";
+import { SESSION_COOKIE } from "@/lib/auth/token";
 
 /**
  * How the app reaches the smart-pickup API (`aws/pickup/`), and nothing else.
  *
- * Two modes, picked by configuration and never by guesswork:
+ * One mode: `PICKUP_API_URL` is the HTTP API Gateway that `scripts/pickup-setup.sh`
+ * provisioned. The session cookie *is* the Cognito ID token, and the API's JWT
+ * authorizer accepts exactly that token, so it is forwarded as the bearer: the API sees
+ * the same identity and the same `eco-*` groups the page did, and there is no service
+ * credential to hold.
  *
- *   **Cloud** — `PICKUP_API_URL` is the HTTP API Gateway that `scripts/pickup-setup.sh`
- *   provisioned. The session cookie *is* the Cognito ID token, and the API's JWT
- *   authorizer accepts exactly that token, so it is forwarded as the bearer: the API
- *   sees the same identity and the same `eco-*` groups the page did, and there is no
- *   service credential to hold.
- *
- *   **Local** — `PICKUP_LOCAL=true` runs the Lambda's own `handler` in this process,
- *   against DynamoDB Local (`npm run pickup:local`). The event is shaped like the one
- *   API Gateway sends, with the claims taken from the session this server just
- *   verified. The code under test on a laptop is therefore the code that deploys, not a
- *   mirror of it.
- *
- * Neither set is a 503 that says so. There is no third, in-memory mode: a handoff that
- * "succeeds" against nothing would be a demo that proves nothing.
+ * A laptop reads the same service a deployment does, and that is the point: the loads,
+ * the PINs and the credit notes are the rows in the deployed tables, not a private copy
+ * of them that can drift from what the pilot shows. There is deliberately no in-process
+ * or in-memory mode — a handoff that "succeeds" against nothing would be a demo that
+ * proves nothing — so an unset `PICKUP_API_URL` is a 503 that says so rather than a
+ * quiet fallback.
  */
 
 export interface PickupApiResult {
@@ -65,31 +61,27 @@ export async function authorizePickup(request: Request, pathname: "/handoff" | "
 type Method = "GET" | "POST";
 
 /**
- * `true` when either mode is configured. A caller that means "the API is switched off"
- * rather than "the API failed" asks this first, which is what the page readers do.
+ * `true` when the API's address is configured. A caller that means "the API is switched
+ * off" rather than "the API failed" asks this first, which is what the page readers do.
  */
 export function pickupApiConfigured(): boolean {
-  return process.env.PICKUP_LOCAL === "true" || Boolean(process.env.PICKUP_API_URL);
+  return Boolean(process.env.PICKUP_API_URL);
 }
 
 /**
  * The API call itself, with no Next.js in it: the status and the parsed body, or null
- * when neither mode is configured.
+ * when the API is not configured at all.
  *
  * `callPickupApi` wraps this for the route handlers; the server-side readers in
- * `lib/pickup/directory.ts` call it directly, and that is the reason to split it out.
- * "How this app reaches the smart-pickup API" is a two-mode decision, and a second copy
- * of it written for the pages would be a second place for the two to disagree.
+ * `lib/pickup/directory.ts` call it directly, and that is the reason to split it out: a
+ * second copy of "how this app reaches the smart-pickup API", written for the pages,
+ * would be a second place for the two to disagree.
  */
 export async function requestPickupApi(
-  user: AuthUser,
   method: Method,
   path: string,
   { body, query }: { body?: unknown; query?: Record<string, string> } = {},
 ): Promise<PickupApiResult | null> {
-  if (process.env.PICKUP_LOCAL === "true") {
-    return await invokeLocally(user, method, path, body, query);
-  }
   if (process.env.PICKUP_API_URL) {
     return await invokeRemotely(method, path, body, query);
   }
@@ -106,7 +98,6 @@ export async function requestPickupApi(
 export type ExpectedRefusal = "pin_mismatch" | "pin_locked" | "pin_expired";
 
 export async function callPickupApi(
-  user: AuthUser,
   method: Method,
   path: string,
   {
@@ -116,12 +107,12 @@ export async function callPickupApi(
   }: { body?: unknown; query?: Record<string, string>; expected?: ExpectedRefusal[] } = {},
 ): Promise<NextResponse> {
   try {
-    const result = await requestPickupApi(user, method, path, { body, query });
+    const result = await requestPickupApi(method, path, { body, query });
 
     if (!result) {
       return problem(
         "pickup_api_not_configured",
-        "The smart-pickup API is not configured. Set PICKUP_LOCAL=true and run `npm run pickup:local`, or set PICKUP_API_URL to the deployed API.",
+        "The smart-pickup API is not configured. Set PICKUP_API_URL to the deployed API — `bash scripts/pickup-setup.sh` writes it into .env.local.",
         503,
       );
     }
@@ -134,55 +125,13 @@ export async function callPickupApi(
     console.error("[pickup] API call failed:", error);
     return problem(
       "pickup_api_unreachable",
-      process.env.PICKUP_LOCAL === "true"
-        ? "DynamoDB Local is not answering. Is `npm run pickup:local` running?"
-        : "The smart-pickup API could not be reached.",
+      "The smart-pickup API could not be reached.",
       502,
     );
   }
 }
 
-/* --------------------------------------------------------------------- local */
-
-type LambdaHandler = (event: unknown) => Promise<{ statusCode: number; body?: string }>;
-
-async function invokeLocally(
-  user: AuthUser,
-  method: Method,
-  path: string,
-  body: unknown,
-  query: Record<string, string> | undefined,
-): Promise<PickupApiResult> {
-  // Loaded on first use, so a cloud deployment never evaluates the Lambda's modules.
-  const { handler } = (await import("@/aws/pickup/index.mjs")) as { handler: LambdaHandler };
-  const response = await handler({
-    rawPath: path,
-    queryStringParameters: query,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    requestContext: {
-      requestId: `local-${crypto.randomUUID()}`,
-      http: { method },
-      authorizer: {
-        jwt: {
-          // What API Gateway's JWT authorizer passes through: claims flattened to
-          // strings. The groups go as a JSON array, one of the shapes `security.mjs`
-          // parses.
-          claims: {
-            sub: user.sub,
-            email: user.email ?? "",
-            "cognito:groups": JSON.stringify(user.groups),
-          },
-        },
-      },
-    },
-  });
-  return {
-    status: response.statusCode,
-    body: response.body ? JSON.parse(response.body) : null,
-  };
-}
-
-/* -------------------------------------------------------------------- remote */
+/* ------------------------------------------------------------- the API call */
 
 async function invokeRemotely(
   method: Method,

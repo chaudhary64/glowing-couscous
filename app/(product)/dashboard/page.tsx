@@ -47,8 +47,8 @@ export default async function DashboardPage() {
     storedCounts(),
     listRecentEvents(8),
     getHeatmap(),
-    listLoads(user, 50),
-    listCollectorActivity(user, 25),
+    listLoads(50),
+    listCollectorActivity(25),
   ]);
   // Only collectors with something settled are ranked: a bar at zero is not a standing.
   const topCollectors = activity.rows.filter((row) => row.settledInr > 0).slice(0, 4);

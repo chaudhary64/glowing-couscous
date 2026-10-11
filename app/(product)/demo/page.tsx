@@ -8,8 +8,8 @@ export const instant = false;
 
 /** Phone and gate side by side, for the 3-minute demo recording. */
 export default async function DemoPage() {
-  const user = await requireAccess("/demo");
-  const context = await readHandoffContext(user);
+  await requireAccess("/demo");
+  const context = await readHandoffContext();
 
   return (
     <div className="space-y-5">
