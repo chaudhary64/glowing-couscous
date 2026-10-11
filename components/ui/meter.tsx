@@ -21,8 +21,11 @@ export function Meter({
   tone = "copper",
   target,
   size = "md",
+  label,
   className,
 }: {
+  /** What the meter measures, for assistive technology; defaults to its percentage. */
+  label?: string;
   /** Current value in the same unit as `max`. */
   value: number;
   max?: number;
@@ -41,6 +44,7 @@ export function Meter({
   return (
     <div
       role="meter"
+      aria-label={label ?? `${Math.round(pct)} percent`}
       aria-valuenow={value}
       aria-valuemin={0}
       aria-valuemax={max}
@@ -91,7 +95,7 @@ export function MeterRow({
         </span>
         <span className="font-mono text-[13px] font-bold text-ink">{display}</span>
       </div>
-      <Meter value={value} tone={tone} target={target} className="mt-1.5" />
+      <Meter value={value} tone={tone} target={target} label={`${label}: ${display}`} className="mt-1.5" />
       {note ? (
         <p className="mt-1.5 text-[12px] leading-snug text-ink-muted">{note}</p>
       ) : null}

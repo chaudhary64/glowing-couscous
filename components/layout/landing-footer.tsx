@@ -121,7 +121,7 @@ export function LandingFooter() {
           className="mx-auto grid w-full max-w-6xl grid-cols-2 gap-x-8 gap-y-12 px-5 sm:px-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_minmax(0,1fr)]"
         >
           <div className="col-span-2 lg:col-span-1">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/45">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/60">
               Verifiable e-waste take-back
             </p>
             <h2 className="mt-3 font-display text-xl uppercase leading-tight tracking-tight">
@@ -143,7 +143,7 @@ export function LandingFooter() {
           </div>
 
           <nav aria-label="Product" className="flex flex-col gap-2 text-[13px]">
-            <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-paper/45">
+            <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-paper/60">
               Product
             </p>
             {productLinks.map((link) => (
@@ -158,7 +158,7 @@ export function LandingFooter() {
           </nav>
 
           <nav aria-label="This page" className="flex flex-col gap-2 text-[13px]">
-            <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-paper/45">
+            <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-paper/60">
               This page
             </p>
             {landingSections.map((link) => (
@@ -173,11 +173,11 @@ export function LandingFooter() {
           </nav>
 
           <div className="flex flex-col items-start gap-3">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/45">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/60">
               Status
             </p>
             <Badge tone="review">{SIMULATED_LABEL}</Badge>
-            <p className="font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-paper/45">
+            <p className="font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-paper/60">
               Rates: a labelled demo card
               <br />
               Route: CPCB-registered recyclers
@@ -189,10 +189,10 @@ export function LandingFooter() {
           data-motion="rows"
           className="mx-auto mt-16 flex w-full max-w-6xl flex-col gap-2 border-t border-paper/20 px-5 pt-6 sm:px-8 lg:flex-row lg:items-center lg:justify-between"
         >
-          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-paper/45">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-paper/60">
             © 2026 EcoEPR · Mumbai + Pune pilot
           </p>
-          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-paper/45">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-paper/60">
             Verified before a rupee is promised
           </p>
         </div>
