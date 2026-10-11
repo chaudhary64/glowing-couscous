@@ -16,14 +16,20 @@
 # the build the normal way, and is additionally referenced statically in
 # `lib/auth/config.ts`, so the pool settings survive even if this step is dropped.
 #
-# This spec is mirrored in the app's own build settings in the Amplify console, so it
-# does not matter which of the two the service decides to honour.
+# Note which copy is used: this repository file is the one Amplify Hosting honours. The
+# app also stores a copy of this spec in its own build settings in the Amplify console,
+# and while this file exists that copy is ignored — so a change here is not live until it
+# is committed and pushed, however the console is configured.
 #
 # The list is deliberately short, because of what the copy costs: anything written into
 # `.env.production` becomes part of the deployment artifacts, and AWS warns that anyone
-# with access to those artifacts can read them. `DATABASE_URL` therefore stays out —
-# nothing in the serving code reads it, so there is no reason to put a database password
-# on disk in a deployment.
+# with access to those artifacts can read them. `DATABASE_URL` is the one entry that has
+# to be here anyway: the Evidence screen reads the archive's rows on the server
+# (`app/(product)/evidence/page.tsx` → `lib/s3/media-assets.ts` → `lib/db/client.ts`), so
+# without it the deployed archive reports "No database" and can list nothing. It is a
+# database password on disk in a deployment, which is why reading it from Secrets Manager
+# or SSM under an IAM role is the right next step — but until then, a screen that cannot
+# work at all is the worse failure.
 #
 # `AZURE_OPENAI_API_KEY` is the exception, and it is a considered one. The AI routes read it at
 # request time, and unlike the pool settings it cannot be baked into the bundle: a
@@ -64,7 +70,7 @@ frontend:
         - npm ci --cache .npm --prefer-offline
     build:
       commands:
-        - env | grep -E '^(COGNITO_REGION|COGNITO_USER_POOL_ID|COGNITO_CLIENT_ID|COGNITO_ISSUER|AZURE_OPENAI_ENDPOINT|AZURE_OPENAI_API_KEY|AZURE_OPENAI_DEPLOYMENT|AZURE_SPEECH_REGION|AZURE_SPEECH_KEY|S3_BUCKET|S3_REGION|S3_PREFIX|S3_ACCESS_KEY_ID|S3_SECRET_ACCESS_KEY|PICKUP_API_URL)=' >> .env.production
+        - env | grep -E '^(COGNITO_REGION|COGNITO_USER_POOL_ID|COGNITO_CLIENT_ID|COGNITO_ISSUER|AZURE_OPENAI_ENDPOINT|AZURE_OPENAI_API_KEY|AZURE_OPENAI_DEPLOYMENT|AZURE_SPEECH_REGION|AZURE_SPEECH_KEY|S3_BUCKET|S3_REGION|S3_PREFIX|S3_ACCESS_KEY_ID|S3_SECRET_ACCESS_KEY|PICKUP_API_URL|DATABASE_URL)=' >> .env.production
         - npm run build
   artifacts:
     baseDirectory: .next
