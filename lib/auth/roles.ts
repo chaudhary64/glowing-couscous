@@ -15,17 +15,17 @@ export const ROLES = {
   "eco-owner": {
     label: "Owner",
     rank: 1,
-    summary: "Everything, including members and billing.",
+    summary: "Everything an admin can. Billing is not built yet.",
   },
   "eco-admin": {
     label: "Admin",
     rank: 2,
-    summary: "Organization settings, members, facilities and rate cards.",
+    summary: "The team and the rate card in force, plus everything an officer can.",
   },
   "eco-officer": {
     label: "Officer",
     rank: 3,
-    summary: "Validation decisions, EPR filings, credit approvals.",
+    summary: "Valuations, validation decisions and recyclers, plus everything an operator can.",
   },
   "eco-operator": {
     label: "Operator",
@@ -45,6 +45,7 @@ export type Role = keyof typeof ROLES;
 export const RANK_ANY_ROLE = 5;
 export const RANK_OPERATOR = 4;
 export const RANK_OFFICER = 3;
+export const RANK_ADMIN = 2;
 
 export const roleLabel = (role: Role | null): string =>
   role ? ROLES[role].label : "No role assigned";
@@ -162,6 +163,15 @@ export const GUARDS: readonly Guard[] = [
     minRank: RANK_OFFICER,
     requirement: "officer or above",
     paths: ["/recyclers"],
+  },
+  {
+    // Who has an account, and the prices in force: the two things an admin answers
+    // for. Both are read-only here — roles are Cognito groups and the card ships in
+    // code — so a viewer-level screen would leak the team list for no gain.
+    id: "administration",
+    minRank: RANK_ADMIN,
+    requirement: "admin or above",
+    paths: ["/team", "/rates"],
   },
 ];
 

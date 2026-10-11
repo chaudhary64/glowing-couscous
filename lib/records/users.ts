@@ -1,9 +1,10 @@
-import { eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 
 import { database, databaseConfigured } from "@/db/client";
 import { users } from "@/db/schema";
 
 import type { AuthUser } from "@/lib/auth/token";
+import type { RecordsResult } from "@/lib/types";
 
 /**
  * `users.cognito_sub` — the join between a verified token and a row.
@@ -131,5 +132,59 @@ export async function resolveUserId(cognitoSub: string): Promise<string | null> 
       .trim();
     console.error("[db] resolving a user failed", message);
     return null;
+  }
+}
+
+/** One account as the team list shows it. */
+export interface Member {
+  name: string;
+  email: string | null;
+  status: string;
+  /** ISO time of the last sign-in, or null for an account that never signed in. */
+  lastSeenAt: string | null;
+}
+
+/**
+ * Everyone with a `users` row, most recently seen first.
+ *
+ * The table is a mirror of the Cognito pool written at sign-in (`provisionUser`), so this
+ * lists the people who have actually used the app. Roles are not here: they are Cognito
+ * groups, carried on each person's token, and the database never stores a copy that
+ * could fall out of step with the pool.
+ */
+export async function listMembers(limit = 200): Promise<RecordsResult<Member>> {
+  if (!databaseConfigured()) return { configured: false, error: null, rows: [] };
+  const connection = database();
+  if (!connection) return { configured: false, error: null, rows: [] };
+
+  try {
+    const rows = await connection.db
+      .select({
+        name: users.fullName,
+        email: users.email,
+        status: users.status,
+        lastSeenAt: users.lastSeenAt,
+      })
+      .from(users)
+      .orderBy(sql`${users.lastSeenAt} desc nulls last`, desc(users.fullName))
+      .limit(limit);
+    return {
+      configured: true,
+      error: null,
+      rows: rows.map((row) => ({
+        name: row.name,
+        email: row.email,
+        status: row.status,
+        lastSeenAt: row.lastSeenAt ? row.lastSeenAt.toISOString() : null,
+      })),
+    };
+  } catch (error) {
+    const cause =
+      error instanceof Error && error.cause instanceof Error ? error.cause.message : null;
+    const message = (cause ?? (error instanceof Error ? error.message : String(error)))
+      .replace(/\s+/g, " ")
+      .trim();
+    console.error("[db] listing members failed", message);
+    return { configured: true, error: message.slice(0, 200), rows: [] };
   }
 }

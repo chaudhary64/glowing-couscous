@@ -28,6 +28,8 @@ export const SCREENS = [
   { path: "/valuation", minRank: 3, nav: "Valuations", title: "Valuations" },
   { path: "/validation", minRank: 3, nav: "Validation queue", title: "Validation queue" },
   { path: "/recyclers", minRank: 3, nav: "Recyclers", title: "Recyclers" },
+  { path: "/team", minRank: 2, nav: "Team", title: "Team" },
+  { path: "/rates", minRank: 2, nav: "Rate card", title: "Rate card" },
 ] as const;
 
 export const stateFile = (role: RoleName) => `tests/e2e/.auth/${role}.json`;
