@@ -37,7 +37,7 @@ lists and prices the materials itself.
 ## 3. What runs today
 
 The pipeline is real, end to end. What is still sample data is labelled on the screen
-that shows it, and listed in section 11.
+that shows it.
 
 | Area | State |
 | --- | --- |
@@ -160,9 +160,6 @@ navigation simply hides what the matrix refuses.
   Speech transcribes the Hindi voice note.
 - **MapLibre GL** with OpenFreeMap tiles for the hotspot map.
 
-The full architecture diagram and a service-by-service breakdown are in
-[docs/demo-video-script.md](docs/demo-video-script.md).
-
 ## 8. Getting started
 
 **Prerequisites:** Node.js 20.9 or newer, npm, and access to the demo Cognito pool,
@@ -229,24 +226,3 @@ build, because Amplify's SSR compute does not inherit the app's environment sett
 - The rate card is a labelled demo card; replacing it with a licensed feed changes nothing
   else.
 - WhatsApp is the next channel, not part of this build.
-
-### Not built yet
-
-- **Still sample data, and labelled as such:** the dashboard's "Loads in play" board, and
-  the intake screen's worked examples. Collectors have no profile records yet, so
-  `/collectors` is an activity view built from the loads.
-- **Auth gaps:** no token refresh (sessions end after an hour), no password reset, no MFA,
-  one role per person rather than per organisation, and no separate collector role.
-- **AI on Azure, not AWS:** Bedrock was the plan, but the AWS account was blocked from it
-  while this was built. Only the transport in `lib/ai/foundry.ts` is vendor-specific.
-- **The van round is not a driving route:** it is a priority order by detection count.
-- **The RDS security group is open to `0.0.0.0/0`**, because Amplify's SSR compute has no
-  static egress. It is compensated by `rds.force_ssl=1` and a long generated password.
-  The fix is an IAM role on the Amplify compute reading secrets from Secrets Manager. This
-  must not outlive the demo.
-
-
----
-
-Recording the demo? [docs/demo-video-script.md](docs/demo-video-script.md) has the video
-script, the architecture diagram, the AWS service table and a pre-recording checklist.
