@@ -69,20 +69,17 @@ test("API: the same photo sent twice is never priced as a second item", async ({
       data: { photo, note: "Laptop motherboard, dead." },
       timeout: 110_000,
     });
-  // Whether the *first* send creates an item is not asserted: item codes are a hash of
-  // the model's description (lib/ai/analyse.ts), so an earlier run's identical
-  // description may already own the code. What must hold is the second send.
   const first = await (await send()).json();
   const second = await send();
   expect(second.status()).toBe(200);
   const again = await second.json();
 
-  // Never a second item. How lib/records/items.ts gets there varies — the earlier code
-  // reused, the upload already resolved to an item, or no new submission row to hang
-  // one off — and the model may describe the photo differently the second time, so
-  // only the invariant is asserted.
+  // The id comes from the photograph, not the model's words (lib/ai/analyse.ts), so the
+  // second send resolves to the same submission however the model describes it, and a
+  // fresh photograph is recorded even when an earlier item was described the same way.
+  expect(again.id).toBe(first.id);
+  expect(first.priced.created, JSON.stringify(first.submission)).toBe(true);
   expect(again.priced.created, JSON.stringify(again.priced)).toBe(false);
-  expect(first.priced.configured).toBe(true);
 });
 
 test("API: bad requests are refused before the model is called", async ({ request, baseURL }) => {
