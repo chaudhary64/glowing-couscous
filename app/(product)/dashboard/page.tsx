@@ -5,6 +5,7 @@ import { Panel, Surface } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { MeterRow } from "@/components/ui/meter";
+import { mayOpen, RoleLink } from "@/components/ui/role-link";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
 import { SIMULATED_CLAIM } from "@/lib/disclaimer";
@@ -57,10 +58,64 @@ export default async function DashboardPage() {
   const notesInr =
     loads.reduce((total, load) => total + Number(load.creditNoteAmountPaise ?? 0), 0) / 100;
   const openSites = heat.clusters.filter((c) => c.status === "open");
-  // Across India, by district: the busiest four, each with its state.
-  const pressureWards = heat.districts.slice(0, 4);
+  // Across India, by district: the busiest four, each with its state. Pressure is relative
+  // to the busiest district, so a single detection would score 100/100; a district is
+  // ranked only once it has as many detections as a hotspot needs.
+  const rankable = heat.districts.filter((district) => district.detections >= heat.rule.minDetections);
+  const pressureWards = rankable.slice(0, 4);
+  const tooFew = heat.districts.length - rankable.length;
   const counts = snapshot.counts;
   const configured = snapshot.configured;
+  const role = user.role;
+
+  /*
+    One dashboard, cut to the role reading it. A card, button or link whose screen this
+    role cannot open is left out (or kept as plain text where the words still inform),
+    so nobody is sent to /no-access from their own home screen. The counts above stay:
+    they are information, not a door.
+  */
+  const attention = [
+    {
+      href: "/validation",
+      dot: "review",
+      value: counts ? counts.awaitingDecision : "—",
+      title: "Items awaiting a human decision",
+      note: counts
+        ? `${counts.awaitingDecision} of the ${counts.held} items the gatekeeper held have no live decision on them yet.`
+        : "The validation queue counts these itself.",
+      counted: true,
+    },
+    {
+      href: "/validation",
+      dot: "hazard",
+      value: counts ? counts.rejected : "—",
+      title: "Uploads refused before a credit",
+      note: "Verdicts recorded as rejected, which no human has to look at again unless the collector re-uploads.",
+      counted: true,
+    },
+    {
+      href: "/map",
+      dot: "hazard",
+      value: heat.configured ? openSites.length : "—",
+      title: "Hotspots with no van assigned",
+      note: openSites.length
+        ? `${openSites.slice(0, 2).map((site) => site.label).join(" and ")}${openSites.length > 2 ? ` and ${openSites.length - 2} more` : ""}.`
+        : `No site has four geotagged intakes within ~150 m in the last ${heat.rule.windowDays} days.`,
+      counted: true,
+    },
+    {
+      href: "/pickups",
+      dot: "copper",
+      value: board.configured ? openLoads.length : "—",
+      title: "Loads waiting at the gate",
+      note: board.configured
+        ? `${openLoads.length} of ${loads.length} loads have not settled. A load settles when the recycler types the collector's PIN at the gate.`
+        : "The pickup service is not configured, so no load can be read.",
+      counted: board.configured,
+    },
+  ] as const;
+  const cards = attention.filter((card) => mayOpen(role, card.href));
+  const cardGrid = ["", "", "sm:grid-cols-2", "sm:grid-cols-3", "sm:grid-cols-2 lg:grid-cols-4"][cards.length];
 
   return (
     <div className="flex flex-col gap-10">
@@ -73,12 +128,16 @@ export default async function DashboardPage() {
             : "The pipeline writes its submissions, prices, verdicts and decisions into Postgres, and this screen counts them. With no database configured there is nothing to count, and the panels below say what they could not read."
         }
         actions={
-          <>
-            <ButtonLink href="/intake">New intake</ButtonLink>
-            <ButtonLink href="/validation" variant="secondary">
-              Clear validation queue
-            </ButtonLink>
-          </>
+          mayOpen(role, "/intake") || mayOpen(role, "/validation") ? (
+            <>
+              {mayOpen(role, "/intake") ? <ButtonLink href="/intake">New intake</ButtonLink> : null}
+              {mayOpen(role, "/validation") ? (
+                <ButtonLink href="/validation" variant="secondary">
+                  Clear validation queue
+                </ButtonLink>
+              ) : null}
+            </>
+          ) : undefined
         }
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -147,128 +206,45 @@ export default async function DashboardPage() {
         </Surface>
       )}
 
-      <section>
-        <SectionHeader
-          eyebrow="Work queue"
-          title="Needs attention"
-          note="Every card here is counted: the decisions and hotspots from the pipeline's own rows, the loads from the smart-pickup service's pickups table."
-        />
+      {cards.length > 0 ? (
+        <section>
+          <SectionHeader
+            eyebrow="Work queue"
+            title="Needs attention"
+            note="Every card here is counted: the decisions and hotspots from the pipeline's own rows, the loads from the smart-pickup service's pickups table."
+          />
 
-        <ul className="mt-5 grid gap-px border border-rule bg-rule sm:grid-cols-2 lg:grid-cols-4">
-          <li className="bg-paper-raised p-4">
-            <div className="flex items-start justify-between gap-3">
-              <Dot tone="review" />
-              <span className="font-display text-2xl leading-none tracking-tight text-copper">
-                {counts ? counts.awaitingDecision : "—"}
-              </span>
-            </div>
-            <h3 className="mt-3 text-sm font-medium leading-snug">
-              <Link href="/validation" className="hover:text-copper">
-                Items awaiting a human decision
-              </Link>
-            </h3>
-            <p className="mt-1.5 text-[12px] leading-snug text-ink-muted">
-              {counts
-                ? `${counts.awaitingDecision} of the ${counts.held} items the gatekeeper held have no live decision on them yet.`
-                : "The validation queue counts these itself."}
-            </p>
-            <p className="mt-3 flex items-center gap-2">
-              <Badge tone="verified">Counted</Badge>
-            </p>
-            <Link
-              href="/validation"
-              className="mt-3 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-            >
-              Open →
-            </Link>
-          </li>
-
-          <li className="bg-paper-raised p-4">
-            <div className="flex items-start justify-between gap-3">
-              <Dot tone="hazard" />
-              <span className="font-display text-2xl leading-none tracking-tight text-copper">
-                {counts ? counts.rejected : "—"}
-              </span>
-            </div>
-            <h3 className="mt-3 text-sm font-medium leading-snug">
-              <Link href="/validation" className="hover:text-copper">
-                Uploads refused before a credit
-              </Link>
-            </h3>
-            <p className="mt-1.5 text-[12px] leading-snug text-ink-muted">
-              Verdicts recorded as rejected, which no human has to look at again unless
-              the collector re-uploads.
-            </p>
-            <p className="mt-3 flex items-center gap-2">
-              <Badge tone="verified">Counted</Badge>
-            </p>
-            <Link
-              href="/validation"
-              className="mt-3 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-            >
-              Open →
-            </Link>
-          </li>
-
-          <li className="bg-paper-raised p-4">
-            <div className="flex items-start justify-between gap-3">
-              <Dot tone="hazard" />
-              <span className="font-display text-2xl leading-none tracking-tight text-copper">
-                {heat.configured ? openSites.length : "—"}
-              </span>
-            </div>
-            <h3 className="mt-3 text-sm font-medium leading-snug">
-              <Link href="/map" className="hover:text-copper">
-                Hotspots with no van assigned
-              </Link>
-            </h3>
-            <p className="mt-1.5 text-[12px] leading-snug text-ink-muted">
-              {openSites.length
-                ? `${openSites.slice(0, 2).map((site) => site.label).join(" and ")}${openSites.length > 2 ? ` and ${openSites.length - 2} more` : ""}.`
-                : `No site has four geotagged intakes within ~150 m in the last ${heat.rule.windowDays} days.`}
-            </p>
-            <p className="mt-3 flex items-center gap-2">
-              <Badge tone="verified">Counted</Badge>
-            </p>
-            <Link
-              href="/map"
-              className="mt-3 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-            >
-              Open →
-            </Link>
-          </li>
-
-          <li className="bg-paper-raised p-4">
-            <div className="flex items-start justify-between gap-3">
-              <Dot tone="copper" />
-              <span className="font-display text-2xl leading-none tracking-tight text-copper">
-                {board.configured ? openLoads.length : "—"}
-              </span>
-            </div>
-            <h3 className="mt-3 text-sm font-medium leading-snug">
-              <Link href="/pickups" className="hover:text-copper">
-                Loads waiting at the gate
-              </Link>
-            </h3>
-            <p className="mt-1.5 text-[12px] leading-snug text-ink-muted">
-              {board.configured
-                ? `${openLoads.length} of ${loads.length} loads have not settled. A load settles when the recycler types the collector's PIN at the gate.`
-                : "The pickup service is not configured, so no load can be read."}
-            </p>
-            <p className="mt-3 flex items-center gap-2">
-              <Badge tone={board.configured ? "verified" : "hazard"}>
-                {board.configured ? "Counted" : "No service"}
-              </Badge>
-            </p>
-            <Link
-              href="/pickups"
-              className="mt-3 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-            >
-              Open →
-            </Link>
-          </li>
-        </ul>
-      </section>
+          <ul className={`mt-5 grid gap-px border border-rule bg-rule ${cardGrid}`}>
+            {cards.map((card) => (
+              <li key={card.title} className="bg-paper-raised p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <Dot tone={card.dot} />
+                  <span className="font-display text-2xl leading-none tracking-tight text-copper">
+                    {card.value}
+                  </span>
+                </div>
+                <h3 className="mt-3 text-sm font-medium leading-snug">
+                  <Link href={card.href} className="hover:text-copper">
+                    {card.title}
+                  </Link>
+                </h3>
+                <p className="mt-1.5 text-[12px] leading-snug text-ink-muted">{card.note}</p>
+                <p className="mt-3 flex items-center gap-2">
+                  <Badge tone={card.counted ? "verified" : "hazard"}>
+                    {card.counted ? "Counted" : "No service"}
+                  </Badge>
+                </p>
+                <Link
+                  href={card.href}
+                  className="mt-3 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
+                >
+                  Open →
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <section>
@@ -301,12 +277,14 @@ export default async function DashboardPage() {
                         {formatTimestamp(event.at)}
                       </TD>
                       <TD>
-                        <Link
+                        <RoleLink
+                          role={role}
                           href={event.href}
                           className="font-medium underline decoration-rule decoration-1 underline-offset-2 hover:decoration-copper"
+                          plainClassName="font-medium"
                         >
                           {event.subject}
-                        </Link>
+                        </RoleLink>
                         <p className="mt-1 text-[12px] leading-snug text-ink-muted">
                           {event.detail}
                         </p>
@@ -359,12 +337,13 @@ export default async function DashboardPage() {
                         className={load.hazardous ? "border-l-[5px] border-l-hazard" : undefined}
                       >
                         <TD mono>
-                          <Link
+                          <RoleLink
+                            role={role}
                             href="/pickups"
                             className="underline decoration-rule underline-offset-2 hover:decoration-copper"
                           >
                             {load.pickupId}
-                          </Link>
+                          </RoleLink>
                           <p className="mt-1 text-[11px] text-ink-muted">
                             {load.streamLabel} · {load.facilityName}
                           </p>
@@ -402,7 +381,9 @@ export default async function DashboardPage() {
             <div className="flex flex-col">
               {pressureWards.length === 0 ? (
                 <p className="text-[13px] leading-relaxed text-ink-soft">
-                  No geotagged intakes in the last {heat.rule.windowDays} days yet.
+                  {tooFew > 0
+                    ? `No district has ${heat.rule.minDetections} detections in the last ${heat.rule.windowDays} days yet, so none is ranked. ${tooFew} district${tooFew === 1 ? " has" : "s have"} fewer.`
+                    : `No geotagged intakes in the last ${heat.rule.windowDays} days yet.`}
                 </p>
               ) : null}
               {pressureWards.map((ward) => (
@@ -426,12 +407,14 @@ export default async function DashboardPage() {
             eyebrow="From the load board · Collectors"
             title="Leading by settled credits"
             actions={
-              <Link
+              <RoleLink
+                role={role}
                 href="/collectors"
+                hide
                 className="font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
               >
                 All collectors →
-              </Link>
+              </RoleLink>
             }
           >
             {topCollectors.length === 0 ? (

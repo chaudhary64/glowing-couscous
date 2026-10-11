@@ -21,9 +21,12 @@ import type { IntakeSample, ResolvedItemSummary } from "@/lib/types";
 export function IntakeConsole({
   samples,
   resolved,
+  canValue = true,
 }: {
   samples: IntakeSample[];
   resolved: Record<string, ResolvedItemSummary>;
+  /** Whether this role may open Valuations; an operator may not, so no link is shown. */
+  canValue?: boolean;
 }) {
   const [activeId, setActiveId] = useState(samples[0].id);
   const active = samples.find((sample) => sample.id === activeId) ?? samples[0];
@@ -159,12 +162,14 @@ export function IntakeConsole({
                 </p>
               )}
 
-              <Link
-                href="/valuation"
-                className="ml-auto border-[3px] border-ink bg-ink px-4 py-2 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-paper hover:text-ink"
-              >
-                Open the valuation
-              </Link>
+              {canValue ? (
+                <Link
+                  href="/valuation"
+                  className="ml-auto border-[3px] border-ink bg-ink px-4 py-2 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-paper hover:text-ink"
+                >
+                  Open the valuation
+                </Link>
+              ) : null}
             </div>
           </Panel>
         </section>

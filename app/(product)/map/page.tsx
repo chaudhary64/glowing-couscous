@@ -182,6 +182,7 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
             <VanRound
               hotspots={hotspots}
               wards={wards}
+              canOpenBoard={canOpen("/pickups", user.role).ok}
               actions={(spot) => {
                 const cluster = byCode.get(spot.id);
                 return cluster ? <DispatchButtons cluster={cluster} canDispatch={canDispatch} /> : null;

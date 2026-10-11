@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { LiveAnalysis } from "@/components/features/ai/live-analysis";
 import { IntakeConsole } from "@/components/features/intake/intake-console";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
+import { mayOpen, RoleLink } from "@/components/ui/role-link";
 import { Surface } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
@@ -44,7 +44,8 @@ function resolvedEntry(sample: IntakeSample): [string, ResolvedItemSummary] {
 }
 
 export default async function IntakePage() {
-  await requireAccess("/intake");
+  const user = await requireAccess("/intake");
+  const canValue = mayOpen(user.role, "/valuation");
 
   const [tallies, log] = await Promise.all([storedCounts(), listRecentIntakes(6)]);
   const counts = tallies.counts;
@@ -58,9 +59,11 @@ export default async function IntakePage() {
         title="New intake"
         lede="Point a phone at the item or say what it is in Hindi. The upload comes back as a priced item with a confidence on every field, and nothing is promised to the collector until it clears the gatekeeper. Every figure below is counted from the submissions this database holds."
         actions={
-          <ButtonLink href="/valuation" variant="secondary">
-            Open valuations
-          </ButtonLink>
+          canValue ? (
+            <ButtonLink href="/valuation" variant="secondary">
+              Open valuations
+            </ButtonLink>
+          ) : undefined
         }
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -130,7 +133,7 @@ export default async function IntakePage() {
             actually holds.
           </span>
         </p>
-        <IntakeConsole samples={intakeSamples} resolved={resolved} />
+        <IntakeConsole samples={intakeSamples} resolved={resolved} canValue={canValue} />
       </div>
 
       <section>
@@ -203,12 +206,13 @@ export default async function IntakePage() {
                       <TD>
                         {row.item ? (
                           <>
-                            <Link
+                            <RoleLink
+                              role={user.role}
                               href={`/valuation?item=${encodeURIComponent(row.item.id)}`}
                               className="underline decoration-rule decoration-1 underline-offset-2 hover:decoration-copper"
                             >
                               {row.item.label}
-                            </Link>
+                            </RoleLink>
                             <p className="mt-1 font-mono text-[11px] text-ink-muted">
                               {row.item.id}
                             </p>
@@ -246,12 +250,14 @@ export default async function IntakePage() {
                       </TD>
                       <TD>
                         {row.item ? (
-                          <Link
+                          <RoleLink
+                            role={user.role}
                             href={`/valuation?item=${encodeURIComponent(row.item.id)}`}
+                            hide
                             className="font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
                           >
                             Open →
-                          </Link>
+                          </RoleLink>
                         ) : null}
                       </TD>
                     </TR>

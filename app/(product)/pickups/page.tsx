@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
+import { mayOpen, RoleLink } from "@/components/ui/role-link";
 import { Panel, Surface } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { Field, FieldList } from "@/components/ui/field-list";
@@ -83,9 +83,11 @@ export default async function PickupsPage() {
         lede="Route every load to a licensed line, then settle the note against the weight the recycler actually took. Hazardous loads can only go to a destination authorised for that stream."
         actions={
           <>
-            <ButtonLink href="/recyclers" variant="secondary">
-              Destinations
-            </ButtonLink>
+            {mayOpen(user.role, "/recyclers") ? (
+              <ButtonLink href="/recyclers" variant="secondary">
+                Destinations
+              </ButtonLink>
+            ) : null}
             <ButtonLink href="/handoff" variant="secondary">
               Collector handoff
             </ButtonLink>
@@ -199,12 +201,14 @@ export default async function PickupsPage() {
                             </p>
                           </TD>
                           <TD>
-                            <Link
+                            <RoleLink
+                              role={user.role}
                               href="/recyclers"
                               className="font-medium underline decoration-rule decoration-1 underline-offset-2 hover:decoration-copper"
+                              plainClassName="font-medium"
                             >
                               {load.facilityName}
-                            </Link>
+                            </RoleLink>
                             <p className="mt-1 font-mono text-[11px] text-ink-muted">
                               {load.cpcbLicense}
                             </p>
