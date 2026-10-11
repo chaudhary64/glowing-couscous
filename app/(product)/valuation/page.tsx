@@ -321,7 +321,7 @@ export default async function ValuationsPage({
                       <Field label="Mass" value={formatMass(openItem.massGrams)} mono />
                       <Field
                         label="Assayed by"
-                        value={openValuation.model ?? "not recorded"}
+                        value="Automated analysis"
                         tone="muted"
                       />
                       <Field
@@ -480,7 +480,7 @@ export default async function ValuationsPage({
                     ) : null}
 
                     <p className="mt-5 border-t border-rule pt-3 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">
-                      {openVerdict.modelVersion} · checked{" "}
+                      Automated gatekeeper · checked{" "}
                       {formatIstStamp(openVerdict.checkedAt)} ·{" "}
                       <Link
                         href="/validation"

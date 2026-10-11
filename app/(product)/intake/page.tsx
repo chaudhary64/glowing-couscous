@@ -190,7 +190,6 @@ export default async function IntakePage() {
                         <span className="font-medium">{row.summary ?? "Untitled submission"}</span>
                         <p className="mt-1 font-mono text-[11px] text-ink-muted">
                           {row.id}
-                          {row.model ? ` · ${row.model}` : ""}
                           {row.confidence !== null
                             ? ` · ${formatConfidence(row.confidence)} confidence`
                             : ""}

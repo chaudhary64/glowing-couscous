@@ -539,7 +539,7 @@ export default async function LandingPage() {
             body="Valid or invalid on every upload, before a rupee is promised. A rejected submission names the rule it broke rather than guessing at what it might be."
             figure={formatPct(gatekeeper.confidence)}
             note={`${verdictLabel(gatekeeper.verdict)} · ${gatekeeper.matchedClass}`}
-            footer={`${gatekeeper.modelVersion} · ${gatekeeper.checkedAt}`}
+            footer={`Automated gatekeeper · ${gatekeeper.checkedAt}`}
             artifact={
               <div className="flex flex-col items-start gap-4">
                 <VerdictMark verdict={gatekeeper.verdict} />
@@ -566,7 +566,7 @@ export default async function LandingPage() {
               The model never states a rupee figure.
             </h3>
             <p className="mt-4 text-base leading-relaxed text-ink-soft">
-              Microsoft Foundry reads the photograph and the Hindi voice note in a single call
+              The vision model reads the photograph and the Hindi voice note in a single call
               and returns vocabulary: an item class from a closed list, material ids with mass
               estimates, a verdict and a confidence. A reply whose ids or verdict fall outside
               those closed lists is discarded rather than guessed at, and no priced figure is
@@ -752,10 +752,9 @@ export default async function LandingPage() {
 
           <p className="mt-10 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-dashed border-rule pt-4 font-mono text-[11px] uppercase leading-relaxed tracking-[0.14em] text-ink-muted">
             <span className="text-copper">Not AWS</span>
-            <span className="text-ink">Microsoft Foundry</span>
+            <span className="text-ink">A multimodal model</span>
             <span className="normal-case tracking-normal">
-              reads the photograph and the Hindi audio in a single call, and is named here
-              rather than folded into the badge.
+              reads the photograph and the Hindi audio in a single call.
             </span>
           </p>
         </div>

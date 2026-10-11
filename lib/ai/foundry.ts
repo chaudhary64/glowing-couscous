@@ -179,7 +179,7 @@ function buildContent(args: AiCallArgs, maxBytes = MAX_MEDIA_BYTES): Record<stri
       const format = AUDIO_FORMATS[mime];
       if (!format) {
         throw new AiCallError(
-          `Microsoft Foundry reads WAV or MP3 audio, and this clip is ${mime}. The browser re-encodes a recording to WAV before it is sent.`,
+          `Live analysis reads WAV or MP3 audio, and this clip is ${mime}. The browser re-encodes a recording to WAV before it is sent.`,
           415,
         );
       }
@@ -224,7 +224,7 @@ async function invoke(
     const reason =
       (error as Error).name === "TimeoutError" ? "ran out of time" : "could not be reached";
     throw new AiCallError(
-      `${deployment} ${reason} (${elapsed} ms elapsed, in a ${TOTAL_BUDGET_MS} ms request budget).`,
+      `The AI service ${reason} (${elapsed} ms elapsed, in a ${TOTAL_BUDGET_MS} ms request budget).`,
     );
   }
 
@@ -244,7 +244,7 @@ async function invoke(
     const sentAudio = content.some((part) => part.type === "input_audio");
     if (response.status === 400 && sentAudio && /text or image_url|audio/i.test(body)) {
       throw new AiCallError(
-        `Microsoft Foundry deployment "${deployment}" does not accept audio input, so the voice note could not be read. An audio-capable model (the gpt-audio family) has to be deployed and named by AZURE_OPENAI_DEPLOYMENT. ${snippet}`,
+        `The configured AI deployment does not accept audio input, so the voice note could not be read. An audio-capable model has to be deployed and named by AZURE_OPENAI_DEPLOYMENT. ${snippet}`,
         400,
       );
     }
@@ -253,12 +253,12 @@ async function invoke(
       response.status === 401 || response.status === 403
         ? " Check AZURE_OPENAI_API_KEY."
         : response.status === 404
-          ? ` Check AZURE_OPENAI_DEPLOYMENT — "${deployment}" may not be deployed on this resource.`
+          ? ` Check AZURE_OPENAI_DEPLOYMENT — the named deployment may not exist on this resource.`
           : response.status === 400 && /content_filter|content management policy/i.test(body)
-            ? " Foundry's content filter refused the input."
+            ? " The content filter refused the input."
             : "";
     throw new AiCallError(
-      `Microsoft Foundry responded ${response.status}.${hint} ${snippet}`,
+      `The AI service responded ${response.status}.${hint} ${snippet}`,
       response.status,
     );
   }
@@ -267,7 +267,7 @@ async function invoke(
   try {
     payload = JSON.parse(body);
   } catch {
-    throw new AiCallError("Microsoft Foundry returned a body that was not JSON.");
+    throw new AiCallError("The AI service returned a body that was not JSON.");
   }
 
   const parsed = payload as {
@@ -283,20 +283,20 @@ async function invoke(
   // report: the fault is the budget, not the model's obedience.
   if (choice?.finish_reason === "length") {
     throw new AiCallError(
-      `Microsoft Foundry hit the ${MAX_TEXT_TOKENS}-token output limit before finishing, so the answer was incomplete and nothing could be priced.`,
+      `The AI service hit the ${MAX_TEXT_TOKENS}-token output limit before finishing, so the answer was incomplete and nothing could be priced.`,
       502,
     );
   }
 
   if (choice?.message?.refusal) {
     throw new AiCallError(
-      `Microsoft Foundry refused the request (${choice.message.refusal.slice(0, 200)}).`,
+      `The AI service refused the request (${choice.message.refusal.slice(0, 200)}).`,
     );
   }
 
   if (!text) {
     throw new AiCallError(
-      `Microsoft Foundry returned no text${choice?.finish_reason ? ` (finish_reason ${choice.finish_reason})` : ""}.`,
+      `The AI service returned no text${choice?.finish_reason ? ` (finish_reason ${choice.finish_reason})` : ""}.`,
     );
   }
 

@@ -811,7 +811,7 @@ export async function listRecentEvents(limit = 10): Promise<RecordsResult<Stored
         kind: "intake" as const,
         subject: `${row.code} captured`,
         detail: row.summary ?? (row.mode === "voice" ? "Hindi voice note" : "Photograph"),
-        actor: row.model ?? "capture panel",
+        actor: "capture panel",
         href: "/intake" as const,
       })),
       ...verdictRows.map((row) => ({
@@ -822,7 +822,7 @@ export async function listRecentEvents(limit = 10): Promise<RecordsResult<Stored
         kind: row.verdict === "verified" ? ("valuation" as const) : ("validation" as const),
         subject: `${row.itemCode} ${VERDICT_WORDS[row.verdict]}`,
         detail: readableClass(row.matchedClass) ?? row.itemLabel,
-        actor: row.modelVersion,
+        actor: "gatekeeper",
         href: row.verdict === "verified" ? ("/valuation" as const) : ("/validation" as const),
       })),
       ...decisionRows.map((row) => ({

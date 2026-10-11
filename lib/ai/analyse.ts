@@ -336,7 +336,7 @@ export async function analyseItem(input: AnalyseItemInput): Promise<AiAnalysis> 
   const warnings = [...parsed.warnings];
   if (call.fallbackFrom) {
     warnings.push(
-      `${call.fallbackFrom} was at capacity, so ${call.model} answered instead.`,
+      `The primary model was at capacity, so a substitute answered instead.`,
     );
   }
 
@@ -405,7 +405,7 @@ export async function analyseIntake(
   warnings.push(...parsed.warnings);
   if (call.fallbackFrom) {
     warnings.push(
-      `${call.fallbackFrom} was at capacity, so ${call.model} answered instead.`,
+      `The primary model was at capacity, so a substitute answered instead.`,
     );
   }
 

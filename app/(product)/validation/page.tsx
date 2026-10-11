@@ -221,7 +221,7 @@ export default async function ValidationQueuePage() {
                 </div>
 
                 <p className="mt-4 border-t border-dotted border-rule pt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
-                  Refused by {item.gatekeeper?.modelVersion ?? "an unidentified model"} at{" "}
+                  Refused by the automated gatekeeper at{" "}
                   {item.gatekeeper
                     ? formatIstStamp(item.gatekeeper.checkedAt)
                     : "an unrecorded time"}

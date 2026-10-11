@@ -26,7 +26,7 @@ test("UI: a photo of a motherboard is valued, priced and gatekept", async ({ pag
 
   await expect(page.getByRole("heading", { name: "What the collector is offered" })).toBeVisible({ timeout: 90_000 });
   await expect(page.getByRole("heading", { name: "What produced this" })).toBeVisible();
-  await expect(page.getByText(/Foundry · /).first()).toBeVisible();
+  await expect(page.getByText(/Automated analysis/).first()).toBeVisible();
   // The failure panel (a 2px hazard box) must be absent — not the hazard *badges* the
   // result carries for a board with lead solder.
   await expect(page.locator("div.border-2.border-hazard.bg-hazard-tint")).toHaveCount(0);

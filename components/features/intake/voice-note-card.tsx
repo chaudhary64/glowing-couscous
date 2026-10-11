@@ -16,7 +16,7 @@ import type { VoiceNote } from "@/lib/types";
  */
 export function VoiceNoteCard({
   voiceNote,
-  engine = "Azure Speech · hi-IN",
+  engine = "Automated transcription",
 }: {
   voiceNote: VoiceNote;
   engine?: string;

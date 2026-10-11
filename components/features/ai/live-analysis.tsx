@@ -898,7 +898,7 @@ function Provenance({ source, warnings }: { source: AiAnalysis["source"]; warnin
   return (
     <div className="flex flex-col gap-2 border-t border-rule pt-3">
       <p className="flex flex-wrap items-center gap-2">
-        <Badge tone="ink">Foundry · {source.model}</Badge>
+        <Badge tone="ink">Automated analysis</Badge>
         <Badge tone="neutral">{(source.latencyMs / 1000).toFixed(1)} s</Badge>
         <Badge tone="neutral">{source.inputs.join(" + ")}</Badge>
         <span className="font-mono text-[11px] text-ink-muted">{source.calledAt}</span>
@@ -1085,7 +1085,7 @@ function IntakeResult({ result }: { result: RecordedIntake }) {
       {result.voiceNote ? (
         <VoiceNoteCard
           voiceNote={result.voiceNote}
-          engine="Azure Speech · hi-IN"
+          engine="Automated transcription"
         />
       ) : null}
 
@@ -1095,7 +1095,7 @@ function IntakeResult({ result }: { result: RecordedIntake }) {
           caption="Every field carries the confidence that matters more than the value"
         />
         <p className="mt-4 flex flex-wrap items-center gap-2 border-t border-rule pt-3">
-          <Badge tone="ink">Foundry · {result.source.model}</Badge>
+          <Badge tone="ink">Automated analysis</Badge>
           <Badge tone="neutral">{(result.source.latencyMs / 1000).toFixed(1)} s</Badge>
           <span className="text-[12px] leading-snug text-ink-muted">
             Each field says whether it came from the photo or the voice note.
