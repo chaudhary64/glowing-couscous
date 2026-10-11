@@ -244,7 +244,7 @@ build, because Amplify's SSR compute does not inherit the app's environment sett
   static egress. It is compensated by `rds.force_ssl=1` and a long generated password.
   The fix is an IAM role on the Amplify compute reading secrets from Secrets Manager. This
   must not outlive the demo.
-  -thank you.
+
 
 ---
 
