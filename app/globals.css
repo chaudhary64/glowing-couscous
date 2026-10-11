@@ -806,6 +806,14 @@ body {
 .world-backdrop canvas {
   display: block;
 }
+/* A phone's world is a picture of the page's station (world-backdrop.tsx). */
+.world-still {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .world-veil {
   position: absolute;
   inset: 0;

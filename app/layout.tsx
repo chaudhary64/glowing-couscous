@@ -4,6 +4,7 @@ import "./globals.css";
 import { ConsentBanner } from "@/components/layout/consent-banner";
 import { MotionObserver } from "@/components/motion/motion-observer";
 import { WorldBackdrop } from "@/components/world/world-backdrop";
+import { SITE_URL } from "@/lib/site-url";
 import { TiltLayer } from "@/components/motion/tilt-layer";
 
 const anton = Anton({
@@ -28,6 +29,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: SITE_URL,
   title: "EcoEPR — Verifiable e-waste take-back",
   description:
     "Multi-modal AI bridge connecting informal e-waste collectors to CPCB-registered recyclers, producing verifiable brand EPR compliance.",

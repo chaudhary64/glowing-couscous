@@ -59,11 +59,24 @@ export const STATIONS: Record<string, Station> = {
   "/recyclers": { eye: [0.3, 0.85, -2.0], look: [0.05, 0.03, -0.5] },
 };
 
-/** Docs, sign-in and anything unlisted: a slow high pass over the whole board. */
-export function stationFor(pathname: string): Station {
-  if (STATIONS[pathname]) return STATIONS[pathname];
+/**
+ * The station a path stands at, by its key in `STATIONS`, or "overview" for docs,
+ * sign-in and anything unlisted (a slow high pass over the whole board). Also names the
+ * pre-rendered still a phone shows (`public/world/<name>.webp`).
+ */
+export function stationKey(pathname: string): string {
+  if (STATIONS[pathname]) return pathname;
   const section = `/${pathname.split("/")[1] ?? ""}`;
-  return STATIONS[section] ?? OVERVIEW;
+  return STATIONS[section] ? section : "overview";
+}
+
+export function stationFor(pathname: string): Station {
+  return STATIONS[stationKey(pathname)] ?? OVERVIEW;
+}
+
+/** The still's file name for a station key: "/" is "landing", "/map" is "map". */
+export function stillName(key: string): string {
+  return key === "/" ? "landing" : key.replace(/^\//, "");
 }
 
 /** Eye and look along a station's scroll path at progress `p`, eased between keyframes. */

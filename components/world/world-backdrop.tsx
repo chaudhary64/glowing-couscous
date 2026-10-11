@@ -4,18 +4,24 @@ import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
+import { hasGpuWebGL } from "@/lib/gpu";
+
+import { stationKey, stillName } from "./stations";
 import type { WorldTier } from "./world-scene";
 
 /**
  * Mounts the 3D world behind every page (root layout), and decides how much of it a
  * device gets:
  *
+ *   switched off     the sidebar's "3D world" switch (cookie `ecoepr.world=off`)
+ *   phone / tablet   a picture of the page's station: `public/world/<station>.webp`,
+ *                    rendered from this scene by `scripts/render-world-stills.mjs`.
+ *                    A phone used to load three.js and the board (about 2.5 MB) and
+ *                    block its main thread for seconds to draw that one frame.
  *   no WebGL, or WebGL only in software (SwiftShader, llvmpipe, a VM's basic
  *                    renderer — measured at 1 fps here, against 60 on the GPU):
  *                    nothing; the page stands on the CSS ground in globals.css
- *   switched off     the sidebar's "3D world" switch (cookie `ecoepr.world=off`)
  *   reduced motion   one still frame at the page's station
- *   phone / tablet   one still frame ("low"): a lit board, no running loop
  *   desktop          the live world; "high" with bloom on 8+ cores, "mid" without
  *
  * The scene's code and the board model load after the page has painted (dynamic
@@ -47,40 +53,25 @@ export function worldSwitchedOff(): boolean {
   return document.cookie.split("; ").includes(`${WORLD_COOKIE}=off`);
 }
 
-const SOFTWARE = /swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/i;
-
-let gpu: boolean | undefined;
-/**
- * WebGL on real graphics hardware. `failIfMajorPerformanceCaveat` makes the browser
- * refuse a context it would have to emulate in software; the renderer string catches
- * the browsers that hand one out anyway.
- */
-function hasGpuWebGL(): boolean {
-  if (gpu === undefined) {
-    try {
-      const gl = document.createElement("canvas").getContext("webgl2", { failIfMajorPerformanceCaveat: true });
-      if (!gl) {
-        gpu = false;
-      } else {
-        const info = gl.getExtension("WEBGL_debug_renderer_info");
-        const renderer = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "";
-        gpu = !SOFTWARE.test(renderer);
-        gl.getExtension("WEBGL_lose_context")?.loseContext();
-      }
-    } catch {
-      gpu = false;
-    }
-  }
-  return gpu;
-}
-
 function snapshot(): Mode {
-  if (worldSwitchedOff() || !hasGpuWebGL()) return "off";
+  if (worldSwitchedOff()) return "off";
   const [reduced, coarse, narrow] = QUERIES.map((query) => window.matchMedia(query).matches);
+  if ((coarse || narrow) && !stationOverride()) return "low:still";
+  if (!hasGpuWebGL()) return "off";
   if (coarse || narrow) return "low:still";
   const cores = navigator.hardwareConcurrency ?? 4;
   const tier: WorldTier = cores >= 8 ? "high" : "mid";
   return `${tier}:${reduced ? "still" : "live"}`;
+}
+
+/**
+ * Development only, for `scripts/render-world-stills.mjs`: `?world-station=/intake`
+ * draws that page's station with the 3D scene on any page (the product's pages need a
+ * sign-in the script does not have). Compiled out of production builds.
+ */
+function stationOverride(): string | null {
+  if (process.env.NODE_ENV !== "development") return null;
+  return new URLSearchParams(window.location.search).get("world-station");
 }
 
 export function WorldBackdrop() {
@@ -92,9 +83,24 @@ export function WorldBackdrop() {
   if (mode === "off") return null;
   const [tier, motion] = mode.split(":") as [WorldTier, "live" | "still"];
 
+  const override = stationOverride();
+
   return (
     <div aria-hidden className="world-backdrop" data-ready={ready ? "" : undefined}>
-      <WorldScene pathname={pathname} tier={tier} still={motion === "still"} onReady={onReady} />
+      {tier === "low" && !override ? (
+        // A plain <img>: one fixed, full-bleed picture with no layout to reserve, and
+        // the optimizer would only re-encode a file that is already sized for phones.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/world/${stillName(stationKey(pathname))}.webp`}
+          alt=""
+          decoding="async"
+          className="world-still"
+          onLoad={onReady}
+        />
+      ) : (
+        <WorldScene pathname={override ?? pathname} tier={tier} still={motion === "still"} onReady={onReady} />
+      )}
       <div className="world-veil" />
     </div>
   );

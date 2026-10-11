@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { cn } from "@/lib/cn";
+import { hasGpuWebGL } from "@/lib/gpu";
 
 /**
  * Mounts the hero's 3D board behind the headline.
@@ -11,7 +12,8 @@ import { cn } from "@/lib/cn";
  * The headline and receipt are server HTML and paint first; the board fades in behind
  * them once its code and model arrive, so it never holds up the largest paint. Its
  * render loop runs only while the hero is on screen. Under reduced motion it is one
- * still frame; without WebGL the hero is simply the ink ground it was designed on.
+ * still frame; without WebGL on a real GPU the hero is simply the ink ground it was
+ * designed on.
  *
  * Below the desktop breakpoint the board is its own block between the headline and the
  * receipt, framed for portrait (`compact`) and drawn at a lower pixel ratio.
@@ -24,18 +26,6 @@ function onReducedChange(notify: () => void) {
   const query = window.matchMedia(REDUCED);
   query.addEventListener("change", notify);
   return () => query.removeEventListener("change", notify);
-}
-let webglSupport: boolean | undefined;
-function supportsWebGL(): boolean {
-  if (webglSupport === undefined) {
-    try {
-      const canvas = document.createElement("canvas");
-      webglSupport = Boolean(canvas.getContext("webgl2") ?? canvas.getContext("webgl"));
-    } catch {
-      webglSupport = false;
-    }
-  }
-  return webglSupport;
 }
 const never = () => () => {};
 
@@ -59,7 +49,7 @@ export function HeroBoard({
   const [active, setActive] = useState(true);
   const [ready, setReady] = useState(false);
   const reduced = useSyncExternalStore(onReducedChange, () => window.matchMedia(REDUCED).matches, () => false);
-  const webgl = useSyncExternalStore(never, supportsWebGL, () => false);
+  const webgl = useSyncExternalStore(never, hasGpuWebGL, () => false);
   const wide = useSyncExternalStore(onWideChange, () => window.matchMedia(WIDE).matches, () => false);
 
   useEffect(() => {

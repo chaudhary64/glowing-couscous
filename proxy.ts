@@ -73,5 +73,7 @@ export const config = {
   // worker without the page's navigation, and a redirect to /login breaks the map.
   // `models/` is the landing page's 3D board, which a signed-out visitor must load.
   // `geo/` is public boundary data (India's districts) the map fetches from its worker.
-  matcher: ["/((?!api|_next|vendor/|models/|geo/|favicon.ico).*)"],
+  // `world/` holds the pictures of the 3D world a phone shows behind every page.
+  // robots.txt and sitemap.xml are for crawlers, which have no session.
+  matcher: ["/((?!api|_next|vendor/|models/|geo/|world/|favicon.ico|robots.txt|sitemap.xml).*)"],
 };

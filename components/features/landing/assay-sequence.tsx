@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
+import { hasGpuWebGL } from "@/lib/gpu";
 
 /**
  * "Collected → assayed → priced → stamped", told once, on scroll.
@@ -67,19 +68,6 @@ const beatAt = (p: number) => {
 /** The exploded, side-on frame shown as the one still image under reduced motion. */
 const STILL_PROGRESS = 0.7;
 
-let webglSupport: boolean | undefined;
-/** Asked once per page: creating contexts to probe is not free. */
-function supportsWebGL(): boolean {
-  if (webglSupport === undefined) {
-    try {
-      const canvas = document.createElement("canvas");
-      webglSupport = Boolean(canvas.getContext("webgl2") ?? canvas.getContext("webgl"));
-    } catch {
-      webglSupport = false;
-    }
-  }
-  return webglSupport;
-}
 
 const REDUCED = "(prefers-reduced-motion: reduce)";
 function onReducedChange(notify: () => void) {
@@ -97,7 +85,7 @@ export function AssaySequence({ facts, stamp }: { facts: AssayFacts; stamp: Reac
   const [ready, setReady] = useState(false);
   // The server renders the full-motion, WebGL layout; the client corrects it on hydration.
   const reduced = useSyncExternalStore(onReducedChange, () => window.matchMedia(REDUCED).matches, () => false);
-  const webgl = useSyncExternalStore(never, supportsWebGL, () => true);
+  const webgl = useSyncExternalStore(never, hasGpuWebGL, () => true);
 
   // Load the 3D only when the section is about a screen away.
   useEffect(() => {
