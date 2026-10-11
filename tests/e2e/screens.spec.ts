@@ -41,5 +41,6 @@ test("the dashboard links through to the working screens", async ({ page }) => {
 
 test("the hotspot map lists wards", async ({ page }) => {
   await page.goto("/map");
-  await expect(page.locator("table, svg").first()).toBeVisible();
+  // Within the page itself: the rail's menu icon is an svg too.
+  await expect(page.locator("main").locator("table, svg").first()).toBeVisible();
 });

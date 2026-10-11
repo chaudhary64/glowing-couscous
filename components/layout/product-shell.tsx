@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 
+import { NavFrame } from "@/components/layout/nav-frame";
 import { ProductNav } from "@/components/layout/product-nav";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { roleLabel } from "@/lib/auth/roles";
@@ -61,15 +62,20 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <div className="flex min-h-full flex-col lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
-      <ProductNav
-        counts={counts}
-        viewer={{
-          name: user?.name ?? user?.email ?? "Unknown account",
-          email: user?.email ?? null,
-          role: user?.role ?? null,
-        }}
-      />
+    // The grid and the rail's folded state live in `NavFrame`, a client component, so the
+    // menu button can widen the page without this shell knowing about it.
+    <NavFrame
+      nav={
+        <ProductNav
+          counts={counts}
+          viewer={{
+            name: user?.name ?? user?.email ?? "Unknown account",
+            email: user?.email ?? null,
+            role: user?.role ?? null,
+          }}
+        />
+      }
+    >
 
       <div className="flex min-w-0 flex-col">
         <div className="sticky top-0 z-10 border-b-[3px] border-ink bg-paper lg:hidden">
@@ -106,6 +112,6 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
           {children}
         </main>
       </div>
-    </div>
+    </NavFrame>
   );
 }
