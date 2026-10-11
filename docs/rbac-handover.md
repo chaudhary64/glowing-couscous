@@ -409,10 +409,27 @@ tables alone):
 npm run pickup:setup
 ```
 
-`scripts/pickup-setup.sh` packages the sources with `zip` **or** Python's `zipfile`; on the machine
-this was built on there is no `zip`, so it takes the Python path. If you redeploy by hand instead
-of through the script, the arcnames must be flat — `index.mjs` at the root of the archive, no
-directory prefix — or Lambda will not find `index.handler`.
+`scripts/pickup-setup.sh` packages the sources with `zip` **or** Python's `zipfile`, whichever is
+present. Both paths put the files at the **root** of the archive — checked, the Python fallback
+writes `index.mjs` and not `./index.mjs` — which matters because Lambda looks for `index.handler`
+at the top level: an archive with a directory prefix deploys a function that cannot find its
+handler and answers every route with a 502. There is no `zip` on this machine, so the Python path
+is the one that runs here.
+
+When you only want the new code in (no IAM, route or table changes), the script's two steps can be
+run on their own. This is the form Phase A used, and the form deploy 2 in step 28 wants:
+
+```bash
+python -c "import glob,os,zipfile;z=zipfile.ZipFile('dist/ecoepr-smart-pickup.zip','w',zipfile.ZIP_DEFLATED);[z.write(p,os.path.basename(p)) for p in glob.glob('aws/pickup/*.mjs')];z.close()"
+aws lambda update-function-code --function-name ecoepr-smart-pickup --region ap-south-1 \
+  --zip-file fileb://dist/ecoepr-smart-pickup.zip
+aws lambda wait function-updated --function-name ecoepr-smart-pickup --region ap-south-1
+```
+
+After an update, `aws lambda get-function-configuration --function-name ecoepr-smart-pickup
+--region ap-south-1 --query '[State,LastModified,CodeSha256]' --output text` should read `Active`
+with a `LastModified` from the last minute; a `CodeSha256` that did not change means the upload
+did not land.
 
 **Check the database enum:**
 
@@ -421,10 +438,14 @@ npm run db:check
 node --env-file=.env.local -e 'const{Client}=require("pg");(async()=>{const c=new Client({connectionString:process.env.DATABASE_URL});await c.connect();const r=await c.query(`select enumlabel from pg_enum join pg_type t on t.oid=enumtypid where t.typname=$1 order by enumsortorder`,["membership_role"]);console.log(r.rows.map(x=>x.enumlabel).join(", "));await c.end()})()'
 ```
 
-**Re-run the contract's matrix check** (a throwaway in the gitignored `dist/`, not a committed
-test): `node --import ./scripts/ts-paths.mjs dist/rbac-contract-check.mts` — it asserts all five
-roles against all sixteen paths, that no `requirement` string still promises "or above", and that
-an unresolved scope fails closed. Re-create it from git history if `dist/` has been cleaned.
+**The matrix check.** Phase A verified the frozen matrix before handing it over, with a throwaway
+script at `dist/rbac-contract-check.mts`: all five roles against all sixteen paths, no `requirement`
+string still promising "or above", the prefix matching (`/intakes` is not beneath `/intake`), and an
+unresolved scope failing closed. **That file is in nobody's history** — `dist/` is ignored build
+output, so it was never committed and it is not on this branch, and it will be gone the first time
+something cleans `dist/`. The **committed** acceptance test for the matrix is
+[`tests/e2e/access.spec.ts`](../tests/e2e/access.spec.ts), which walks every path as every role
+against the live pool: run that one, and do the walk by hand once as step 27 asks.
 
 ---
 
