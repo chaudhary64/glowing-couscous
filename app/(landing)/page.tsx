@@ -175,7 +175,7 @@ export default function LandingPage() {
             the receipt, its edges dissolving into the ink; on a desktop it lies behind
             everything, under the veil.
           */}
-          <HeroBoard className="relative -mx-5 -my-4 h-[86vw] max-h-[520px] min-h-[300px] [mask-image:linear-gradient(180deg,transparent,#000_16%,#000_80%,transparent)] sm:-mx-8 lg:absolute lg:inset-0 lg:left-[18%] lg:-z-20 lg:m-0 lg:h-auto lg:[mask-image:none]" />
+          <HeroBoard className="relative -mx-5 -my-4 h-[86vw] max-h-[520px] min-h-[300px] [mask-image:linear-gradient(180deg,transparent,#000_16%,#000_80%,transparent)] sm:-mx-8 lg:absolute lg:inset-0 lg:left-[18%] lg:-z-20 lg:m-0 lg:h-auto lg:max-h-none lg:[mask-image:none]" />
 
           <div className="relative z-10 min-w-0 max-lg:-mt-10 lg:pl-8">
             {/* Paper on the bench: the receipt keeps its own ink colour on the dark ground. */}

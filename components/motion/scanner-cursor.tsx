@@ -42,6 +42,13 @@ export function ScannerCursor() {
     const magnets = new Map<HTMLElement, { x: number; y: number; pull: Animation }>();
     const at = (x: number, y: number) => ({ transform: `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0)` });
 
+    const lockOn = (hit: Element | null) => {
+      if (hit === locked) return;
+      locked = hit;
+      if (locked) el.dataset.locked = "1";
+      else delete el.dataset.locked;
+    };
+
     const label = (target: Element) =>
       (target.getAttribute("aria-label") ?? target.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 22).toUpperCase();
 
@@ -52,12 +59,15 @@ export function ScannerCursor() {
     };
     const tick = () => {
       frame = 0;
+      // A target that left the page (a dismissed notice, a closed menu) lets go at once,
+      // rather than leaving the reticle framing nothing until the next pointer move.
+      if (locked && !locked.isConnected) lockOn(null);
       // Target box: the locked element's rect (padded), or a small square on the pointer.
       let tx = pointer.x - 17;
       let ty = pointer.y - 17;
       let tw = 34;
       let th = 34;
-      if (locked && locked.isConnected) {
+      if (locked) {
         const r = locked.getBoundingClientRect();
         tx = r.left - 6;
         ty = r.top - 6;
@@ -113,12 +123,7 @@ export function ScannerCursor() {
         box.x = pointer.x - 17;
         box.y = pointer.y - 17;
       }
-      const hit = (event.target as Element | null)?.closest?.(LOCK_SELECTOR) ?? null;
-      if (hit !== locked) {
-        locked = hit;
-        if (locked) el.dataset.locked = "1";
-        else delete el.dataset.locked;
-      }
+      lockOn((event.target as Element | null)?.closest?.(LOCK_SELECTOR) ?? null);
       // Magnets near the pointer join the animated set.
       document.querySelectorAll<HTMLElement>("[data-magnetic]").forEach((m) => {
         if (magnets.has(m)) return;
@@ -135,13 +140,28 @@ export function ScannerCursor() {
 
     window.addEventListener("pointermove", onMove, { passive: true });
     document.documentElement.addEventListener("pointerleave", onLeave);
-    // A locked target can move under a still pointer when the page scrolls.
-    window.addEventListener("scroll", wake, { passive: true });
+    // The page can change under a still pointer: a scroll moves another link beneath it,
+    // and a click can remove the very button it framed (a dismissed notice, a closed
+    // menu). Either way the reticle re-reads what is now under the pointer.
+    const recheck = () => {
+      if (visible) lockOn(document.elementFromPoint(pointer.x, pointer.y)?.closest(LOCK_SELECTOR) ?? null);
+      wake();
+    };
+    // After a click, once React has applied whatever the click changed.
+    let afterClick = 0;
+    const onClick = () => {
+      window.clearTimeout(afterClick);
+      afterClick = window.setTimeout(recheck, 80);
+    };
+    window.addEventListener("scroll", recheck, { passive: true });
+    window.addEventListener("click", onClick, { passive: true });
     wake();
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("scroll", wake);
+      window.clearTimeout(afterClick);
+      window.removeEventListener("scroll", recheck);
+      window.removeEventListener("click", onClick);
       document.documentElement.removeEventListener("pointerleave", onLeave);
       magnets.forEach((offset) => offset.pull.cancel());
     };

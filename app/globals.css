@@ -810,11 +810,14 @@ body {
   position: absolute;
   inset: 0;
   /* A uniform dim (the world is scenery, the page is the subject), darker again under
-     the top bar and at the edges where headings and the rail sit. */
+     the top bar and at the edges where headings and the rail sit. At 0.32 the lit
+     heatsink and chips came through bright enough to swallow small mono labels and
+     muted body text set straight on the world; 0.48 keeps the board legible as a
+     place while the text stays the brightest thing on screen. */
   background:
     linear-gradient(180deg, rgb(5 8 11 / 0.6) 0%, rgb(5 8 11 / 0.15) 26%, transparent 50%),
     radial-gradient(ellipse 120% 90% at 55% 45%, transparent 40%, rgb(5 8 11 / 0.72) 100%),
-    rgb(5 8 11 / 0.32);
+    rgb(5 8 11 / 0.48);
 }
 @media (prefers-reduced-motion: reduce) {
   .world-backdrop { transition: none; }

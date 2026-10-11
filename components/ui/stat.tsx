@@ -22,7 +22,7 @@ export function Stat({
   className?: string;
 }) {
   return (
-    <div data-tilt="5" className={cn("glass rule-light relative border-t-2 border-ink bg-paper-raised/55 px-3 pb-3 pt-2.5", className)}>
+    <div data-tilt="5" className={cn("glass rule-light relative border-t-2 border-ink bg-paper-raised px-3 pb-3 pt-2.5", className)}>
       <span aria-hidden className="tilt-sheen" />
       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
         {label}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { WorldToggle } from "@/components/world/world-toggle";
 import { features } from "@/lib/data/features";
 
 const statusLabel: Record<string, string> = {
@@ -36,6 +37,9 @@ export function DocNav() {
         >
           ← Back to the app
         </Link>
+        <div className="mt-3">
+          <WorldToggle />
+        </div>
       </div>
 
       <ul className="flex gap-px overflow-x-auto lg:flex-col lg:gap-0 lg:overflow-visible">

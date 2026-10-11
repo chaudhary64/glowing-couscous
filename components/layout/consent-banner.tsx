@@ -34,7 +34,7 @@ export function ConsentBanner() {
     <div
       role="region"
       aria-label="Cookies and location"
-      className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-3xl border-2 border-ink bg-paper-raised p-4 text-ink shadow-[0_18px_50px_-18px_rgb(0_0_0/0.55)] sm:inset-x-6 sm:bottom-6 sm:p-5"
+      className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-3xl glass border-2 border-ink bg-[rgb(14_20_26)] p-4 text-ink shadow-[0_18px_50px_-18px_rgb(0_0_0/0.55)] sm:inset-x-6 sm:bottom-6 sm:p-5"
     >
       <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-copper">Cookies &amp; location</p>
       <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">

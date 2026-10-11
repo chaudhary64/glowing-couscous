@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ScannerCursor } from "@/components/motion/scanner-cursor";
 import { SpotlightLayer } from "@/components/motion/spotlight-layer";
 import { Badge } from "@/components/ui/badge";
+import { WorldToggle } from "@/components/world/world-toggle";
 
 /**
  * Chrome for the public landing page.
@@ -142,6 +143,9 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-paper/60">
               EcoEPR · Mumbai + Pune pilot · 2026
             </p>
+            {/* The landing page is where the 3D runs hardest, so the switch is here too,
+                not only in the app's sidebar. */}
+            <WorldToggle />
             <Badge tone="review" className="ml-auto">
               Simulated data
             </Badge>
