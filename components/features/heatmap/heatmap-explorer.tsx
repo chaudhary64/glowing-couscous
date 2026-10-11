@@ -83,7 +83,7 @@ export function DispatchButtons({ cluster, canDispatch }: { cluster: HeatmapClus
           </Button>
         ) : null}
       </div>
-      {error ? <p className="text-[12px] text-hazard">{error}</p> : null}
+      {error ? <p className="text-[12px] text-hazard-ink">{error}</p> : null}
     </div>
   );
 }

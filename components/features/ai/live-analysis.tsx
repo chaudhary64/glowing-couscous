@@ -711,7 +711,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
             </div>
             {recording ? (
               <p className="flex items-center gap-2 text-[12px] leading-snug text-ink" role="status">
-                <span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-hazard" />
+                <span aria-hidden className="inline-block h-2 w-2 animate-pulse  bg-hazard" />
                 Recording. It stops by itself at {MAX_RECORDING_SECONDS} seconds.
               </p>
             ) : processingAudio ? (
@@ -820,7 +820,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
           ) : null}
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center gap-3 border-t-2 border-ink pt-4">
+        <div className="mt-5 flex flex-wrap items-center gap-3 border-t-[3px] border-ink pt-4">
           <Button onClick={submit} disabled={running || !hasInput || askLocation || recording || processingAudio}>
             {running ? "Analysing…" : copy.action}
           </Button>
@@ -836,7 +836,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
         </div>
 
         {askLocation ? (
-          <div role="group" aria-label="Add a location" className="mt-4 border-2 border-copper bg-copper-tint p-4">
+          <div role="group" aria-label="Add a location" className="mt-4 border-[3px] border-copper bg-sunken p-4">
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-copper">No location yet</p>
             <p className="mt-1.5 text-sm leading-relaxed text-ink">
               Add this device&apos;s location? It files the intake to its district (its BMC ward in Mumbai) and counts it
@@ -859,7 +859,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
         ) : null}
 
         {failure ? (
-          <div className="mt-4 border-2 border-hazard bg-hazard-tint p-4">
+          <div className="mt-4 border-[3px] border-hazard bg-sunken p-4">
             <Badge tone="hazard" solid>
               {FAILURE_LABELS[failure.code] ?? failure.code}
             </Badge>
@@ -944,7 +944,7 @@ function ValuationResult({ analysis }: { analysis: AiAnalysis }) {
           <ul className="mt-4 flex flex-col gap-1 border-t border-rule pt-3">
             {identified.hazards.map((hazard) => (
               <li key={hazard} className="text-[13px] leading-snug text-ink-soft">
-                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-hazard">
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-hazard-ink">
                   Hazard
                 </span>{" "}
                 {hazard}

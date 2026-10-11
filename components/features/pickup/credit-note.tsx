@@ -1,5 +1,6 @@
 import { Receipt, type ReceiptLine } from "@/components/ui/receipt";
 import { Stamp } from "@/components/ui/stamp";
+import { SIMULATED_CLAIM } from "@/lib/disclaimer";
 import { formatInr, formatMass } from "@/lib/format";
 import type { Collector, EwasteItem, Recycler } from "@/lib/types";
 
@@ -65,7 +66,7 @@ export function CreditNote({
         value: formatInr(amount),
         sub: "Payable once weight is verified at the recycler gate.",
       }}
-      note={`Running total for this collector: ${formatInr(collector.creditsInr)} across ${collector.pickups} pickups. Credits are simulated in this prototype — no real payout is issued.`}
+      note={`Running total for this collector: ${formatInr(collector.creditsInr)} across ${collector.pickups} pickups. ${SIMULATED_CLAIM}`}
       stamp={<Stamp label="Settled" tone="verified" />}
     />
   );

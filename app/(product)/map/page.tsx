@@ -52,7 +52,7 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
 
   const toggle = (active: boolean) =>
     cn(
-      "border-2 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em]",
+      "border-[3px] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em]",
       active ? "border-ink bg-ink text-paper" : "border-rule bg-paper-raised text-ink hover:border-ink",
     );
 

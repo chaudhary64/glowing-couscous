@@ -7,10 +7,10 @@ import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { MeterRow } from "@/components/ui/meter";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
-import { needsAttention } from "@/lib/data/activity";
-import { collectors, pickups } from "@/lib/data/operations";
+import { SIMULATED_CLAIM } from "@/lib/disclaimer";
 import { getHeatmap } from "@/lib/heatmap/store";
 import { formatInr, formatPct, formatTimestamp } from "@/lib/format";
+import { listCollectorActivity, listLoads } from "@/lib/pickup/directory";
 import { listRecentEvents, storedCounts } from "@/lib/records/queues";
 import { activityLabel, activityTone, pickupLabel, pickupTone } from "@/lib/tone";
 
@@ -39,25 +39,23 @@ export const instant = false;
  * ones and calls them all "today" is a dashboard nobody can trust twice.
  */
 
-const topCollectors = [...collectors]
-  .sort((a, b) => b.creditsInr - a.creditsInr)
-  .slice(0, 4);
-
-/** Loads an operator can still act on today. Sample data — see the note on the board. */
-const activePickups = pickups.filter(
-  (pickup) => pickup.status !== "settled" && pickup.status !== "received",
-);
-
-const sampleAttention = needsAttention.filter((item) => item.id !== "queue-validation");
-
 export default async function DashboardPage() {
-  await requireAccess("/dashboard");
+  const user = await requireAccess("/dashboard");
 
-  const [snapshot, events, heat] = await Promise.all([
+  const [snapshot, events, heat, board, activity] = await Promise.all([
     storedCounts(),
     listRecentEvents(8),
     getHeatmap(),
+    listLoads(user, 50),
+    listCollectorActivity(user, 25),
   ]);
+  // Only collectors with something settled are ranked: a bar at zero is not a standing.
+  const topCollectors = activity.rows.filter((row) => row.settledInr > 0).slice(0, 4);
+  const loads = board.rows;
+  const openLoads = loads.filter((load) => load.status !== "settled");
+  const notesIssued = loads.filter((load) => Boolean(load.creditNoteId));
+  const notesInr =
+    loads.reduce((total, load) => total + Number(load.creditNoteAmountPaise ?? 0), 0) / 100;
   const openSites = heat.clusters.filter((c) => c.status === "open");
   // Across India, by district: the busiest four, each with its state.
   const pressureWards = heat.districts.slice(0, 4);
@@ -67,12 +65,12 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-10">
       <ScreenHeader
-        eyebrow="Operations · Mumbai + Pune pilot"
+        eyebrow="Operations"
         title="Today"
         lede={
           counts
-            ? `${counts.intakesToday} intakes today, ${counts.itemsPriced} items priced, and ${counts.awaitingDecision} waiting on a human decision. The tiles, the cards badged Counted and the activity feed are counted from the pipeline's own rows; anything badged Sample is the demo's authored data.`
-            : "The pipeline writes its submissions, prices, verdicts and decisions into Postgres, and this screen counts them. With no database configured there is nothing to count, and the panels below say which figures are sample data."
+            ? `${counts.intakesToday} intakes today, ${counts.itemsPriced} items priced, and ${counts.awaitingDecision} waiting on a human decision. Every panel here is counted: the tiles, the work queue and the activity feed from the pipeline's own rows, and the load board and collector ranking from the pickup service.`
+            : "The pipeline writes its submissions, prices, verdicts and decisions into Postgres, and this screen counts them. With no database configured there is nothing to count, and the panels below say what they could not read."
         }
         actions={
           <>
@@ -94,7 +92,7 @@ export default async function DashboardPage() {
               </span>
             ) : null}
             {snapshot.error ? (
-              <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-hazard">
+              <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-hazard-ink">
                 {snapshot.error}
               </span>
             ) : null}
@@ -134,7 +132,7 @@ export default async function DashboardPage() {
           <Stat
             label="Net promised to collectors"
             value={formatInr(counts.netPayableInr)}
-            note={`Cleared items only. ${formatInr(counts.eprCreditInr)} of brand EPR credit beside it. Simulated — no payout is made.`}
+            note={`Cleared items only. ${formatInr(counts.eprCreditInr)} of brand EPR credit beside it. ${SIMULATED_CLAIM}`}
           />
         </StatGrid>
       ) : (
@@ -143,8 +141,8 @@ export default async function DashboardPage() {
             No <span className="font-mono">DATABASE_URL</span> is configured, so no count
             can be taken: submissions, prices, verdicts and decisions are all written by
             the pipeline but not read back here. The tiles are therefore absent rather
-            than showing zeroes, and the panels marked{" "}
-            <Badge tone="neutral">Sample</Badge> below are the demo&rsquo;s authored data.
+            than showing zeroes, and each panel below says what it could not read instead
+            of drawing a plausible number in its place.
           </p>
         </Surface>
       )}
@@ -153,7 +151,7 @@ export default async function DashboardPage() {
         <SectionHeader
           eyebrow="Work queue"
           title="Needs attention"
-          note="Decisions and hotspots are counted from the record. The rest depend on pickups and credit notes, which nothing writes yet — they are sample values and say so."
+          note="Every card here is counted: the decisions and hotspots from the pipeline's own rows, the loads from the smart-pickup service's pickups table."
         />
 
         <ul className="mt-5 grid gap-px border border-rule bg-rule sm:grid-cols-2 lg:grid-cols-4">
@@ -240,33 +238,35 @@ export default async function DashboardPage() {
             </Link>
           </li>
 
-          {sampleAttention.slice(0, 2).map((item) => (
-            <li key={item.id} className="bg-paper-raised p-4">
-              <div className="flex items-start justify-between gap-3">
-                <Dot tone={item.tone} />
-                <span className="font-display text-2xl leading-none tracking-tight text-ink-muted">
-                  {item.count}
-                </span>
-              </div>
-              <h3 className="mt-3 text-sm font-medium leading-snug">
-                <Link href={item.href} className="hover:text-copper">
-                  {item.label}
-                </Link>
-              </h3>
-              <p className="mt-1.5 text-[12px] leading-snug text-ink-muted">
-                {item.detail}
-              </p>
-              <p className="mt-3 flex items-center gap-2">
-                <Badge tone="neutral">Sample</Badge>
-              </p>
-              <Link
-                href={item.href}
-                className="mt-3 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-              >
-                Open →
+          <li className="bg-paper-raised p-4">
+            <div className="flex items-start justify-between gap-3">
+              <Dot tone="copper" />
+              <span className="font-display text-2xl leading-none tracking-tight text-copper">
+                {board.configured ? openLoads.length : "—"}
+              </span>
+            </div>
+            <h3 className="mt-3 text-sm font-medium leading-snug">
+              <Link href="/pickups" className="hover:text-copper">
+                Loads waiting at the gate
               </Link>
-            </li>
-          ))}
+            </h3>
+            <p className="mt-1.5 text-[12px] leading-snug text-ink-muted">
+              {board.configured
+                ? `${openLoads.length} of ${loads.length} loads have not settled. A load settles when the recycler types the collector's PIN at the gate.`
+                : "The pickup service is not configured, so no load can be read."}
+            </p>
+            <p className="mt-3 flex items-center gap-2">
+              <Badge tone={board.configured ? "verified" : "hazard"}>
+                {board.configured ? "Counted" : "No service"}
+              </Badge>
+            </p>
+            <Link
+              href="/pickups"
+              className="mt-3 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
+            >
+              Open →
+            </Link>
+          </li>
         </ul>
       </section>
 
@@ -330,48 +330,60 @@ export default async function DashboardPage() {
         <aside className="flex flex-col gap-6">
           <section>
             <SectionHeader
-              eyebrow="Sample data"
+              eyebrow={board.configured ? "From the pickup service" : "Unavailable"}
               title="Loads in play"
-              note="Pickups and credit notes are feature 04 — Smart Pickup & Digital Credit — and no screen writes them yet, so this board is the authored sample. Hazardous loads are marked, because that flag restricts the destination."
+              note={`Every load the smart-pickup service has routed, read from its own table. ${notesIssued.length} note${
+                notesIssued.length === 1 ? "" : "s"
+              } issued so far, ${formatInr(notesInr)} settled. A load leaves this board when the gate settles it against the weighed mass.`}
             />
             <Surface className="mt-4">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>Pickup</TH>
-                    <TH>Status</TH>
-                    <TH numeric>Settled</TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {activePickups.map((pickup) => (
-                    <TR
-                      key={pickup.id}
-                      className={pickup.hazardous ? "border-l-4 border-l-hazard" : undefined}
-                    >
-                      <TD mono>
-                        <Link
-                          href="/pickups"
-                          className="underline decoration-rule underline-offset-2 hover:decoration-copper"
-                        >
-                          {pickup.id}
-                        </Link>
-                        <p className="mt-1 text-[11px] text-ink-muted">
-                          {pickup.distanceKm} km · {pickup.etaMinutes} min
-                        </p>
-                      </TD>
-                      <TD>
-                        <Badge tone={pickupTone(pickup.status)}>
-                          {pickupLabel(pickup.status)}
-                        </Badge>
-                      </TD>
-                      <TD numeric mono>
-                        {pickup.settledInr > 0 ? formatInr(pickup.settledInr) : "—"}
-                      </TD>
+              {loads.length === 0 ? (
+                <p className="p-4 text-sm leading-relaxed text-ink-soft">
+                  {board.configured
+                    ? "No load has been routed yet. A route on the collector handoff screen appears here as soon as the service records it."
+                    : "This board needs the pickup service. Without it there is no load to list."}
+                </p>
+              ) : (
+                <Table>
+                  <THead>
+                    <TR>
+                      <TH>Pickup</TH>
+                      <TH>Status</TH>
+                      <TH numeric>Settled</TH>
                     </TR>
-                  ))}
-                </TBody>
-              </Table>
+                  </THead>
+                  <TBody>
+                    {loads.slice(0, 6).map((load) => (
+                      <TR
+                        key={load.pickupId}
+                        className={load.hazardous ? "border-l-[5px] border-l-hazard" : undefined}
+                      >
+                        <TD mono>
+                          <Link
+                            href="/pickups"
+                            className="underline decoration-rule underline-offset-2 hover:decoration-copper"
+                          >
+                            {load.pickupId}
+                          </Link>
+                          <p className="mt-1 text-[11px] text-ink-muted">
+                            {load.streamLabel} · {load.facilityName}
+                          </p>
+                        </TD>
+                        <TD>
+                          <Badge tone={pickupTone(load.status)}>
+                            {pickupLabel(load.status)}
+                          </Badge>
+                        </TD>
+                        <TD numeric mono>
+                          {load.creditNoteAmountPaise
+                            ? formatInr(load.creditNoteAmountPaise / 100)
+                            : "—"}
+                        </TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              )}
             </Surface>
           </section>
 
@@ -411,8 +423,8 @@ export default async function DashboardPage() {
           </Panel>
 
           <Panel
-            eyebrow="Sample data · Collectors"
-            title="Leading by credits"
+            eyebrow="From the load board · Collectors"
+            title="Leading by settled credits"
             actions={
               <Link
                 href="/collectors"
@@ -422,28 +434,37 @@ export default async function DashboardPage() {
               </Link>
             }
           >
-            <ul className="flex flex-col">
-              {topCollectors.map((collector) => (
-                <li
-                  key={collector.id}
-                  className="flex items-baseline justify-between gap-3 border-b border-rule-soft py-2 last:border-b-0"
-                >
-                  <span>
-                    <span className="text-sm font-medium">{collector.name}</span>
-                    <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">
-                      {collector.tier}
+            {topCollectors.length === 0 ? (
+              <p className="text-[13px] leading-relaxed text-ink-soft">
+                No credit note has settled against a collector yet, so there is no standing
+                to rank. A list drawn now would be an invented one.
+              </p>
+            ) : (
+              <ul className="flex flex-col">
+                {topCollectors.map((collector) => (
+                  <li
+                    key={collector.collectorId}
+                    className="flex items-baseline justify-between gap-3 border-b border-rule-soft py-2 last:border-b-0"
+                  >
+                    <span>
+                      <span className="text-sm font-medium">
+                        {collector.collectorId}
+                      </span>
+                      <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">
+                        {collector.notes} note{collector.notes === 1 ? "" : "s"}
+                      </span>
                     </span>
-                  </span>
-                  <span className="font-mono text-[13px] tabular-nums">
-                    {formatInr(collector.creditsInr)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+                    <span className="font-mono text-[13px] tabular-nums">
+                      {formatInr(collector.settledInr)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
             <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-              Nothing provisions a <span className="font-mono">collectors</span> row yet,
-              so the collector columns are null on every row the pipeline writes. These
-              figures are the authored sample.
+              Settled credits, counted from the loads the pickup service holds. A collector
+              id is all the platform stores — no name and no standing — so this ranks the
+              work rather than the worker.
             </p>
           </Panel>
         </aside>

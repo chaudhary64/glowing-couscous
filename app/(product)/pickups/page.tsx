@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { CreditNote } from "@/components/features/pickup/credit-note";
-import { PickupTimeline } from "@/components/features/pickup/pickup-timeline";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Panel, Surface } from "@/components/ui/card";
@@ -9,64 +7,73 @@ import { Field, FieldList } from "@/components/ui/field-list";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
-import { getItem } from "@/lib/data/inventory";
-import {
-  collectors,
-  logisticsStats,
-  pickups,
-  recyclers,
-} from "@/lib/data/operations";
-import { formatInr, formatMass, formatPct } from "@/lib/format";
+import { simulatedNote } from "@/lib/disclaimer";
+import { formatInr, formatMass, formatPct, formatTimestamp } from "@/lib/format";
+import { listLoadEvents, listLoads } from "@/lib/pickup/directory";
+import type { PickupEvent, PickupView } from "@/lib/pickup/types";
 import { pickupLabel, pickupTone } from "@/lib/tone";
-import type { Collector, EwasteItem, Recycler } from "@/lib/types";
 
 export const instant = false;
 
-function collectorOf(id: string): Collector {
-  const found = collectors.find((entry) => entry.id === id);
-  if (!found) {
-    throw new Error(`Unknown collector ${id}`);
-  }
-  return found;
+/**
+ * The load board, read from the loads.
+ *
+ * This screen used to render six hand-authored loads, a five-person collector roster and
+ * a table of logistics totals — `PU-8841`, `CN-2026-8838`, "23 open pickups", "₹1,13,050
+ * of credits issued" — none of which any code wrote. Meanwhile `POST /pickups` had been
+ * minting real loads into DynamoDB all along, with real credit notes and a real audit
+ * trail, and the screen showed none of them.
+ *
+ * Every figure below is now a sum over those rows. The audit trail is the events the
+ * service wrote in the same transaction as each state change, so it is the load's history
+ * rather than a reconstruction of it.
+ */
+
+/** The words the API's event kinds read as on a screen. */
+const EVENT_WORDS: Record<PickupEvent["kind"], string> = {
+  routed: "Routed to a licensed destination",
+  pin_issued: "Handoff PIN issued to the collector's phone",
+  pin_reissued: "Handoff PIN reissued",
+  pin_failed: "A wrong PIN was entered at the gate",
+  pin_locked: "PIN locked after too many wrong attempts",
+  pin_verified: "PIN verified at the gate",
+  settled: "Weighed and settled — credit note issued",
+  payout_sent: "Payout sent to the collector",
+};
+
+function routeText(load: PickupView): string {
+  if (load.etaMinutes > 0) return `${load.distanceKm} km · ${load.etaMinutes} min`;
+  return `${load.distanceKm} km`;
 }
 
-function recyclerOf(id: string): Recycler {
-  const found = recyclers.find((entry) => entry.id === id);
-  if (!found) {
-    throw new Error(`Unknown recycler ${id}`);
-  }
-  return found;
+/** A load is open until it settles; there is no third state in the service. */
+function isOpen(load: PickupView): boolean {
+  return load.status !== "settled";
 }
-
-function routeText(distanceKm: number, etaMinutes: number): string {
-  return etaMinutes > 0
-    ? `${distanceKm} km · ${etaMinutes} min`
-    : `${distanceKm} km · closed`;
-}
-
-/** The load the board is focused on: the one currently moving. */
-const focusPickup = pickups.find((entry) => entry.id === "PU-8841") ?? pickups[0];
-/** A settled load, so the operator can see the document that was issued. */
-const settledPickup =
-  pickups.find((entry) => entry.status === "settled" && entry.settledInr > 0) ??
-  pickups[0];
-/** The only load where money was withheld. */
-const withheldPickup =
-  pickups.find((entry) => entry.id === "PU-8836") ?? pickups[0];
-
-const focusRecycler = recyclerOf(focusPickup.recyclerId);
-const focusItem: EwasteItem = getItem(focusPickup.itemId);
-const settledItem: EwasteItem = getItem(settledPickup.itemId);
-const withheldItem: EwasteItem = getItem(withheldPickup.itemId);
-
-/** Loads already placed with each destination, so the link has something to say. */
-const loadsByRecycler = recyclers.map((recycler) => ({
-  recycler,
-  loads: pickups.filter((pickup) => pickup.recyclerId === recycler.id).length,
-}));
 
 export default async function PickupsPage() {
-  await requireAccess("/pickups");
+  const user = await requireAccess("/pickups");
+
+  const board = await listLoads(user, 50);
+  const loads = board.rows;
+  const openLoads = loads.filter(isOpen);
+  // The load the panel opens on: the newest one still moving, because that is the row an
+  // operator can still act on. With everything settled it falls back to the newest load.
+  const focus = openLoads[0] ?? loads[0] ?? null;
+  const trail = focus ? await listLoadEvents(user, focus.pickupId) : null;
+
+  const hazardous = loads.filter((load) => load.hazardous);
+  const settledInr =
+    loads.reduce((total, load) => total + Number(load.creditNoteAmountPaise ?? 0), 0) / 100;
+  const declined = loads.filter(
+    (load) => (load.routing?.refused?.length ?? 0) > 0,
+  ).length;
+
+  const notice = !board.configured
+    ? "The smart-pickup service is not configured, so no load can be read. Set PICKUP_LOCAL=true and run `npm run pickup:local`, or point PICKUP_API_URL at the deployed API."
+    : board.error
+      ? `The load board could not be read: ${board.error}`
+      : null;
 
   return (
     <div className="flex flex-col gap-10">
@@ -79,256 +86,312 @@ export default async function PickupsPage() {
             <ButtonLink href="/recyclers" variant="secondary">
               Destinations
             </ButtonLink>
-            <ButtonLink href="/map" variant="secondary">
-              Hotspot map
+            <ButtonLink href="/handoff" variant="secondary">
+              Collector handoff
             </ButtonLink>
           </>
         }
+        meta={
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <Badge tone={notice ? "hazard" : "verified"}>
+              {notice ? "No board" : "Read from the pickup service"}
+            </Badge>
+            {notice ? null : (
+              <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+                {loads.length} load{loads.length === 1 ? "" : "s"} on the board ·{" "}
+                {openLoads.length} open · {hazardous.length} hazardous
+              </span>
+            )}
+          </div>
+        }
       />
 
-      <StatGrid columns={4}>
-        <Stat
-          label="Open loads"
-          value={String(logisticsStats.openPickups)}
-          unit="loads"
-          note="Requested, assigned or moving across both cities."
-        />
-        <Stat
-          label="Hazardous share"
-          value={formatPct(logisticsStats.hazardousShare)}
-          note={`${logisticsStats.unlicensedDisposalsBlocked} unlicensed disposals blocked this month.`}
-        />
-        <Stat
-          label="Median to settle"
-          value={logisticsStats.medianSettleHours.toFixed(1)}
-          unit="hours"
-          note="From valuation accepted to credit note issued."
-        />
-        <Stat
-          label="Credits issued"
-          value={formatInr(logisticsStats.creditsIssuedInr)}
-          emphasis
-          note={`Across ${logisticsStats.notesIssued} notes. Simulated amounts.`}
-        />
-      </StatGrid>
-
-      <section>
-        <SectionHeader
-          eyebrow="Live board"
-          title="All loads"
-          note="Hazardous loads carry a mark in the left margin, because that flag is what restricts the destination."
-        />
-
-        <Surface className="mt-4">
-          <Table>
-            <THead>
-              <TR>
-                <TH>Pickup</TH>
-                <TH>Collector</TH>
-                <TH>Item</TH>
-                <TH>Destination</TH>
-                <TH className="hidden lg:table-cell">Route</TH>
-                <TH>Status</TH>
-                <TH className="hidden md:table-cell">Credit note</TH>
-                <TH numeric>Settled</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {pickups.map((pickup) => {
-                const collector = collectorOf(pickup.collectorId);
-                const recycler = recyclerOf(pickup.recyclerId);
-                const item = getItem(pickup.itemId);
-
-                return (
-                  <TR
-                    key={pickup.id}
-                    className={
-                      pickup.hazardous ? "border-l-4 border-l-hazard" : undefined
-                    }
-                  >
-                    <TD mono>
-                      <span className="font-medium">{pickup.id}</span>
-                      {pickup.hazardous ? (
-                        <p className="mt-1">
-                          <Badge tone="hazard">Hazard</Badge>
-                        </p>
-                      ) : null}
-                    </TD>
-                    <TD>
-                      <span className="font-medium">{collector.name}</span>
-                      <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">
-                        {collector.city} · {collector.tier}
-                      </p>
-                    </TD>
-                    <TD>
-                      <Link
-                        href="/valuation"
-                        className="underline decoration-rule decoration-1 underline-offset-2 hover:decoration-copper"
-                      >
-                        {item.label}
-                      </Link>
-                      <p className="mt-1 font-mono text-[11px] text-ink-muted">
-                        {item.id} · {formatMass(item.massGrams)}
-                      </p>
-                    </TD>
-                    <TD>
-                      <Link
-                        href="/recyclers"
-                        className="font-medium underline decoration-rule decoration-1 underline-offset-2 hover:decoration-copper"
-                      >
-                        {recycler.name}
-                      </Link>
-                      <p className="mt-1 font-mono text-[11px] text-ink-muted">
-                        {recycler.cpcbId}
-                      </p>
-                    </TD>
-                    <TD className="hidden font-mono text-[12px] text-ink-muted lg:table-cell">
-                      {routeText(pickup.distanceKm, pickup.etaMinutes)}
-                    </TD>
-                    <TD>
-                      <Badge tone={pickupTone(pickup.status)}>
-                        {pickupLabel(pickup.status)}
-                      </Badge>
-                    </TD>
-                    <TD mono className="hidden text-[12px] md:table-cell">
-                      {pickup.creditNote}
-                    </TD>
-                    <TD numeric mono>
-                      {pickup.settledInr > 0 ? formatInr(pickup.settledInr) : "—"}
-                    </TD>
-                  </TR>
-                );
-              })}
-            </TBody>
-          </Table>
-
-          <p className="border-t border-rule px-3 py-3 text-[12px] leading-relaxed text-ink-muted">
-            Showing {pickups.length} loads of {logisticsStats.openPickups} open on the
-            board. A settled row means the note was issued against weight verified at
-            the recycler gate; a withheld row means a rule blocked the payout before it
-            left the doorstep.
-          </p>
+      {notice ? (
+        <Surface tone="inset" className="p-4">
+          <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">{notice}</p>
         </Surface>
-      </section>
+      ) : null}
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-        <section>
-          <div className="flex flex-wrap items-center justify-between gap-3">
+      {notice ? null : (
+        <>
+          <StatGrid columns={4}>
+            <Stat
+              label="Open loads"
+              value={String(openLoads.length)}
+              unit="loads"
+              note={`${loads.length} on the board in total. A load is open until the gate settles it.`}
+            />
+            <Stat
+              label="Hazardous share"
+              value={formatPct(loads.length > 0 ? hazardous.length / loads.length : 0)}
+              note={
+                declined > 0
+                  ? `${declined} load${declined === 1 ? "" : "s"} carried a refused candidate, so the router passed over a nearer site.`
+                  : "Hazardous loads can only go to a destination authorised for that stream."
+              }
+            />
+            <Stat
+              label="Notes issued"
+              value={String(loads.filter((load) => Boolean(load.creditNoteId)).length)}
+              unit="notes"
+              note="One note per settled load, written in the same transaction as the settlement."
+            />
+            <Stat
+              label="Settled to collectors"
+              value={formatInr(settledInr)}
+              emphasis
+              note={simulatedNote("The sum of the notes on this board.")}
+            />
+          </StatGrid>
+
+          <section>
             <SectionHeader
-              eyebrow="Audit trail"
-              title={`${focusPickup.id} in transit`}
-              note="Gate weighing sets the payable mass, which is what makes the chain from doorstep to licensed line checkable."
+              eyebrow="Live board"
+              title="All loads"
+              note="Hazardous loads carry a mark in the left margin, because that flag is what restricts the destination."
             />
-            <Badge tone={pickupTone(focusPickup.status)}>
-              {pickupLabel(focusPickup.status)}
-            </Badge>
+
+            <Surface className="mt-4">
+              {loads.length === 0 ? (
+                <p className="p-4 text-sm leading-relaxed text-ink-soft">
+                  No load has been routed yet. A route on the collector handoff screen
+                  appears here as soon as the service records it.
+                </p>
+              ) : (
+                <>
+                  <Table>
+                    <THead>
+                      <TR>
+                        <TH>Pickup</TH>
+                        <TH>Collector</TH>
+                        <TH>Item</TH>
+                        <TH>Destination</TH>
+                        <TH className="hidden lg:table-cell">Route</TH>
+                        <TH>Status</TH>
+                        <TH className="hidden md:table-cell">Credit note</TH>
+                        <TH numeric>Settled</TH>
+                      </TR>
+                    </THead>
+                    <TBody>
+                      {loads.map((load) => (
+                        <TR
+                          key={load.pickupId}
+                          className={load.hazardous ? "border-l-[5px] border-l-hazard" : undefined}
+                        >
+                          <TD mono>
+                            <span className="font-medium">{load.pickupId}</span>
+                            {load.hazardous ? (
+                              <p className="mt-1">
+                                <Badge tone="hazard">Hazard</Badge>
+                              </p>
+                            ) : null}
+                          </TD>
+                          <TD>
+                            <span className="font-medium">{load.collectorId}</span>
+                            <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">
+                              {load.city}
+                            </p>
+                          </TD>
+                          <TD>
+                            <span>{load.streamLabel}</span>
+                            <p className="mt-1 font-mono text-[11px] text-ink-muted">
+                              {load.itemCode} · {formatMass(Number(load.declaredMassG ?? 0))}
+                            </p>
+                          </TD>
+                          <TD>
+                            <Link
+                              href="/recyclers"
+                              className="font-medium underline decoration-rule decoration-1 underline-offset-2 hover:decoration-copper"
+                            >
+                              {load.facilityName}
+                            </Link>
+                            <p className="mt-1 font-mono text-[11px] text-ink-muted">
+                              {load.cpcbLicense}
+                            </p>
+                          </TD>
+                          <TD className="hidden font-mono text-[12px] text-ink-muted lg:table-cell">
+                            {routeText(load)}
+                          </TD>
+                          <TD>
+                            <Badge tone={pickupTone(load.status)}>
+                              {pickupLabel(load.status)}
+                            </Badge>
+                          </TD>
+                          <TD mono className="hidden text-[12px] md:table-cell">
+                            {load.creditNoteId ?? "—"}
+                          </TD>
+                          <TD numeric mono>
+                            {load.creditNoteAmountPaise
+                              ? formatInr(load.creditNoteAmountPaise / 100)
+                              : "—"}
+                          </TD>
+                        </TR>
+                      ))}
+                    </TBody>
+                  </Table>
+
+                  <p className="border-t border-rule px-3 py-3 text-[12px] leading-relaxed text-ink-muted">
+                    A settled row means the note was issued against weight verified at the
+                    recycler gate. The board reads the same rows the service writes; nothing
+                    here is authored.
+                  </p>
+                </>
+              )}
+            </Surface>
+          </section>
+
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <section>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <SectionHeader
+                  eyebrow="Audit trail"
+                  title={focus ? `${focus.pickupId}` : "No load to open"}
+                  note="Every step the service took, written in the same transaction as the state change it describes."
+                />
+                {focus ? (
+                  <Badge tone={pickupTone(focus.status)}>{pickupLabel(focus.status)}</Badge>
+                ) : null}
+              </div>
+
+              {focus ? (
+                <Panel className="mt-4" bodyClassName="p-4">
+                  <FieldList columns={2} className="mb-5">
+                    <Field label="Collector" value={focus.collectorId} />
+                    <Field label="Destination" value={focus.facilityName} tone="muted" />
+                    <Field
+                      label="Stream"
+                      value={`${focus.streamLabel}${focus.hazardous ? " · hazardous" : ""}`}
+                    />
+                    <Field
+                      label="Declared mass"
+                      value={formatMass(Number(focus.declaredMassG ?? 0))}
+                      mono
+                    />
+                    <Field label="Pickup id" value={focus.pickupId} mono tone="copper" />
+                    <Field
+                      label="Credit note"
+                      value={
+                        focus.creditNoteId
+                          ? `${focus.creditNoteId} · ${formatInr(
+                              Number(focus.creditNoteAmountPaise ?? 0) / 100,
+                            )}`
+                          : "not issued yet"
+                      }
+                      mono
+                      tone={focus.creditNoteId ? undefined : "muted"}
+                    />
+                  </FieldList>
+
+                  {trail && trail.rows.length > 0 ? (
+                    <ol className="flex flex-col border-t border-rule pt-3">
+                      {trail.rows.map((event, index) => (
+                        <li
+                          key={`${event.at}-${event.kind}-${index}`}
+                          className="flex gap-3 border-b border-rule-soft py-3 last:border-b-0"
+                        >
+                          <span className="w-32 shrink-0 font-mono text-[11px] tabular-nums text-ink-muted">
+                            {formatTimestamp(event.at)}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="text-sm leading-snug">
+                              {EVENT_WORDS[event.kind]}
+                            </span>
+                            {event.actorRole ? (
+                              <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">
+                                {event.actorRole}
+                              </p>
+                            ) : null}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
+                      {trail?.error
+                        ? `The trail could not be read: ${trail.error}`
+                        : "The service recorded no event for this load yet."}
+                    </p>
+                  )}
+
+                  <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
+                    Routing settles the destination before an id is minted, so a load with no
+                    licensed line is refused rather than recorded. That is why the trail
+                    starts at “routed” and never at a failed attempt.
+                  </p>
+                </Panel>
+              ) : (
+                <Surface tone="inset" className="mt-4 p-4">
+                  <p className="text-sm leading-relaxed text-ink-soft">
+                    Nothing has been routed, so there is no trail to read.
+                  </p>
+                </Surface>
+              )}
+            </section>
+
+            <aside className="flex flex-col gap-6 lg:sticky lg:top-16 lg:self-start">
+              <Panel eyebrow="Destinations" title="Loads by facility">
+                <ul className="flex flex-col">
+                  {loads.length === 0 ? (
+                    <li className="py-2 text-[13px] leading-relaxed text-ink-soft">
+                      No load is on the board.
+                    </li>
+                  ) : (
+                    [...new Set(loads.map((load) => load.facilityId))]
+                      .sort((a, b) => a.localeCompare(b))
+                      .map((facilityId) => {
+                        const forFacility = loads.filter(
+                          (load) => load.facilityId === facilityId,
+                        );
+                        const first = forFacility[0];
+                        return (
+                          <li
+                            key={facilityId}
+                            className="flex items-baseline justify-between gap-3 border-b border-rule-soft py-2 last:border-b-0"
+                          >
+                            <span className="min-w-0">
+                              <span className="text-sm font-medium">
+                                {first.facilityName}
+                              </span>
+                              <span className="mt-0.5 block font-mono text-[11px] text-ink-muted">
+                                {first.cpcbLicense}
+                              </span>
+                            </span>
+                            <span className="shrink-0 font-mono text-[13px] tabular-nums">
+                              {forFacility.length} load
+                              {forFacility.length === 1 ? "" : "s"}
+                            </span>
+                          </li>
+                        );
+                      })
+                  )}
+                </ul>
+
+                {declined > 0 ? (
+                  <div className="mt-4 border-t border-rule pt-3">
+                    <p className="text-[12px] leading-relaxed text-ink-soft">
+                      <span className="font-medium text-ink">
+                        {declined} load{declined === 1 ? "" : "s"}
+                      </span>{" "}
+                      had at least one candidate refused by the router — a nearer facility
+                      that was not authorised for the stream, usually. The refusal is
+                      recorded on the load rather than discarded.
+                    </p>
+                  </div>
+                ) : null}
+              </Panel>
+
+              <Panel eyebrow="Collector roster" title="No roster on file">
+                <p className="text-sm leading-relaxed text-ink-soft">
+                  Loads carry a collector id, because the service records who asked for the
+                  route. Nothing provisions a collector record yet, so a name, a city and a
+                  credit balance cannot be shown beside it — the id is the honest answer
+                  rather than a placeholder name.
+                </p>
+              </Panel>
+            </aside>
           </div>
-
-          <Panel className="mt-4" bodyClassName="p-4">
-            <FieldList columns={2} className="mb-5">
-              <Field label="Collector" value={collectorOf(focusPickup.collectorId).name} />
-              <Field label="Destination" value={focusRecycler.name} tone="muted" />
-              <Field label="Load" value={focusItem.label} />
-              <Field
-                label="Declared mass"
-                value={`${formatMass(focusItem.massGrams)} · ${focusItem.hazards.length} hazard note${focusItem.hazards.length === 1 ? "" : "s"}`}
-                mono
-              />
-              <Field label="Pickup id" value={focusPickup.id} mono tone="copper" />
-              <Field
-                label="Credit note"
-                value={focusPickup.creditNote}
-                mono
-                tone="muted"
-              />
-            </FieldList>
-
-            <PickupTimeline pickup={focusPickup} recyclerName={focusRecycler.name} />
-          </Panel>
-        </section>
-
-        <aside className="flex flex-col gap-6 lg:sticky lg:top-16 lg:self-start">
-          <div>
-            <SectionHeader
-              eyebrow="Payout document"
-              title="What the collector holds"
-              note={`Settled example ${settledPickup.id}: a clean, non-hazardous load.`}
-            />
-            <CreditNote
-              className="mt-4"
-              collector={collectorOf(settledPickup.collectorId)}
-              item={settledItem}
-              recycler={recyclerOf(settledPickup.recyclerId)}
-              reference={settledPickup.creditNote}
-              amount={settledPickup.settledInr}
-            />
-          </div>
-
-          <Panel
-            eyebrow="Withheld payout"
-            title="Working device, no scrap credit"
-            actions={<Badge tone="hazard">Rule R-03</Badge>}
-          >
-            <p className="text-sm leading-relaxed text-ink-soft">
-              {withheldItem.label} powered on and cleared the refurbishment screen, so
-              its gross value of {formatInr(withheldItem.valuation.grossValue)} was
-              never paid as scrap. The load still left the street — it went to the
-              reuse partner instead of the shredding stream.
-            </p>
-
-            <FieldList columns={2} className="mt-4">
-              <Field
-                label="Collector"
-                value={collectorOf(withheldPickup.collectorId).name}
-              />
-              <Field
-                label="Destination"
-                value={recyclerOf(withheldPickup.recyclerId).name}
-                tone="muted"
-              />
-              <Field label="Scrap credit" value={formatInr(0)} mono tone="hazard" />
-              <Field label="Reuse share" value="Pending data-wipe sign-off" tone="muted" />
-            </FieldList>
-
-            <p className="mt-4 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-              The note reference reads {withheldPickup.creditNote}, so the refusal is
-              visible in the ledger rather than silently dropped.
-            </p>
-          </Panel>
-
-          <Panel
-            eyebrow="Destinations"
-            title="Loads by recycler"
-            actions={
-              <Link
-                href="/recyclers"
-                className="font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-              >
-                All destinations →
-              </Link>
-            }
-          >
-            <ul className="flex flex-col">
-              {loadsByRecycler.map(({ recycler, loads }) => (
-                <li
-                  key={recycler.id}
-                  className="flex items-baseline justify-between gap-3 border-b border-rule-soft py-2 last:border-b-0"
-                >
-                  <span className="min-w-0">
-                    <span className="text-sm font-medium">{recycler.name}</span>
-                    <span className="mt-0.5 block font-mono text-[11px] text-ink-muted">
-                      {recycler.cpcbId}
-                    </span>
-                  </span>
-                  <span className="shrink-0 font-mono text-[13px] tabular-nums">
-                    {loads} load{loads === 1 ? "" : "s"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Panel>
-        </aside>
-      </div>
+        </>
+      )}
     </div>
   );
 }

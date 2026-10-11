@@ -1,8 +1,9 @@
 import { cn } from "@/lib/cn";
 
 /**
- * A ruled box. No radius, no shadow — separation comes from border weight, which
- * is how a weighbridge form separates its fields.
+ * A ruled box: a 3px black edge on white, no radius, no shadow. Separation comes from
+ * border weight — which is how a weighbridge form separates its fields — never from a
+ * fill or a drop shadow.
  */
 export function Surface({
   children,
@@ -17,9 +18,9 @@ export function Surface({
   return (
     <div
       className={cn(
-        "border",
-        tone === "plain" && "border-rule bg-paper-raised",
-        tone === "inset" && "border-rule-soft bg-paper",
+        "border-[3px]",
+        tone === "plain" && "border-ink bg-paper-raised",
+        tone === "inset" && "border-ink bg-sunken",
         tone === "ink" && "border-ink bg-ink text-paper",
         className,
       )}
@@ -57,15 +58,15 @@ export function Panel({
       {hasHeader ? (
         <div
           className={cn(
-            "flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b-2 px-4 py-3",
-            tone === "ink" ? "border-paper/30" : "border-ink",
+            "flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b-[3px] px-4 py-3",
+            tone === "ink" ? "border-paper" : "border-ink",
           )}
         >
           <div className="min-w-0">
             {eyebrow ? (
               <p
                 className={cn(
-                  "font-mono text-[10px] uppercase tracking-[0.18em]",
+                  "font-mono text-[10px] font-bold uppercase tracking-[0.18em]",
                   tone === "ink" ? "text-paper/60" : "text-ink-muted",
                 )}
               >

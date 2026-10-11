@@ -133,7 +133,7 @@ export function CollectorPhone({
               type="button"
               onClick={handOver}
               disabled={stage === "routing"}
-              className="w-full border-2 border-ink bg-ink py-5 font-display text-2xl uppercase tracking-tight text-paper transition-colors hover:bg-paper hover:text-ink disabled:cursor-wait disabled:opacity-70"
+              className="w-full border-[3px] border-ink bg-ink py-5 font-display text-2xl uppercase tracking-tight text-paper transition-colors hover:bg-paper hover:text-ink disabled:cursor-wait disabled:border-rule-soft disabled:bg-sunken"
             >
               {stage === "routing" ? "Routing…" : "Hand over e-waste"}
             </button>
@@ -150,12 +150,12 @@ export function CollectorPhone({
               {pin.pin}
             </p>
             {blocked ? (
-              <div className="mt-4 w-full border-2 border-hazard bg-hazard-tint p-3 text-sm text-hazard">
+              <div className="mt-4 w-full border-[3px] border-hazard bg-sunken p-3 text-sm text-hazard-ink">
                 {handoff?.locked ? "Too many wrong tries at the gate. This PIN is locked." : "This PIN has expired."}
                 <button
                   type="button"
                   onClick={newPin}
-                  className="mt-3 block w-full border-2 border-hazard bg-hazard py-2 font-mono text-[11px] uppercase tracking-[0.14em] text-paper hover:bg-paper hover:text-hazard"
+                  className="mt-3 block w-full border-[3px] border-hazard bg-hazard py-2 font-mono text-[11px] uppercase tracking-[0.14em] text-paper hover:bg-paper hover:text-hazard-ink"
                 >
                   Get a new PIN
                 </button>
@@ -196,7 +196,7 @@ export function CollectorPhone({
         ) : null}
 
         {error ? (
-          <p role="alert" className="mt-4 border-l-4 border-hazard bg-hazard-tint px-3 py-2 text-sm text-hazard">
+          <p role="alert" className="mt-4 border-l-[5px] border-hazard bg-sunken px-3 py-2 text-sm text-hazard-ink">
             {error}
           </p>
         ) : null}
@@ -235,8 +235,8 @@ function Countdown({ until }: { until: string }) {
  */
 export function PhoneFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-[380px] rounded-[2.25rem] border-[10px] border-ink bg-ink shadow-[0_24px_48px_-24px_rgba(18,23,27,0.6)]">
-      <div className="relative h-[720px] max-h-[calc(100svh-10rem)] min-h-[600px] overflow-hidden rounded-[1.6rem]">
+    <div className="mx-auto w-full max-w-[380px]  border-[10px] border-ink bg-ink ">
+      <div className="relative h-[720px] max-h-[calc(100svh-10rem)] min-h-[600px] overflow-hidden ">
         {children}
       </div>
     </div>

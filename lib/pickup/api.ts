@@ -64,6 +64,38 @@ export async function authorizePickup(request: Request, pathname: "/handoff" | "
 
 type Method = "GET" | "POST";
 
+/**
+ * `true` when either mode is configured. A caller that means "the API is switched off"
+ * rather than "the API failed" asks this first, which is what the page readers do.
+ */
+export function pickupApiConfigured(): boolean {
+  return process.env.PICKUP_LOCAL === "true" || Boolean(process.env.PICKUP_API_URL);
+}
+
+/**
+ * The API call itself, with no Next.js in it: the status and the parsed body, or null
+ * when neither mode is configured.
+ *
+ * `callPickupApi` wraps this for the route handlers; the server-side readers in
+ * `lib/pickup/directory.ts` call it directly, and that is the reason to split it out.
+ * "How this app reaches the smart-pickup API" is a two-mode decision, and a second copy
+ * of it written for the pages would be a second place for the two to disagree.
+ */
+export async function requestPickupApi(
+  user: AuthUser,
+  method: Method,
+  path: string,
+  { body, query }: { body?: unknown; query?: Record<string, string> } = {},
+): Promise<PickupApiResult | null> {
+  if (process.env.PICKUP_LOCAL === "true") {
+    return await invokeLocally(user, method, path, body, query);
+  }
+  if (process.env.PICKUP_API_URL) {
+    return await invokeRemotely(method, path, body, query);
+  }
+  return null;
+}
+
 export async function callPickupApi(
   user: AuthUser,
   method: Method,
@@ -71,11 +103,7 @@ export async function callPickupApi(
   { body, query }: { body?: unknown; query?: Record<string, string> } = {},
 ): Promise<NextResponse> {
   try {
-    const result = process.env.PICKUP_LOCAL === "true"
-      ? await invokeLocally(user, method, path, body, query)
-      : process.env.PICKUP_API_URL
-        ? await invokeRemotely(method, path, body, query)
-        : null;
+    const result = await requestPickupApi(user, method, path, { body, query });
 
     if (!result) {
       return problem(

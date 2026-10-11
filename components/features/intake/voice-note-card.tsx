@@ -23,7 +23,7 @@ export function VoiceNoteCard({
 }) {
   return (
     <Panel eyebrow="Speech to text" title="What the collector said">
-      <Surface tone="inset" className="border-l-4 border-l-copper px-4 py-3.5">
+      <Surface tone="inset" className="border-l-[5px] border-l-copper px-4 py-3.5">
         <p lang="hi" className="text-lg leading-relaxed text-ink">
           {voiceNote.transcript}
         </p>

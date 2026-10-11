@@ -1,6 +1,5 @@
 import type {
   ActivityKind,
-  Channel,
   Collector,
   FeatureStatus,
   ItemCondition,
@@ -77,18 +76,6 @@ export function featureStatusTone(status: FeatureStatus): BadgeTone {
   if (status === "core") return "copper";
   if (status === "supporting") return "lead";
   return "review";
-}
-
-export function channelTone(status: Channel["status"]): BadgeTone {
-  if (status === "shipped") return "verified";
-  if (status === "next") return "copper";
-  return "review";
-}
-
-export function channelLabel(status: Channel["status"]): string {
-  if (status === "shipped") return "Shipped";
-  if (status === "next") return "Next";
-  return "Deferred";
 }
 
 /**

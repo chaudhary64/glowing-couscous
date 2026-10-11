@@ -1,27 +1,32 @@
 import type { Metadata } from "next";
-import { Anton, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { Archivo_Black, Space_Mono, Work_Sans } from "next/font/google";
 import "./globals.css";
 import { ConsentBanner } from "@/components/layout/consent-banner";
 import { MotionObserver } from "@/components/motion/motion-observer";
 
-const anton = Anton({
+/*
+  RawBlock's three faces: Archivo Black for display, Work Sans for body, Space Mono
+  for every label, figure and rule annotation. Space Mono ships 400 and 700 only, and
+  the bold weight is what carries table headers and chip text.
+*/
+const archivoBlack = Archivo_Black({
   subsets: ["latin"],
   weight: "400",
-  variable: "--font-anton",
+  variable: "--font-archivo-black",
   display: "swap",
 });
 
-const plexSans = IBM_Plex_Sans({
+const workSans = Work_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-plex-sans",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-work-sans",
   display: "swap",
 });
 
-const plexMono = IBM_Plex_Mono({
+const spaceMono = Space_Mono({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-plex-mono",
+  weight: ["400", "700"],
+  variable: "--font-space-mono",
   display: "swap",
 });
 
@@ -38,7 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     // everything inside it is still verified.
     <html
       lang="en"
-      className={`${anton.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`}
+      className={`${archivoBlack.variable} ${workSans.variable} ${spaceMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full">

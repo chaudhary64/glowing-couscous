@@ -44,11 +44,11 @@ export function Receipt({
   return (
     <div
       className={cn(
-        "relative border border-ink bg-paper-raised font-mono text-[13px]",
+        "relative border-[3px] border-ink bg-paper-raised font-mono text-[13px]",
         className,
       )}
     >
-      <div aria-hidden className="h-0 border-t-2 border-dashed border-ink" />
+      <div aria-hidden className="h-0 border-t-[3px] border-dashed border-ink" />
 
       <div className="px-4 pt-4 pb-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -115,7 +115,7 @@ export function Receipt({
         </>
       ) : null}
 
-      <div aria-hidden className="mx-4 border-t-2 border-ink" />
+      <div aria-hidden className="mx-4 border-t-[3px] border-ink" />
 
       <div className="flex flex-wrap items-end justify-between gap-4 px-4 py-4">
         <div>
@@ -139,7 +139,7 @@ export function Receipt({
         </>
       ) : null}
 
-      <div aria-hidden className="h-0 border-t-2 border-dashed border-ink" />
+      <div aria-hidden className="h-0 border-t-[3px] border-dashed border-ink" />
     </div>
   );
 }

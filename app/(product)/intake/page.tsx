@@ -3,12 +3,12 @@ import { LiveAnalysis } from "@/components/features/ai/live-analysis";
 import { IntakeConsole } from "@/components/features/intake/intake-console";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
-import { Panel, Surface } from "@/components/ui/card";
+import { Surface } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
-import { intakeSamples, intakeStats } from "@/lib/data/intake";
+import { intakeSamples } from "@/lib/data/intake";
 import { getItem } from "@/lib/data/inventory";
 import { formatConfidence, formatInr, formatMass, formatPct, formatTimestamp } from "@/lib/format";
 import { listRecentIntakes, storedCounts } from "@/lib/records/queues";
@@ -20,10 +20,10 @@ export const instant = false;
 /**
  * Built on the server so the sample console never reaches into the inventory fixture.
  *
- * This is the one fixture-shaped thing left on the screen besides the language panel:
- * the console walks four fixed submissions on purpose, because those four walk four
- * different verdict paths — credited, hazard-routed, held, refused — and no live stream
- * is guaranteed to contain all four. Everything above and below it is a query.
+ * This is the only fixture-shaped thing left on the screen: the console walks four fixed
+ * submissions on purpose, because those four walk four different verdict paths — credited,
+ * hazard-routed, held, refused — and no live stream is guaranteed to contain all four.
+ * Everything above and below it is a query.
  */
 function resolvedEntry(sample: IntakeSample): [string, ResolvedItemSummary] {
   const item = getItem(sample.resolvedItemId);
@@ -42,29 +42,6 @@ function resolvedEntry(sample: IntakeSample): [string, ResolvedItemSummary] {
     },
   ];
 }
-
-/** What each upload sets in motion, in the order it runs. */
-const pipeline: { service: string; detail: string }[] = [
-  {
-    service: "Microsoft Foundry · multimodal",
-    detail: "One call reads the photograph and any Hindi audio together.",
-  },
-  {
-    service: "Rate card",
-    detail:
-      "Material fractions are priced on the server. The model names materials and masses; it never quotes a rupee figure.",
-  },
-  {
-    service: "Gatekeeper",
-    detail:
-      "The same pass returns the valid/invalid decision, the rule that fired and why.",
-  },
-  {
-    service: "Audit trail",
-    detail:
-      "The submission, the fields the model read out of it, the assay, the price and the verdict are all written before the response goes back — so nothing on this screen has to be taken on trust.",
-  },
-];
 
 export default async function IntakePage() {
   await requireAccess("/intake");
@@ -96,7 +73,7 @@ export default async function IntakePage() {
                 : "Records off"}
             </Badge>
             {readError ? (
-              <span className="text-[12px] leading-snug text-hazard">{readError}</span>
+              <span className="text-[12px] leading-snug text-hazard-ink">{readError}</span>
             ) : null}
           </div>
         }
@@ -144,51 +121,16 @@ export default async function IntakePage() {
         />
       </StatGrid>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
-        <div className="flex flex-col gap-3">
-          <p className="flex flex-wrap items-center gap-2">
-            <Badge tone="neutral">Sample data</Badge>
-            <span className="text-[12px] leading-snug text-ink-muted">
-              The console below walks four fixed submissions, because those four cover
-              the four verdict paths. The table further down is what this database
-              actually holds.
-            </span>
-          </p>
-          <IntakeConsole samples={intakeSamples} resolved={resolved} />
-        </div>
-
-        <aside className="flex flex-col gap-6 lg:sticky lg:top-16 lg:self-start">
-          <Panel eyebrow="Coverage" title="Languages in the pilot">
-            <ul className="flex flex-wrap gap-1.5">
-              {intakeStats.languages.map((language) => (
-                <li key={language}>
-                  <Badge tone="copper">{language}</Badge>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-              Stop at Hindi and most of the country is out of reach. The pipeline
-              takes a language as configuration, so coverage grows without a
-              rewrite.
-            </p>
-          </Panel>
-
-          <Panel eyebrow="Under the hood" title="What runs on capture">
-            <ol className="flex flex-col gap-3">
-              {pipeline.map((entry) => (
-                <li key={entry.service} className="border-t border-rule pt-3 first:border-t-0 first:pt-0">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink">
-                    {entry.service}
-                  </p>
-                  <p className="mt-1 text-[12px] leading-snug text-ink-soft">
-                    {entry.detail}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          </Panel>
-
-        </aside>
+      <div className="flex flex-col gap-3">
+        <p className="flex flex-wrap items-center gap-2">
+          <Badge tone="neutral">Sample data</Badge>
+          <span className="text-[12px] leading-snug text-ink-muted">
+            The console below walks four fixed submissions, because those four cover
+            the four verdict paths. The table further down is what this database
+            actually holds.
+          </span>
+        </p>
+        <IntakeConsole samples={intakeSamples} resolved={resolved} />
       </div>
 
       <section>

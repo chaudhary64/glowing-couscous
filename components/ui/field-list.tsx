@@ -41,7 +41,7 @@ export function Field({
 }) {
   return (
     <div className={cn("border-t border-rule pt-2", className)}>
-      <dt className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
+      <dt className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
         {label}
       </dt>
       <dd
@@ -52,8 +52,8 @@ export function Field({
           mono && "font-mono text-[13px]",
           tone === "copper" && "text-copper",
           tone === "verified" && "text-verified",
-          tone === "hazard" && "text-hazard",
-          tone === "review" && "text-review",
+          tone === "hazard" && "text-hazard-ink",
+          tone === "review" && "text-review-ink",
           tone === "muted" && "text-ink-muted",
         )}
       >

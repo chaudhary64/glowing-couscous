@@ -166,7 +166,7 @@ export function EvidenceViewer({ assets }: { assets: EvidenceAsset[] }) {
             </div>
 
             {reading?.state === "refused" ? (
-              <p className="mt-3 border-t border-hazard/40 pt-3 text-[12px] leading-relaxed text-hazard">
+              <p className="mt-3 border-t border-hazard/40 pt-3 text-[12px] leading-relaxed text-hazard-ink">
                 {reading.message}
               </p>
             ) : null}
@@ -213,7 +213,7 @@ export function EvidenceViewer({ assets }: { assets: EvidenceAsset[] }) {
                 </p>
 
                 {unserved[asset.storageKey] ? (
-                  <p className="mt-2 text-[12px] leading-relaxed text-hazard">
+                  <p className="mt-2 text-[12px] leading-relaxed text-hazard-ink">
                     The link was signed, but S3 would not serve the bytes behind it. That
                     means the key has no object at it — a signature is proof of nothing on
                     its own, because signing happens locally without asking S3 whether the

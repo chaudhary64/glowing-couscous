@@ -61,6 +61,7 @@ import {
   listEvents,
   listFacilities,
   listPickupsByCollector,
+  listRecentLoads,
   listStreams,
   nextPickupId,
   pickupEvent,
@@ -126,7 +127,7 @@ async function route(event) {
       if (!write.ok) return write.response;
       return await createPickup(event, write.caller);
     }
-    if (method === "GET") return await collectorLedger(event);
+    if (method === "GET") return await pickupsIndex(event);
     return methodNotAllowed("POST, GET");
   }
   if (segments.length === 2 && segments[0] === "pickups" && method === "GET") {
@@ -314,6 +315,43 @@ async function oneNote(pickupId) {
     });
   }
   return json(200, { pickup: pickup ? view(pickup) : null, creditNote: view(note) });
+}
+
+/**
+ * `GET /pickups` answers one of two questions, and the parameter decides which.
+ *
+ * With `collectorId` it is a collector's ledger: what this person is owed, load by load.
+ * Without it, it is the operator's board: every load the platform has routed, newest
+ * first. Same table, read two ways — which is why they share a route rather than each
+ * claiming a path of its own, and why adding the board did not change the ledger's
+ * response by a byte.
+ */
+async function pickupsIndex(event) {
+  const params = queryParams(event);
+  const collector =
+    typeof params.collectorId === "string" ? params.collectorId.trim() : "";
+  if (collector) return await collectorLedger(event);
+  return await recentLoads(event);
+}
+
+/**
+ * The board read: every load, newest first.
+ *
+ * The PIN's state rides along (`withPinState`), because the question an operator asks of
+ * a row that has not settled is "is the handoff still live" — and a board that made them
+ * open each load to find out would be a board nobody uses. The PIN itself never appears:
+ * it is shown once, on the collector's phone.
+ */
+async function recentLoads(event) {
+  const params = queryParams(event);
+  const limit = readInteger(params, "limit", { min: 1, max: 100, required: false });
+  const rows = await listRecentLoads(limit.ok && limit.value ? limit.value : 25);
+  const pickups = rows.map(withPinState);
+  return json(200, {
+    day: currentDay(),
+    count: pickups.length,
+    pickups,
+  });
 }
 
 async function collectorLedger(event) {

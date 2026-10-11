@@ -201,16 +201,35 @@ export async function updateItem(table, key, options) {
 }
 
 /**
- * A full read, for the seeder only. The API never scans: every route it serves has a
- * key, and a route that needed a full read of a table would be a route whose access
- * pattern had not been thought about yet.
+ * A full read, with two deliberate callers.
+ *
+ * `scripts/pickup-seed.mjs` uses it to converge the catalogue: it has to see every row
+ * in order to prune the ones the catalogue no longer names.
+ *
+ * `GET /pickups` uses it, with a filter, to answer "every load on the board" — the one
+ * question the pickups table has no key for. That is not an oversight: a load's keys are
+ * built for the two questions the product asks directly (a collector's ledger, a
+ * facility's day), and the operator's board arrived later. At pilot scale it is tens of
+ * items; a GSI on (`type`, `requestedAt`) is the change to make when it stops being
+ * tens, and `repository.listRecentLoads` is the only call site to move.
+ *
+ * The filter is not decoration. It runs inside DynamoDB, so a scan for loads does not
+ * drag every audit event in the table back to the caller in order to throw it away.
  */
-export async function scan(table) {
+export async function scan(table, options = {}) {
   const rows = [];
   let startKey;
   do {
     const result = await db().send(
-      new ScanCommand({ TableName: table, ExclusiveStartKey: startKey }),
+      new ScanCommand({
+        TableName: table,
+        FilterExpression: options.filter,
+        ExpressionAttributeNames: options.names,
+        ExpressionAttributeValues: options.values
+          ? toItem(options.values)
+          : undefined,
+        ExclusiveStartKey: startKey,
+      }),
     );
     for (const item of result.Items ?? []) rows.push(fromItem(item));
     startKey = result.LastEvaluatedKey;

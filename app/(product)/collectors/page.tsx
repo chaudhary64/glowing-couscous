@@ -1,243 +1,257 @@
 import Link from "next/link";
 import {
-  CollectorDirectory,
+  CollectorActivityTable,
   CreditsShare,
 } from "@/components/features/product/collectors/collector-directory";
 import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
 import { Panel, Surface } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
-import { intakeStats } from "@/lib/data/intake";
-import { getItem } from "@/lib/data/inventory";
-import { collectors, pickups } from "@/lib/data/operations";
-import { formatInr } from "@/lib/format";
+import { SIMULATED_CLAIM, simulatedNote } from "@/lib/disclaimer";
+import { formatInr, formatMass, formatTimestamp } from "@/lib/format";
+import { listCollectorActivity, listLoads } from "@/lib/pickup/directory";
 import { pickupLabel, pickupTone } from "@/lib/tone";
 
 export const instant = false;
 
-/** Totals are derived from the roster, never typed twice. */
-const totalPickups = collectors.reduce((sum, entry) => sum + entry.pickups, 0);
-const totalCredits = collectors.reduce((sum, entry) => sum + entry.creditsInr, 0);
-const meanPerPickup = Math.round(totalCredits / totalPickups);
-
-const leadCount = collectors.filter((entry) => entry.tier === "lead").length;
-const verifiedCount = collectors.filter((entry) => entry.tier === "verified").length;
-const newCount = collectors.filter((entry) => entry.tier === "new").length;
-
-/** Languages the pipeline supports against languages the roster actually speaks. */
-const languageCounts = new Map<string, number>();
-for (const collector of collectors) {
-  for (const language of collector.languages) {
-    languageCounts.set(language, (languageCounts.get(language) ?? 0) + 1);
-  }
-}
-
-const languageCoverage = [...languageCounts.entries()].sort(
-  (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
-);
-
-/** Enabled in the pipeline but spoken by nobody on the roster yet. */
-const uncoveredLanguages = intakeStats.languages.filter(
-  (language) => !languageCounts.has(language),
-);
-
-/** Spoken by a collector but not yet enabled in the pipeline. */
-const unsupportedLanguages = languageCoverage
-  .map(([language]) => language)
-  .filter((language) => !intakeStats.languages.includes(language));
-
-/** Loads joined to the collector carrying them and the item in the load. */
-const recentLoads = pickups.map((pickup) => ({
-  pickup,
-  collector: collectors.find((entry) => entry.id === pickup.collectorId),
-  item: getItem(pickup.itemId),
-}));
-
+/**
+ * Who is collecting, counted from the loads.
+ *
+ * This screen used to be the most authored page on the site: five invented people, with
+ * invented cities, credit balances and language lists, plus a directory table that
+ * presented them as a ledger. Nothing writes a collector record — the Postgres `collectors`
+ * table has no writer and the `collector_name` column is null on every row the pipeline
+ * writes — so a roster cannot be read honestly today.
+ *
+ * What can be read is who asked for each route, because `POST /pickups` records it. So the
+ * page is now an activity view keyed by collector id, and it says what is missing instead
+ * of filling the gap: no name, no standing, no languages. That is the same rule the rest of
+ * the app follows — a figure is counted or it is labelled, and it is never invented to
+ * make a table look complete.
+ */
 export default async function CollectorsPage() {
-  await requireAccess("/collectors");
+  const user = await requireAccess("/collectors");
+
+  const [activity, board] = await Promise.all([
+    listCollectorActivity(user, 25),
+    listLoads(user, 50),
+  ]);
+  const collectors = activity.rows;
+  const loads = board.rows;
+
+  const totalLoads = collectors.reduce((sum, row) => sum + row.loads, 0);
+  const openLoads = collectors.reduce((sum, row) => sum + row.open, 0);
+  const notes = collectors.reduce((sum, row) => sum + row.notes, 0);
+  const settledInr = collectors.reduce((sum, row) => sum + row.settledInr, 0);
+  const hazardous = collectors.reduce((sum, row) => sum + row.hazardous, 0);
+
+  const notice = !activity.configured
+    ? "The smart-pickup service is not configured, so no collector activity can be read. Set PICKUP_LOCAL=true and run `npm run pickup:local`, or point PICKUP_API_URL at the deployed API."
+    : activity.error
+      ? `Collector activity could not be read: ${activity.error}`
+      : null;
+
+  const recent = loads.slice(0, 8);
 
   return (
     <div className="flex flex-col gap-10">
       <ScreenHeader
         eyebrow="Network · Collectors"
         title="Collectors"
-        lede={`${collectors.length} informal collectors are on the platform across Mumbai, Thane and Pune, carrying ${formatInr(totalCredits)} of simulated credits between them.`}
+        lede="Every route the platform has recorded, grouped by the collector who asked for it. A collector id is what the service stores; the person behind it is not on file, so the page shows the activity rather than a name it cannot verify."
+        actions={
+          <ButtonLink href="/pickups" variant="secondary">
+            See the load board
+          </ButtonLink>
+        }
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
-              Pipeline languages
-            </span>
-            <span className="flex flex-wrap gap-1.5">
-              {intakeStats.languages.map((language) => (
-                <Badge key={language} tone="copper">
-                  {language}
-                </Badge>
-              ))}
-            </span>
-            <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
-              {formatInr(meanPerPickup)} mean per pickup
-            </span>
+            <Badge tone={notice ? "hazard" : "verified"}>
+              {notice ? "No activity" : "Counted from the load board"}
+            </Badge>
+            {notice ? null : (
+              <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+                {collectors.length} collector id{collectors.length === 1 ? "" : "s"} ·{" "}
+                {totalLoads} load{totalLoads === 1 ? "" : "s"} · {notes} note
+                {notes === 1 ? "" : "s"} issued
+              </span>
+            )}
           </div>
         }
       />
 
-      <StatGrid columns={4}>
-        <Stat
-          label="Collectors on the platform"
-          value={String(collectors.length)}
-          unit="people"
-          note={`${leadCount} lead · ${verifiedCount} verified · ${newCount} new.`}
-        />
-        <Stat
-          label="Credits earned"
-          value={formatInr(totalCredits)}
-          emphasis
-          note={`Across ${totalPickups.toLocaleString("en-IN")} pickups since onboarding.`}
-        />
-        <Stat
-          label="Mean per pickup"
-          value={formatInr(meanPerPickup)}
-          unit="/ pickup"
-          note="Total credits divided by total pickups, so the tail is included."
-        />
-        <Stat
-          label="Languages spoken"
-          value={String(languageCoverage.length)}
-          unit="on the roster"
-          note={`Pipeline supports ${intakeStats.languages.length}. ${uncoveredLanguages.join(", ")} has no speaker yet, and ${unsupportedLanguages.join(", ")} is spoken but not enabled.`}
-        />
-      </StatGrid>
-
-      <section>
-        <SectionHeader
-          eyebrow="Roster"
-          title="Everyone on the platform"
-          note="Standing is earned on pickup history, not typed in by an operator."
-        />
-        <div className="mt-5">
-          <CollectorDirectory collectors={collectors} />
-        </div>
-      </section>
-
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <section>
-          <SectionHeader
-            eyebrow="Distribution"
-            title="Credits share"
-            note="Measured against the leading collector, so the shape of the roster is visible at a glance."
-          />
-          <Surface className="mt-5 p-4">
-            <CreditsShare collectors={collectors} />
-          </Surface>
-        </section>
-
-        <section>
-          <SectionHeader
-            eyebrow="Language coverage"
-            title="Who can talk to whom"
-            note="Reach is limited by the language a collector actually speaks, not by the list of supported ones."
-          />
-          <Surface className="mt-5 p-4">
-            <ul className="flex flex-col">
-              {languageCoverage.map(([language, speakers]) => (
-                <li
-                  key={language}
-                  className="flex items-baseline justify-between gap-3 border-b border-rule-soft py-2 last:border-b-0"
-                >
-                  <span className="text-sm font-medium">{language}</span>
-                  <span className="font-mono text-[13px] tabular-nums text-ink-soft">
-                    {speakers} of {collectors.length} collectors
-                  </span>
-                </li>
-              ))}
-            </ul>
-
-            <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-              {uncoveredLanguages.join(", ")} is enabled in the pipeline but spoken by
-              nobody on the roster, and {unsupportedLanguages.join(", ")} is spoken by a
-              collector the pipeline cannot yet hear. Neither gap is engineering work:
-              adding a language is a configuration change, not a new screen.
-            </p>
-          </Surface>
-        </section>
-      </div>
-
-      <section>
-        <SectionHeader
-          eyebrow="Loads in flight"
-          title="Recently active"
-          note="Which collector is carrying which item, and what state that load is in."
-        />
-        <Surface className="mt-5">
-          <Table>
-            <THead>
-              <TR>
-                <TH>Load</TH>
-                <TH>Collector</TH>
-                <TH className="hidden sm:table-cell">Item</TH>
-                <TH>Status</TH>
-                <TH numeric>Settled</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {recentLoads.map(({ pickup, collector, item }) => (
-                <TR
-                  key={pickup.id}
-                  className={pickup.hazardous ? "border-l-4 border-l-hazard" : undefined}
-                >
-                  <TD mono>
-                    <Link
-                      href="/pickups"
-                      className="font-medium underline decoration-rule underline-offset-2 hover:decoration-copper"
-                    >
-                      {pickup.id}
-                    </Link>
-                    {pickup.hazardous ? (
-                      <p className="mt-1">
-                        <Badge tone="hazard">Hazard</Badge>
-                      </p>
-                    ) : null}
-                  </TD>
-                  <TD>
-                    {collector ? collector.name : "Unassigned"}
-                    <p className="mt-1 font-mono text-[11px] text-ink-muted">
-                      {collector ? collector.id : pickup.collectorId}
-                    </p>
-                  </TD>
-                  <TD className="hidden text-[13px] text-ink-soft sm:table-cell">
-                    {item.label}
-                  </TD>
-                  <TD>
-                    <Badge tone={pickupTone(pickup.status)}>
-                      {pickupLabel(pickup.status)}
-                    </Badge>
-                  </TD>
-                  <TD numeric mono>
-                    {pickup.settledInr > 0 ? formatInr(pickup.settledInr) : "—"}
-                  </TD>
-                </TR>
-              ))}
-            </TBody>
-          </Table>
-
-          <p className="border-t border-rule px-3 py-3 text-[12px] leading-relaxed text-ink-muted">
-            A settled row means the credit note was issued against weight verified at
-            the recycler gate. A withheld row means a rule blocked the payout while the
-            item still left the street.
-          </p>
+      {notice ? (
+        <Surface tone="inset" className="p-4">
+          <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">{notice}</p>
         </Surface>
-      </section>
+      ) : null}
 
-      <Panel eyebrow="Read this before quoting a number" title="Simulated credits">
-        <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-          Every figure on this screen is a fixture. Credits are simulated, and each one
-          is tied to a weighed load at a CPCB-registered recycler rather than to a
-          promise made at the doorstep — which is the only reason a brand could book it
-          against an EPR mandate.
-        </p>
-      </Panel>
+      {notice ? null : (
+        <>
+          <StatGrid columns={4}>
+            <Stat
+              label="Collectors with activity"
+              value={String(collectors.length)}
+              unit="ids"
+              note={`Ids the service has recorded asking for a route, not a loaded roster. ${hazardous} load${hazardous === 1 ? " was" : "s were"} carrying a hazard declaration.`}
+            />
+            <Stat
+              label="Loads asked for"
+              value={String(totalLoads)}
+              unit="loads"
+              note={`Across every collector id above. ${openLoads} still open.`}
+            />
+            <Stat
+              label="Credit notes issued"
+              value={String(notes)}
+              unit="notes"
+              note="One note per settled load, written in the same transaction as the settlement."
+            />
+            <Stat
+              label="Settled to collectors"
+              value={formatInr(settledInr)}
+              emphasis
+              note={simulatedNote(
+                "Each note is tied to a weighed load at a licensed recycler.",
+              )}
+            />
+          </StatGrid>
+
+          <section>
+            <SectionHeader
+              eyebrow="Activity"
+              title="Everyone with a load on the board"
+              note="Ordered by credits settled, with the totals row summing to the same figures the load board shows."
+            />
+            <div className="mt-5">
+              <CollectorActivityTable activity={collectors} />
+            </div>
+          </section>
+
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <section>
+              <SectionHeader
+                eyebrow="Distribution"
+                title="Credits share"
+                note="Measured against the leading collector, so the shape of the tail is visible at a glance."
+              />
+              <Surface className="mt-5 p-4">
+                <CreditsShare activity={collectors} />
+              </Surface>
+            </section>
+
+            <section>
+              <SectionHeader
+                eyebrow="Language coverage"
+                title="Not recorded"
+                note="Which languages a collector speaks is a roster fact, and there is no roster."
+              />
+              <Surface className="mt-5 p-4">
+                <p className="text-[13px] leading-relaxed text-ink-soft">
+                  The intake pipeline resolves a Hindi voice note into a structured item,
+                  and the collector id on a load is the only identity the platform stores.
+                  Nothing records what a collector speaks, so a language-coverage panel
+                  would be a chart of guesses. It is absent rather than approximate — the
+                  same reason there is no name beside a collector id.
+                </p>
+              </Surface>
+            </section>
+          </div>
+
+          <section>
+            <SectionHeader
+              eyebrow="Loads in flight"
+              title="Recently active"
+              note="Which collector asked for which load, and what state it is in now."
+            />
+            <Surface className="mt-5">
+              {recent.length === 0 ? (
+                <p className="p-4 text-sm leading-relaxed text-ink-soft">
+                  No load has been routed yet, so no collector has activity to show.
+                </p>
+              ) : (
+                <>
+                  <Table>
+                    <THead>
+                      <TR>
+                        <TH>Load</TH>
+                        <TH>Collector</TH>
+                        <TH className="hidden sm:table-cell">Stream</TH>
+                        <TH>Status</TH>
+                        <TH numeric>Settled</TH>
+                      </TR>
+                    </THead>
+                    <TBody>
+                      {recent.map((load) => (
+                        <TR
+                          key={load.pickupId}
+                          className={load.hazardous ? "border-l-[5px] border-l-hazard" : undefined}
+                        >
+                          <TD mono>
+                            <Link
+                              href="/pickups"
+                              className="font-medium underline decoration-rule underline-offset-2 hover:decoration-copper"
+                            >
+                              {load.pickupId}
+                            </Link>
+                            <p className="mt-1 font-mono text-[11px] text-ink-muted">
+                              {formatTimestamp(load.requestedAt)}
+                            </p>
+                          </TD>
+                          <TD mono>
+                            {load.collectorId || "unattributed"}
+                            <p className="mt-1 text-[11px] text-ink-muted">{load.city}</p>
+                          </TD>
+                          <TD className="hidden text-[13px] text-ink-soft sm:table-cell">
+                            {load.streamLabel}
+                            <p className="mt-1 font-mono text-[11px] text-ink-muted">
+                              {formatMass(Number(load.declaredMassG ?? 0))}
+                            </p>
+                          </TD>
+                          <TD>
+                            <Badge tone={pickupTone(load.status)}>
+                              {pickupLabel(load.status)}
+                            </Badge>
+                          </TD>
+                          <TD numeric mono>
+                            {load.creditNoteAmountPaise
+                              ? formatInr(load.creditNoteAmountPaise / 100)
+                              : "—"}
+                          </TD>
+                        </TR>
+                      ))}
+                    </TBody>
+                  </Table>
+
+                  <p className="border-t border-rule px-3 py-3 text-[12px] leading-relaxed text-ink-muted">
+                    A settled row means the credit note was issued against weight verified at
+                    the recycler gate. Nothing on this page is authored — there is no sample
+                    roster behind it.
+                  </p>
+                </>
+              )}
+            </Surface>
+          </section>
+
+          <Panel eyebrow="Read this before quoting a number" title="What is counted, and what is missing">
+            <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
+              {SIMULATED_CLAIM} Each note is tied to a weighed load at a CPCB-registered
+              recycler rather than to a promise made at the doorstep — which is the only
+              reason a brand could book one against an EPR mandate.
+            </p>
+            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-ink-soft">
+              What this page cannot show is a person. A collector id is stored on every load,
+              and nothing else about the collector is: no name, no standing, no languages, no
+              contact. Adding those columns would mean inventing them here, so they are
+              absent. A roster is a table away from being real, and until it exists this page
+              counts the work instead of the worker.
+            </p>
+          </Panel>
+        </>
+      )}
     </div>
   );
 }

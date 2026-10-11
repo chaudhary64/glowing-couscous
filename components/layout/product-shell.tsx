@@ -3,6 +3,9 @@ import { connection } from "next/server";
 import { ProductNav } from "@/components/layout/product-nav";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { roleLabel } from "@/lib/auth/roles";
+import { listLoads } from "@/lib/pickup/directory";
+import { listPendingHolds } from "@/lib/records/queues";
+import type { ProductHref } from "@/lib/types";
 
 /**
  * Shell for the working app. Same ink rail and square rules as the docs, but the
@@ -33,9 +36,34 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
   await connection();
   const user = await getCurrentUser();
 
+  /*
+    The rail's badges, read rather than imported.
+
+    A badge is a claim that work is waiting, so it has to be counted from the rows that
+    hold that work: the undecided holds from Postgres, and the loads the smart-pickup
+    service has not settled. Both reads fail soft — a service that is off or a database
+    that is down produces no badge rather than a zero, because "nothing is waiting" and
+    "nobody can tell" are different claims and the rail should not make the first when it
+    means the second. Neither read throws, so a broken badge cannot take down the shell
+    that every product page renders through.
+  */
+  const [holds, loads] = await Promise.all([
+    user ? listPendingHolds(100) : null,
+    user ? listLoads(user, 100) : null,
+  ]);
+  const counts: Partial<Record<ProductHref, number>> = {};
+  if (holds?.configured && holds.rows.length > 0) {
+    counts["/validation"] = holds.rows.length;
+  }
+  if (loads?.configured) {
+    const open = loads.rows.filter((load) => load.status !== "settled").length;
+    if (open > 0) counts["/pickups"] = open;
+  }
+
   return (
     <div className="flex min-h-full flex-col lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
       <ProductNav
+        counts={counts}
         viewer={{
           name: user?.name ?? user?.email ?? "Unknown account",
           email: user?.email ?? null,
@@ -44,32 +72,28 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
       />
 
       <div className="flex min-w-0 flex-col">
-        <div className="sticky top-0 z-10 border-b border-rule bg-paper/95 backdrop-blur supports-[backdrop-filter]:bg-paper/80">
+        <div className="sticky top-0 z-10 border-b-[3px] border-ink bg-paper lg:hidden">
           <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5 sm:px-8">
-            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
-              Mumbai + Pune pilot
-            </span>
-
-            <span className="ml-auto inline-flex items-center gap-2 border border-review/40 bg-review-tint px-2 py-0.5">
-              <span aria-hidden className="size-1.5 bg-review" />
-              <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-review">
-                Simulated data
-              </span>
-            </span>
-
             {/*
-              The rail's sign-out is desktop-only, and the rail itself is the only place
-              the role is named. On a phone the strip carries both, so nobody is stuck
-              signed in on a session they cannot end.
+              The strip exists for the phone, and only for the phone: the rail that names
+              the role and carries the sign-out is desktop-only, so on a small screen this
+              is the one place a session can be seen and ended. Once the rail appears there
+              is nothing here to say, which is why the bar is hidden from `lg` up rather
+              than left standing empty with a rule under it.
+
+              It used to carry the pilot's scope and a "simulated data" badge. Both are
+              gone. A disclaimer pinned to every screen stops being read after a week, and
+              the claim it was making is already made where it can be checked: each panel
+              says whether its figure is counted or authored.
             */}
             <span className="flex items-center gap-3 lg:hidden">
-              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
+              <span className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
                 {roleLabel(user?.role ?? null)}
               </span>
               <form method="post" action="/api/auth/sign-out">
                 <button
                   type="submit"
-                  className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink underline decoration-rule underline-offset-2 hover:decoration-copper"
+                  className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-ink underline decoration-ink underline-offset-2 hover:decoration-copper"
                 >
                   Sign out
                 </button>
@@ -81,16 +105,6 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
         <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8 sm:px-8 lg:py-10">
           {children}
         </main>
-
-        <footer className="border-t border-rule">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-5 py-6 sm:px-8">
-            <p className="max-w-3xl text-[12px] leading-relaxed text-ink-muted">
-              Every figure on these screens is a fixture, not a live reading. Credits
-              are simulated, this is not a payout system, and we route to
-              CPCB-registered recyclers rather than processing waste ourselves.
-            </p>
-          </div>
-        </footer>
       </div>
     </div>
   );

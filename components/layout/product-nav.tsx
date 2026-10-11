@@ -3,22 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { productNav } from "@/lib/data/product-nav";
-import { pickups } from "@/lib/data/operations";
-import { validationQueue } from "@/lib/data/model";
 import { canOpen, roleLabel, type Role } from "@/lib/auth/roles";
 import type { ProductHref } from "@/lib/types";
 
 /**
- * Counts only appear where the number means work is waiting. A badge on
- * "Collectors" would be decoration; a badge on "Validation queue" is a to-do.
+ * Counts only appear where the number means work is waiting. A badge on "Collectors"
+ * would be decoration; a badge on "Validation queue" is a to-do.
+ *
+ * The numbers arrive as a prop rather than an import, because they are real reads: the
+ * holds come from Postgres and the open loads from the smart-pickup service, and this is
+ * a client component that can make neither call. `ProductShell` makes them and passes the
+ * result down. Reading `lib/data` here instead would put a badge on a to-do list that
+ * nothing had actually added to.
  */
-const workCounts: Partial<Record<ProductHref, number>> = {
-  "/validation": validationQueue.filter((record) => record.verdict === "review")
-    .length,
-  "/pickups": pickups.filter(
-    (pickup) => pickup.status === "in-transit" || pickup.status === "assigned",
-  ).length,
-};
 
 export interface NavViewer {
   name: string;
@@ -38,7 +35,13 @@ export interface NavViewer {
  * The same `canOpen` the proxy and the data access layer call is imported directly,
  * so there is no second copy of the matrix to fall out of step.
  */
-export function ProductNav({ viewer }: { viewer: NavViewer }) {
+export function ProductNav({
+  viewer,
+  counts = {},
+}: {
+  viewer: NavViewer;
+  counts?: Partial<Record<ProductHref, number>>;
+}) {
   const pathname = usePathname();
 
   const groups = productNav
@@ -57,7 +60,7 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
       aria-label="App sections"
       className="flex flex-col border-ink bg-ink text-paper lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto"
     >
-      <div className="border-b border-paper/20 px-5 py-5 lg:px-6">
+      <div className="border-b-[3px] border-paper/25 px-5 py-5 lg:px-6">
         {/*
           The mark points at the app's own home here, not the public landing page:
           inside a session "home" means the dashboard, and the landing's job is done.
@@ -66,9 +69,9 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
           href="/dashboard"
           className="font-display text-2xl leading-none tracking-tight text-paper"
         >
-          ECO<span className="text-copper">EPR</span>
+          ECO<span className="text-copper-lit">EPR</span>
         </Link>
-        <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.18em] text-paper/60">
+        <p className="mt-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-paper/60">
           Verifiable e-waste take-back
         </p>
       </div>
@@ -76,13 +79,13 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
       <div className="flex gap-6 overflow-x-auto px-5 py-4 lg:block lg:overflow-visible lg:px-0 lg:py-0">
         {groups.map((group) => (
           <div key={group.label} className="lg:pt-5">
-            <p className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-paper/45 lg:block lg:px-6">
+            <p className="hidden font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-paper/60 lg:block lg:px-6">
               {group.label}
             </p>
             <ul className="flex gap-px lg:mt-2 lg:flex-col lg:gap-0">
               {group.items.map((item) => {
                 const active = pathname === item.href;
-                const count = workCounts[item.href];
+                const count = counts[item.href];
                 return (
                   <li key={item.href} className="shrink-0 lg:shrink">
                     <Link
@@ -90,17 +93,19 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
                       title={item.hint}
                       aria-current={active ? "page" : undefined}
                       className={[
-                        "flex min-w-[150px] items-center justify-between gap-3 border-b border-paper/15 px-5 py-3 text-[13px] font-medium transition-colors lg:min-w-0 lg:px-6",
+                        "flex min-w-[150px] items-center justify-between gap-3 border-b-[3px] border-paper/20 px-5 py-3 text-[13px] transition-colors lg:min-w-0 lg:px-6",
+                        // The screen you are on is a full inversion; everything else is
+                        // the skill's list hover — lighten the ground, underline the word.
                         active
-                          ? "bg-paper text-ink"
-                          : "text-paper/80 hover:bg-paper/10 hover:text-paper",
+                          ? "bg-paper font-bold text-ink"
+                          : "text-paper/80 hover:bg-paper/10 hover:text-paper hover:underline",
                       ].join(" ")}
                     >
                       <span>{item.label}</span>
                       {count ? (
                         <span
                           className={[
-                            "border px-1.5 py-0.5 font-mono text-[10px] tabular-nums",
+                            "border-2 px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums",
                             active
                               ? "border-copper text-copper"
                               : "border-paper/40 text-paper/80",
@@ -118,8 +123,8 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
         ))}
       </div>
 
-      <div className="mt-auto hidden border-t border-paper/20 px-6 py-5 lg:block">
-        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/45">
+      <div className="mt-auto hidden border-t-[3px] border-paper/25 px-6 py-5 lg:block">
+        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-paper/60">
           Signed in
         </p>
         <p className="mt-1.5 text-[13px] font-medium leading-snug text-paper">
@@ -131,9 +136,9 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
           </p>
         ) : null}
 
-        <p className="mt-3 inline-flex items-center gap-2 border border-copper/60 px-2 py-0.5">
-          <span aria-hidden className="size-1.5 bg-copper" />
-          <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-copper">
+        <p className="mt-3 inline-flex items-center gap-2 border-2 border-copper-lit px-2 py-1">
+          <span aria-hidden className="size-1.5 bg-copper-lit" />
+          <span className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-copper-lit">
             {roleLabel(viewer.role)}
           </span>
         </p>
@@ -147,7 +152,7 @@ export function ProductNav({ viewer }: { viewer: NavViewer }) {
         <form method="post" action="/api/auth/sign-out" className="mt-4">
           <button
             type="submit"
-            className="font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
+            className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-copper-lit underline decoration-copper-lit/50 underline-offset-2 hover:decoration-copper-lit"
           >
             Sign out
           </button>

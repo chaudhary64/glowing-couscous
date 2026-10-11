@@ -30,7 +30,7 @@ export function UpiOverlay({
       aria-live="assertive"
       className="handoff-upi absolute inset-0 z-20 flex flex-col items-center justify-center bg-verified px-6 text-center text-paper"
     >
-      <div className="handoff-upi-check flex size-24 items-center justify-center rounded-full border-4 border-paper">
+      <div className="handoff-upi-check flex size-24 items-center justify-center  border-[5px] border-paper">
         <svg viewBox="0 0 24 24" className="size-12" fill="none" stroke="currentColor" strokeWidth={3} aria-hidden>
           <path d="M5 12.5l4.5 4.5L19 7.5" strokeLinecap="square" />
         </svg>
@@ -52,7 +52,7 @@ export function UpiOverlay({
         <button
           type="button"
           onClick={onClose}
-          className="mt-6 border-2 border-paper px-4 py-2 font-mono text-[11px] uppercase tracking-[0.14em] hover:bg-paper hover:text-verified"
+          className="mt-6 border-[3px] border-paper px-4 py-2 font-mono text-[11px] uppercase tracking-[0.14em] hover:bg-paper hover:text-verified"
         >
           Done
         </button>

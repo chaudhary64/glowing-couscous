@@ -102,7 +102,7 @@ export function VanRound({
         })}
       </ol>
 
-      <p className="border-t-2 border-ink px-4 py-3 text-[12px] leading-relaxed text-ink-soft">
+      <p className="border-t-[3px] border-ink px-4 py-3 text-[12px] leading-relaxed text-ink-soft">
         {note ?? (
           <>
             {route.length} clusters on the round carrying {totalDetections} detections

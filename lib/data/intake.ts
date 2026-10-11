@@ -82,10 +82,19 @@ export const intakeSamples: IntakeSample[] = [
   },
 ];
 
+/*
+  The languages the intake pipeline actually handles.
+
+  This list held four — Hindi, Marathi, Gujarati, Tamil — under a panel headed "Languages in
+  the pilot". Only Hindi is wired: `ITEM_SYSTEM_INSTRUCTION` asks the model for a Hindi voice
+  note, `itemPrompt` describes the transcript as Hindi, and `parseIntake` defaults every
+  transcript's language to `Hindi (hi-IN)`. There is no recogniser, no prompt and no test for
+  the other three, so they are gone until there is. The count that matters — how often a
+  voice note is the input — comes from the stored records, not from here.
+*/
+export const intakeLanguages = ["Hindi"] as const;
+
 /** Simple counters for the intake header. */
 export const intakeStats = {
-  today: 412,
   voiceShare: 0.63,
-  languages: ["Hindi", "Marathi", "Gujarati", "Tamil"],
-  medianTurnaroundSeconds: 6,
 };

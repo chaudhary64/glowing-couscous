@@ -48,7 +48,7 @@ export function IntakeConsole({
                 aria-pressed={isActive}
                 onClick={() => setActiveId(sample.id)}
                 className={cn(
-                  "border-2 px-3 py-2 text-left font-mono text-[11px] uppercase tracking-[0.12em] transition-colors",
+                  "border-[3px] px-3 py-2 text-left font-mono text-[11px] uppercase tracking-[0.12em] transition-colors",
                   isActive
                     ? "border-ink bg-ink text-paper"
                     : "border-rule bg-paper-raised text-ink-soft hover:border-ink hover:text-ink",
@@ -64,7 +64,7 @@ export function IntakeConsole({
         </div>
 
         <Surface className="mt-4">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b-2 border-ink px-4 py-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b-[3px] border-ink px-4 py-3">
             <Badge tone="ink">{active.id}</Badge>
             <Badge tone={active.mode === "voice" ? "copper" : "neutral"}>
               {active.mode === "voice" ? "Voice note" : "Photo upload"}
@@ -161,7 +161,7 @@ export function IntakeConsole({
 
               <Link
                 href="/valuation"
-                className="ml-auto border-2 border-ink bg-ink px-4 py-2 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-paper hover:text-ink"
+                className="ml-auto border-[3px] border-ink bg-ink px-4 py-2 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-paper transition-colors hover:bg-paper hover:text-ink"
               >
                 Open the valuation
               </Link>

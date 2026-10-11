@@ -1,6 +1,12 @@
-import { AuthField, AuthNotice, AuthSubmit, AuthSwitch } from "@/components/auth/auth-form";
+import {
+  AuthField,
+  AuthFrame,
+  AuthHero,
+  AuthNotice,
+  AuthSubmit,
+  AuthSwitch,
+} from "@/components/auth/auth-form";
 import { Button } from "@/components/ui/button";
-import { ScreenHeader } from "@/components/ui/page-header";
 import { ERRORS, errorNotice, infoNotice } from "@/lib/auth/copy";
 import { pendingEmail } from "@/lib/auth/session";
 
@@ -16,6 +22,10 @@ import { pendingEmail } from "@/lib/auth/session";
  * The cookie lasts fifteen minutes. When it is gone the page says so plainly rather
  * than rendering a form that cannot work, which is the failure a user will actually
  * hit if they leave the tab open overnight.
+ *
+ * Same frame as sign in and sign up, because it is the third screen of one flow: hero,
+ * the framed block, then the ways out. The code is the record here, so the block is
+ * titled for it and the address it was sent to is on the note line.
  */
 
 type Search = Record<string, string | string[] | undefined>;
@@ -37,16 +47,16 @@ export default async function ConfirmPage({
 
   if (!email) {
     return (
-      <div className="flex flex-col gap-7">
-        <ScreenHeader
-          eyebrow="EcoEPR · Mumbai + Pune pilot"
+      <div className="flex flex-col gap-9">
+        <AuthHero
+          eyebrow="Account · confirm"
           title="Confirm the account"
           lede="A six-digit code is needed to finish creating an account."
         />
 
         <AuthNotice notice={ERRORS.expired} />
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col items-center gap-4 border-t border-rule pt-6">
           <AuthSwitch
             prompt="Start again with this address?"
             href="/signup"
@@ -63,32 +73,32 @@ export default async function ConfirmPage({
   }
 
   return (
-    <div className="flex flex-col gap-7">
-      <ScreenHeader
-        eyebrow="EcoEPR · Mumbai + Pune pilot"
+    <div className="flex flex-col gap-9">
+      <AuthHero
+        eyebrow="Account · confirm"
         title="Confirm the account"
         lede={`Cognito sent a six-digit code to ${email}. Entering it proves the address is yours.`}
       />
 
       {notice ? <AuthNotice notice={notice} /> : null}
 
-      <form
-        method="post"
-        action="/api/auth/confirm"
-        className="flex flex-col gap-5 border-2 border-ink bg-paper-raised p-5 sm:p-6"
-      >
-        <AuthField
-          label="Confirmation code"
-          name="code"
-          autoComplete="one-time-code"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          maxLength={6}
-          placeholder="000000"
-          hint="Six digits, no spaces. Codes are short-lived."
-        />
-
-        <AuthSubmit>Confirm</AuthSubmit>
+      <form method="post" action="/api/auth/confirm">
+        <AuthFrame
+          title="Six-digit code"
+          note={`Sent to ${email}`}
+          action={<AuthSubmit>Confirm</AuthSubmit>}
+        >
+          <AuthField
+            label="Confirmation code"
+            name="code"
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            placeholder="000000"
+            hint="Six digits, no spaces. Codes are short-lived."
+          />
+        </AuthFrame>
       </form>
 
       {/*
@@ -96,22 +106,22 @@ export default async function ConfirmPage({
         actions have different failure modes, and a code that has already expired needs
         the resend *without* a code to submit.
       */}
-      <form method="post" action="/api/auth/resend" className="flex flex-col gap-3">
-        <p className="text-[13px] leading-relaxed text-ink-muted">
+      <form
+        method="post"
+        action="/api/auth/resend"
+        className="flex flex-col items-start gap-3 border-t border-rule pt-5"
+      >
+        <p className="max-w-xl text-[13px] leading-relaxed text-ink-muted">
           Nothing in the inbox? Codes expire, and the first email is often late. Sending
           another one replaces the old code.
         </p>
-        <Button type="submit" variant="secondary" className="self-start">
+        <Button type="submit" variant="secondary">
           Send a new code
         </Button>
       </form>
 
-      <div className="border-t border-rule pt-4">
-        <AuthSwitch
-          prompt="Wrong address?"
-          href="/signup"
-          label="Start over"
-        />
+      <div className="flex flex-col items-center">
+        <AuthSwitch prompt="Wrong address?" href="/signup" label="Start over" />
       </div>
     </div>
   );

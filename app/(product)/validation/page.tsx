@@ -37,11 +37,13 @@ export const instant = false;
  * decision log is `validation_decisions` joined to whoever took each one. Reload the
  * page and the work is still there.
  *
- * Two things on this screen are still authored, and they say so where they appear: the
- * holdout metrics and the reject-rule table. Neither is a gap this change could close —
- * precision, recall and ROC-AUC need a labelled holdout and a trained classifier, and a
- * rule firing is a `rule_blocks` row from a rule vocabulary that no code writes. Every
- * count that comes from a row is counted, and everything else is labelled.
+ * One thing on this screen is still authored, and it says so where it appears: the holdout
+ * metrics. That is not a gap this change could close — precision, recall and ROC-AUC need a
+ * labelled holdout and a trained classifier. The reject-rule table names the prompt's rule
+ * vocabulary and counts its total from `gatekeeper_verdicts`; it used to print a fabricated
+ * per-rule split, and a firing is still a `rule_blocks` row that no code writes, so no rule
+ * carries a count. Every count that comes from a row is counted, and everything else is
+ * labelled.
  */
 
 export default async function ValidationQueuePage() {
@@ -71,13 +73,17 @@ export default async function ValidationQueuePage() {
             <Badge tone={configured ? "verified" : "hazard"}>
               {configured ? "Read from the database" : "No database"}
             </Badge>
-            <Badge tone="ink">
-              {metricHoldout.labelled.toLocaleString("en-IN")} labelled items in the
-              published holdout
+            <Badge tone="neutral">
+              Holdout evidence is authored — last trained {metricHoldout.lastTrained}
             </Badge>
-            <Badge tone="neutral">Last trained {metricHoldout.lastTrained}</Badge>
+            {counts ? (
+              <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+                {counts.verified} cleared · {counts.held} held · {counts.rejected} refused,
+                across {counts.itemsPriced} priced items
+              </span>
+            ) : null}
             {readError ? (
-              <span className="text-[12px] leading-snug text-hazard">{readError}</span>
+              <span className="text-[12px] leading-snug text-hazard-ink">{readError}</span>
             ) : null}
           </div>
         }
@@ -239,12 +245,12 @@ export default async function ValidationQueuePage() {
 
       <section>
         <SectionHeader
-          eyebrow="Controls · authored counts"
+          eyebrow="Controls"
           title="Rules that fire before a credit exists"
-          note="The rule vocabulary and the blocked counts below are the sample from the write-up: a firing is a rule_blocks row and no code writes one yet, so nothing here is counted from this database."
+          note="The vocabulary is the prompt's — R-01 to R-04 are the reasons a refusal can have. The total is counted from gatekeeper_verdicts; the per-rule split is not recorded anywhere, so the table shows no per-rule counts."
         />
         <div className="mt-5">
-          <RejectRules />
+          <RejectRules refused={counts?.rejected ?? null} />
         </div>
       </section>
 

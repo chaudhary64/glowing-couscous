@@ -27,7 +27,7 @@ export function Table({
 
 export function THead({ children }: { children: React.ReactNode }) {
   return (
-    <thead className="border-b-2 border-ink">
+    <thead className="border-b-[3px] border-ink">
       {children}
     </thead>
   );
@@ -49,8 +49,9 @@ export function TR({
   return (
     <tr
       className={cn(
-        "border-b border-rule-soft transition-colors hover:bg-copper-tint/60",
-        muted && "opacity-70",
+        "border-b-2 border-rule-soft transition-colors hover:bg-sunken",
+        // Dimmed by colour, not by opacity: a translucent row takes its rules with it.
+        muted && "[&>td]:text-ink-muted",
         className,
       )}
     >
@@ -72,7 +73,9 @@ export function TH({
     <th
       scope="col"
       className={cn(
-        "px-3 py-2 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-ink-muted",
+        // 10px, not 11: a column header is repeated in every table on every screen, and the
+        // extra pixel widens the min-content of the table past the phone's width.
+        "px-3 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink",
         numeric && "text-right",
         className,
       )}

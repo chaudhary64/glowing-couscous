@@ -1,0 +1,42 @@
+/*
+  The landing page's palette, and one text treatment.
+
+  The landing is the brand surface, so it wears the warmer bone ground the brand
+  references; the working screens are RawBlock — white paper, black rules. No token is
+  redeclared — the tokens are only re-pointed, which is enough because every Tailwind
+  colour utility resolves through `var(--color-*)` at the point of use.
+
+  `:root:has()` so the page ground (and the overscroll area) is bone too, not just the
+  column the wrapper paints; `.landing-bone` carries the same values on the wrapper
+  itself, which is the fallback where `:has()` is unsupported.
+*/
+
+:root:has(.landing-bone) {
+  --color-paper: #f4f3ee;
+  --color-paper-raised: #fbfaf6;
+  --color-rule: #ded8c9;
+  --color-rule-soft: #e8e3d6;
+  --color-ink: #0d0d0b;
+  --color-ink-soft: #3b3b34;
+  --color-ink-muted: #6f6f66;
+  /* The cool slate that means "base metal" elsewhere reads blue against bone. */
+  --color-lead: #7a756a;
+  --color-copper-tint: #f3e6da;
+}
+
+.landing-bone {
+  --color-paper: #f4f3ee;
+  --color-paper-raised: #fbfaf6;
+  --color-rule: #ded8c9;
+  --color-rule-soft: #e8e3d6;
+  --color-ink: #0d0d0b;
+  --color-ink-soft: #3b3b34;
+  --color-ink-muted: #6f6f66;
+  --color-lead: #7a756a;
+  --color-copper-tint: #f3e6da;
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+}
+
+/* `.display-outline` moved to app/globals.css: the auth screens use it too, and they
+   no longer import this file (they wear the RawBlock ground like the rest of the app). */

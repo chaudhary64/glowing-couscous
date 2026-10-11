@@ -1,4 +1,4 @@
-import type { ModelMetric, RejectRule, ValidationRecord } from "@/lib/types";
+import type { ModelMetric, RejectRule } from "@/lib/types";
 
 /**
  * Gatekeeper evidence. These numbers are the argument for the feature: credits
@@ -51,35 +51,31 @@ export const metricHoldout = {
   lastTrained: "06 Oct 2026",
 };
 
-export const validationQueue: ValidationRecord[] = [
-  { id: "ECO-2026-0436", subject: "PET bottle", collector: "Imran Sheikh", submittedAt: "14:44", verdict: "rejected", confidence: 0.99, reason: "No circuit, metal or cell signature." },
-  { id: "ECO-2026-0435", subject: "Redmi Note 12", collector: "Imran Sheikh", submittedAt: "14:40", verdict: "rejected", confidence: 0.86, reason: "Powers on — routed to reuse under R-03." },
-  { id: "ECO-2026-0431", subject: "Dell laptop mainboard", collector: "Sunita Pawar", submittedAt: "14:22", verdict: "verified", confidence: 0.97, reason: "PCB assembly confirmed, lead solder flagged." },
-  { id: "ECO-2026-0432", subject: "Samsung battery pack", collector: "Sunita Pawar", submittedAt: "14:26", verdict: "verified", confidence: 0.93, reason: "Li-ion pack, swollen — hazard route forced." },
-  { id: "ECO-2026-0434", subject: "HP printer power supply", collector: "Rakesh Yadav", submittedAt: "14:35", verdict: "verified", confidence: 0.91, reason: "Copper yield consistent with declared mass." },
-  { id: "ECO-2026-0433", subject: 'LG 21" CRT monitor', collector: "Rakesh Yadav", submittedAt: "14:31", verdict: "review", confidence: 0.68, reason: "Weight class exceeds doorstep threshold." },
-  { id: "eco-2026-0430", subject: "Microwave (door missing)", collector: "Anita Kamble", submittedAt: "13:58", verdict: "review", confidence: 0.72, reason: "Large appliance, magnetron handling unclear." },
-  { id: "eco-2026-0429", subject: "PCB scrap, loose", collector: "Anita Kamble", submittedAt: "13:41", verdict: "verified", confidence: 0.95, reason: "Loose boards, mass estimated from image scale." },
-];
+/*
+  The authored validation queue used to sit here: eight invented items with invented
+  confidences, rendered by a component the validation page had already stopped calling.
+  It is gone — `/validation` reads the real holds from `gatekeeper_verdicts` through
+  `listPendingHolds`. The metrics below stay, because they are the feature's evidence and
+  the page now badges them as authored.
+*/
 
+/*
+  The rule vocabulary. The codes are the ones the gatekeeper prompt hands the model
+  (`R-01` non-e-waste, `R-02` duplicate, `R-03` reuse, `R-04` hazard handling), so this
+  list is the set of reasons a refusal can have, not a count of any of them.
+
+  It used to carry a `blocked` number per rule — 148, 61, 37, 24 — and a total of 270 that
+  multiplied into "roughly ₹1.9L of simulated credits never issued". Nothing wrote those
+  numbers and nothing could: a per-rule firing is a `rule_blocks` row and no code creates
+  one. The refusal total the table now shows is `storedCounts().rejected`, counted from
+  `gatekeeper_verdicts`.
+*/
 export const rejectRules: RejectRule[] = [
-  { code: "R-01", rule: "Item shows no e-waste signature", blocked: 148, note: "Non-electronic uploads blocked before any credit is created." },
-  { code: "R-02", rule: "Duplicate image hash for this collector", blocked: 61, note: "Same photo resubmitted to farm credits." },
-  { code: "R-03", rule: "Device powers on and clears reuse screen", blocked: 37, note: "Working units go to refurbishment, not shredding." },
-  { code: "R-04", rule: "Battery swelling above threshold", blocked: 24, note: "Forces a licensed battery route instead of a rejection." },
+  { code: "R-01", rule: "Item shows no e-waste signature", note: "Non-electronic uploads are rejected before any credit is created." },
+  { code: "R-02", rule: "Duplicate image hash for this collector", note: "Same photo resubmitted to farm credits." },
+  { code: "R-03", rule: "Device powers on and clears reuse screen", note: "Working units go to refurbishment, not shredding." },
+  { code: "R-04", rule: "Battery swelling above threshold", note: "Forces a licensed battery route instead of a rejection." },
 ];
-
-/** Median payout per credited item, used only to size what the reject rules stop. */
-export const medianPayoutInr = 700;
-
-/** Uploads stopped by these rules in the review period. */
-export const blockedTotal = rejectRules.reduce(
-  (total, rule) => total + rule.blocked,
-  0,
-);
-
-/** What those blocked uploads would have drawn in simulated credits. */
-export const preventedCreditsInr = blockedTotal * medianPayoutInr;
 
 export const thresholdNote =
   "Threshold tuned for precision at 0.95, not accuracy. A wrongly credited bottle costs the EPR budget; a wrongly rejected board only costs a re-upload.";

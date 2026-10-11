@@ -3,14 +3,19 @@ import type { BadgeTone } from "@/lib/tone";
 
 export type { BadgeTone };
 
+/*
+  A status chip is white, with a 2px edge in the colour and the colour's label inside —
+  the skill's chip, not a pill and not a tint block. `-ink` is the AA-safe companion of
+  the pure status colour (see the note in app/globals.css).
+*/
 const tones: Record<BadgeTone, string> = {
-  neutral: "border-rule text-ink-muted bg-paper",
+  neutral: "border-ink text-ink bg-paper",
   ink: "border-ink bg-ink text-paper",
-  copper: "border-copper text-copper bg-copper-tint",
-  verified: "border-verified text-verified bg-verified-tint",
-  hazard: "border-hazard text-hazard bg-hazard-tint",
-  review: "border-review text-review bg-review-tint",
-  lead: "border-lead text-lead bg-paper",
+  copper: "border-copper text-copper bg-paper",
+  verified: "border-verified text-verified bg-paper",
+  hazard: "border-hazard text-hazard-ink bg-paper",
+  review: "border-review text-review-ink bg-paper",
+  lead: "border-ink text-ink bg-paper",
 };
 
 export function Badge({
@@ -28,7 +33,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 border px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em]",
+        "inline-flex items-center gap-1.5 border-2 px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.09em]",
         solid
           ? cn(
               "text-paper",
@@ -37,7 +42,7 @@ export function Badge({
               tone === "review" && "border-review bg-review",
               tone === "copper" && "border-copper bg-copper",
               tone === "ink" && "border-ink bg-ink",
-              tone === "lead" && "border-lead bg-lead",
+              tone === "lead" && "border-ink bg-ink",
               tone === "neutral" && "border-ink bg-ink",
             )
           : tones[tone],
@@ -60,7 +65,7 @@ export function Dot({ tone = "neutral" }: { tone?: BadgeTone }) {
         tone === "hazard" && "bg-hazard",
         tone === "review" && "bg-review",
         tone === "copper" && "bg-copper",
-        tone === "lead" && "bg-lead",
+        tone === "lead" && "bg-ink",
         tone === "ink" && "bg-ink",
         tone === "neutral" && "bg-rule",
       )}

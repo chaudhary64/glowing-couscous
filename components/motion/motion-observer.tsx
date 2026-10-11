@@ -11,6 +11,7 @@ import { useEffect } from "react";
  * - `data-motion="rows"`  — its children type in one after another.
  * - `data-motion="print"` — its figures settle digit by digit, like a receipt printer.
  * - `data-motion="stamp"` — struck down with weight.
+ * - `data-motion="draw"`  — a stroke is ruled along its own length, from its start.
  *
  * Everything runs through the Web Animations API, and this component never writes an
  * attribute or a style: an element React has not hydrated yet would report any such
@@ -30,10 +31,28 @@ const DIGITS = "0123456789";
 const EASE_PRINT = "cubic-bezier(0.22, 1, 0.36, 1)";
 const EASE_STRIKE = "cubic-bezier(0.2, 0.9, 0.25, 1)";
 
-type Kind = "scan" | "rows" | "print" | "stamp";
+/**
+ * How long a path is, in its own user units. Measured rather than declared so the draw
+ * needs no `pathLength` attribute and no style write — the dash pattern that hides the
+ * stroke and the offset that has to travel are both derived from this one number.
+ */
+function pathLength(el: HTMLElement): number {
+  const length = el instanceof SVGGeometryElement ? el.getTotalLength() : 1;
+  return Number.isFinite(length) && length > 0 ? length : 1;
+}
+
+/** A dash pattern as long as the path and offset by the same amount: nothing drawn. */
+function undrawn(el: HTMLElement): Keyframe {
+  const length = pathLength(el);
+  return { strokeDasharray: `${length} ${length}`, strokeDashoffset: length };
+}
+
+type Kind = "scan" | "rows" | "print" | "stamp" | "draw";
+
+type Pose = Keyframe | ((el: HTMLElement) => Keyframe);
 
 /** The pose each kind waits in, and the animation that releases it. */
-const MOTIONS: Record<Kind, { from: Keyframe; play: (el: HTMLElement) => Animation[] }> = {
+const MOTIONS: Record<Kind, { from: Pose; play: (el: HTMLElement) => Animation[] }> = {
   scan: {
     from: { clipPath: "inset(0 100% 0 0)" },
     play: (el) => {
@@ -83,6 +102,16 @@ const MOTIONS: Record<Kind, { from: Keyframe; play: (el: HTMLElement) => Animati
         ],
         { duration: 560, delay: 120, easing: EASE_STRIKE, fill: "both" },
       ),
+    ],
+  },
+  draw: {
+    from: undrawn,
+    play: (el) => [
+      el.animate([undrawn(el), { ...undrawn(el), strokeDashoffset: 0 }], {
+        duration: 1100,
+        easing: EASE_PRINT,
+        fill: "forwards",
+      }),
     ],
   },
 };
@@ -147,10 +176,18 @@ function printDigits(el: HTMLElement) {
 
 /** Holds an element (or a list's rows) in its starting pose until released. */
 function hold(el: HTMLElement, kind: Kind): Animation[] {
-  const pose = (target: Element, keyframe: Keyframe) =>
-    target.animate([keyframe, keyframe], { duration: 1, fill: "forwards" });
+  const pose = (target: Element, keyframe: Pose) =>
+    target.animate([resolve(keyframe, target), resolve(keyframe, target)], {
+      duration: 1,
+      fill: "forwards",
+    });
   if (kind === "rows") return [...el.children].map((child) => pose(child, { opacity: 0 }));
   return [pose(el, MOTIONS[kind].from)];
+}
+
+/** A pose is either a keyframe or something derived from the element it lands on. */
+function resolve(keyframe: Pose, target: Element): Keyframe {
+  return typeof keyframe === "function" ? keyframe(target as HTMLElement) : keyframe;
 }
 
 export function MotionObserver() {
@@ -175,12 +212,22 @@ export function MotionObserver() {
     const io = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
+          // Anything still below the viewport keeps waiting. An element the reader has
+          // already passed is released instead: its reveal will never be seen, and a pose
+          // that is never released is an invisible element.
+          if (!entry.isIntersecting && entry.boundingClientRect.top > 0) continue;
           io.unobserve(entry.target);
           release(entry.target as HTMLElement);
         }
       },
-      { rootMargin: "0px 0px -12% 0px" },
+      // The top margin reaches a whole document height up, which is what makes "already
+      // passed" observable at all: IntersectionObserver reports only *changes* in the
+      // ratio, and a jump — an anchor link, or a reload that restores a scroll position —
+      // takes an element from below the viewport to above it while the ratio stays 0. With
+      // this margin, above-the-viewport counts as intersecting, so the jump is a change
+      // (0 to 1) and the release happens. The bottom margin is the reveal threshold, and
+      // 12% of the viewport is where it always was.
+      { rootMargin: "100000px 0px -12% 0px" },
     );
 
     const adopt = (el: HTMLElement) => {

@@ -46,6 +46,7 @@ import {
   deleteItem,
   getItem,
   query,
+  scan,
   transactWrite,
   updateItem,
 } from "./dynamo.mjs";
@@ -167,6 +168,34 @@ export async function assignedMassToday(facilityId, day) {
     values: { ":key": `FACILITY#${facilityId}`, ":day": String(day) },
   });
   return rows.reduce((sum, row) => sum + Number(row.declaredMassG ?? 0), 0);
+}
+
+/**
+ * Every load on the board, newest first.
+ *
+ * The one full read the API makes, and a deliberate one: a load's keys answer the two
+ * questions the product asks directly — a collector's ledger, a facility's day — and the
+ * operator's board is a third question the table has no index for. See `scan` in
+ * `dynamo.mjs` for the ceiling on that and the GSI that replaces it.
+ *
+ * The filter is doing real work: `#type = :pickup` excludes both a load's own audit
+ * events (`type: "event"`, most of the items in this table) and the annual id counters
+ * (no `type` at all), so what comes back is loads and not the table.
+ *
+ * Sorting is here rather than in the query because a Scan has no order to sort by.
+ * `requestedAt` is an ISO instant, so a string compare is a chronological one.
+ */
+export async function listRecentLoads(limit = 25) {
+  const rows = await scan(tables().pickups, {
+    filter: "#type = :pickup",
+    names: { "#type": "type" },
+    values: { ":pickup": "pickup" },
+  });
+  return rows
+    .sort((a, b) =>
+      String(b.requestedAt ?? "").localeCompare(String(a.requestedAt ?? "")),
+    )
+    .slice(0, limit);
 }
 
 /* --------------------------------------------------------------- credit notes */

@@ -7,9 +7,9 @@ const stampColors: Record<BadgeTone, string> = {
   ink: "border-ink text-ink",
   copper: "border-copper text-copper",
   verified: "border-verified text-verified",
-  hazard: "border-hazard text-hazard",
-  review: "border-review text-review",
-  lead: "border-lead text-lead",
+  hazard: "border-hazard text-hazard-ink",
+  review: "border-review text-review-ink",
+  lead: "border-ink text-ink",
 };
 
 const verdictStamps: Record<Verdict, { label: string; tone: BadgeTone }> = {

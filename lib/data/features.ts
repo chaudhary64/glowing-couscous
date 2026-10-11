@@ -1,3 +1,4 @@
+import { SIMULATED_CLAIM } from "@/lib/disclaimer";
 import type { Feature, FeatureSlug } from "@/lib/types";
 
 /**
@@ -52,7 +53,7 @@ export const features: Feature[] = [
     status: "core",
     aws: ["Microsoft Foundry (vision)", "Reject rules R-01–R-04"],
     proof:
-      "Credits are simulated, so the payout is gameable by definition. Precision, F1 and ROC-AUC are the evidence that it is not.",
+      `${SIMULATED_CLAIM} That makes the payout gameable by definition; precision, F1 and ROC-AUC are the evidence that it is not.`,
   },
   {
     rank: 4,

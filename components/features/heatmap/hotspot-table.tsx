@@ -15,7 +15,7 @@ export function HotspotTable({
   return (
     <div className="flex flex-col gap-3">
       {open.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-l-4 border-hazard bg-hazard-tint px-3 py-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-l-[5px] border-hazard bg-sunken px-3 py-2">
           <Badge tone="hazard" solid>
             {open.length} open
           </Badge>
@@ -45,7 +45,7 @@ export function HotspotTable({
               <TR
                 key={spot.id}
                 muted={spot.status === "cleared"}
-                className={spot.status === "open" ? "bg-hazard-tint/40" : undefined}
+                className={spot.status === "open" ? "bg-sunken" : undefined}
               >
                 <TD>
                   <span className="font-medium">{spot.label}</span>

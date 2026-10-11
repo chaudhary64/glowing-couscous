@@ -45,7 +45,7 @@ export function Meter({
       aria-valuemin={0}
       aria-valuemax={max}
       className={cn(
-        "relative w-full border border-ink bg-paper",
+        "relative w-full border-2 border-ink bg-paper",
         size === "sm" ? "h-2" : "h-3",
         className,
       )}
@@ -86,10 +86,10 @@ export function MeterRow({
   return (
     <div className={cn("py-2", className)}>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-soft">
+        <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-ink">
           {label}
         </span>
-        <span className="font-mono text-[13px] font-medium text-ink">{display}</span>
+        <span className="font-mono text-[13px] font-bold text-ink">{display}</span>
       </div>
       <Meter value={value} tone={tone} target={target} className="mt-1.5" />
       {note ? (

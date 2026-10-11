@@ -35,13 +35,17 @@ import type { HeatmapCluster, HeatmapPoint, HeatmapWard } from "@/lib/heatmap/st
 const STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
 const MAPLIBRE_VERSION = "6.11.2";
 
-/** The design tokens, as MapLibre needs them: canvas paint cannot read CSS variables. */
+/**
+ * The design tokens, as MapLibre needs them: canvas paint cannot read CSS variables, so
+ * these four values are a hand-kept copy of the ones in `app/globals.css`. `lead` was the
+ * fifth and is gone — base metal prints black now, like every other neutral, and an unused
+ * key is a value that drifts without anyone noticing.
+ */
 const COLORS = {
-  ink: "#12171b",
+  ink: "#000000",
   copper: "#a2542a",
-  hazard: "#b0311c",
-  verified: "#1d5c3c",
-  lead: "#5a6470",
+  hazard: "#ff0000",
+  verified: "#008000",
 };
 
 /**
@@ -233,7 +237,7 @@ export function HotspotMap({
 
           // India, by district: shaded only where there are detections.
           const hasData = [">", ["coalesce", ["feature-state", "detections"], 0], 0];
-          const districtRamp = ["interpolate", ["linear"], ["coalesce", ["feature-state", "pressure"], 0], 0, "#d9dcd2", 50, COLORS.copper, 100, COLORS.hazard];
+          const districtRamp = ["interpolate", ["linear"], ["coalesce", ["feature-state", "pressure"], 0], 0, "#cccccc", 50, COLORS.copper, 100, COLORS.hazard];
           map.addLayer({
             id: "district-fill",
             type: "fill",
@@ -294,7 +298,7 @@ export function HotspotMap({
             source: "wards",
             layout: { visibility: "none" },
             paint: {
-              "fill-extrusion-color": ["interpolate", ["linear"], ["get", "pressure"], 0, "#d9dcd2", 50, COLORS.copper, 100, COLORS.hazard],
+              "fill-extrusion-color": ["interpolate", ["linear"], ["get", "pressure"], 0, "#cccccc", 50, COLORS.copper, 100, COLORS.hazard],
               "fill-extrusion-height": ["*", ["get", "pressure"], WARD_HEIGHT_PER_PRESSURE_M],
               "fill-extrusion-opacity": 0.78,
               "fill-extrusion-vertical-gradient": true,
@@ -310,11 +314,14 @@ export function HotspotMap({
               "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 10, 0.8, 15, 2.2],
               "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 10, 8, 13, 18, 16, 34],
               "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0.85, 16, 0.25],
+              // One ramp in the system's two pigments. The middle stop used to be a copper
+              // tint; tints are gone, so the density climbs through alpha on the accent
+              // itself instead of through a second, lighter colour.
               "heatmap-color": [
                 "interpolate", ["linear"], ["heatmap-density"],
                 0, "rgba(162,84,42,0)",
-                0.2, "rgba(240,227,217,0.55)",
-                0.45, "rgba(203,138,98,0.75)",
+                0.2, "rgba(162,84,42,0.35)",
+                0.45, "rgba(162,84,42,0.65)",
                 0.7, COLORS.copper,
                 1, COLORS.hazard,
               ],
@@ -330,7 +337,7 @@ export function HotspotMap({
               "circle-color": ["case", ["==", ["get", "hazardous"], 1], COLORS.hazard, COLORS.ink],
               "circle-opacity": ["get", "weight"],
               "circle-stroke-width": 1,
-              "circle-stroke-color": "#f5f6f1",
+              "circle-stroke-color": "#ffffff",
             },
           });
           map.addLayer({
@@ -371,7 +378,7 @@ export function HotspotMap({
               "circle-color": COLORS.ink,
               "circle-radius": ["step", ["get", "point_count"], 13, 4, 16, 10, 20, 50, 25] as never,
               "circle-stroke-width": 2,
-              "circle-stroke-color": "#f5f6f1",
+              "circle-stroke-color": "#ffffff",
               "circle-opacity": 0.9,
             },
           });
@@ -387,7 +394,7 @@ export function HotspotMap({
               "text-size": 12,
               "text-allow-overlap": true,
             },
-            paint: { "text-color": "#f5f6f1" },
+            paint: { "text-color": "#ffffff" },
           });
           map.addLayer({
             id: "group-single",
@@ -399,7 +406,7 @@ export function HotspotMap({
               "circle-radius": 5,
               "circle-color": ["case", ["==", ["get", "hazardous"], 1], COLORS.hazard, COLORS.ink] as never,
               "circle-stroke-width": 1.5,
-              "circle-stroke-color": "#f5f6f1",
+              "circle-stroke-color": "#ffffff",
             },
           });
 
@@ -435,7 +442,7 @@ export function HotspotMap({
             type: "symbol",
             source: "ward-labels",
             layout: { "text-field": ["get", "letter"], "text-size": 12, "text-font": ["Noto Sans Bold"], "text-allow-overlap": false },
-            paint: { "text-color": COLORS.ink, "text-halo-color": "#f5f6f1", "text-halo-width": 1.5 },
+            paint: { "text-color": COLORS.ink, "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
           });
 
           map.on("click", "cluster-fill", (event: MapLayerMouseEvent) => {
@@ -552,7 +559,7 @@ export function HotspotMap({
       {state === "ready" && points.length === 0 && clusters.length === 0 ? (
         // Said on the map itself, so an empty map never reads as a broken one.
         <div className="pointer-events-none absolute inset-x-3 bottom-10 flex justify-center">
-          <p className="max-w-md border-2 border-ink bg-paper-raised/95 px-4 py-2.5 text-center text-[12px] leading-snug text-ink">
+          <p className="max-w-md border-[3px] border-ink bg-paper-raised/95 px-4 py-2.5 text-center text-[12px] leading-snug text-ink">
             <span className="block font-mono text-[10px] uppercase tracking-[0.16em] text-copper">No geotagged intakes yet</span>
             Submit an intake with <span className="font-medium">Add location</span> and it appears here, filed to its
             district.
@@ -564,7 +571,7 @@ export function HotspotMap({
           type="button"
           onClick={() => setTilted((t) => !t)}
           aria-pressed={tilted}
-          className="absolute left-3 top-3 border-2 border-ink bg-paper-raised px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink hover:bg-ink hover:text-paper aria-pressed:bg-ink aria-pressed:text-paper"
+          className="absolute left-3 top-3 border-[3px] border-ink bg-paper-raised px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink hover:bg-ink hover:text-paper aria-pressed:bg-ink aria-pressed:text-paper"
         >
           {tilted ? "Flat view" : "3D view"}
         </button>

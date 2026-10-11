@@ -37,7 +37,7 @@ export function PickupTimeline({
             <span
               aria-hidden
               className={cn(
-                "mt-1 size-4 shrink-0 border-2",
+                "mt-1 size-4 shrink-0 border-[3px]",
                 step.done
                   ? "border-verified bg-verified"
                   : "border-ink bg-paper",
@@ -83,7 +83,7 @@ export function PickupTimeline({
             : `${remaining} step${remaining === 1 ? "" : "s"} left. Weighing at the recycler gate sets the payable mass, and settlement follows that weight — which is what turns a promise into a documented chain from doorstep to licensed line.`}
         </p>
         {pickup.hazardous ? (
-          <p className="mt-2 text-[12px] leading-relaxed text-hazard">
+          <p className="mt-2 text-[12px] leading-relaxed text-hazard-ink">
             Hazard declaration is already attached, so this load cannot be rerouted
             to an unlicensed buyer mid-journey.
           </p>

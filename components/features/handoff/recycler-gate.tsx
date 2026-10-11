@@ -184,11 +184,11 @@ export function RecyclerGate({ pickupId: suggested }: { pickupId?: string | null
               value={idInput}
               onChange={(event) => setIdInput(event.target.value)}
               placeholder="PU-2026-0001"
-              className="min-w-0 flex-1 border-2 border-ink bg-paper px-3 py-2 font-mono text-sm uppercase tracking-[0.08em]"
+              className="min-w-0 flex-1 border-[3px] border-ink bg-paper px-3 py-2 font-mono text-sm uppercase tracking-[0.08em]"
             />
             <Button type="submit" variant="secondary">Open</Button>
           </form>
-          {lookupError ? <p role="alert" className="mt-3 text-sm text-hazard">{lookupError}</p> : null}
+          {lookupError ? <p role="alert" className="mt-3 text-sm text-hazard-ink">{lookupError}</p> : null}
 
           {pickup ? (
             <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm">
@@ -231,7 +231,7 @@ export function RecyclerGate({ pickupId: suggested }: { pickupId?: string | null
                       inputMode="decimal"
                       value={massKg}
                       onChange={(event) => setMassKg(event.target.value)}
-                      className="w-32 border-2 border-ink bg-paper px-3 py-2 font-mono text-lg tabular-nums"
+                      className="w-32 border-[3px] border-ink bg-paper px-3 py-2 font-mono text-lg tabular-nums"
                     />
                     {preview ? (
                       <p className="text-sm text-ink-soft">
@@ -243,7 +243,7 @@ export function RecyclerGate({ pickupId: suggested }: { pickupId?: string | null
                     ) : null}
                   </div>
                   {validMass && Math.abs(variancePct) > VARIANCE_LIMIT_PCT ? (
-                    <p className="mt-2 border-l-4 border-review bg-review-tint px-3 py-2 text-sm text-review">
+                    <p className="mt-2 border-l-[5px] border-review bg-sunken px-3 py-2 text-sm text-review-ink">
                       {variancePct > 0 ? "+" : ""}{variancePct.toFixed(1)}% against the declared {formatMass(pickup.declaredMassG)}.
                       The note will still issue, priced on this weight, and be flagged for review.
                     </p>
@@ -273,7 +273,7 @@ export function RecyclerGate({ pickupId: suggested }: { pickupId?: string | null
                           if (event.key === "Backspace" && !digits[index] && index > 0) pinRefs.current[index - 1]?.focus();
                           if (event.key === "Enter") void verify();
                         }}
-                        className="size-14 border-2 border-ink bg-paper text-center font-mono text-2xl tabular-nums"
+                        className="size-14 border-[3px] border-ink bg-paper text-center font-mono text-2xl tabular-nums"
                       />
                     ))}
                   </div>
@@ -295,7 +295,7 @@ export function RecyclerGate({ pickupId: suggested }: { pickupId?: string | null
             )}
 
             {outcome?.kind === "error" ? (
-              <p role="alert" className="mt-4 border-l-4 border-hazard bg-hazard-tint px-3 py-2 text-sm text-hazard">
+              <p role="alert" className="mt-4 border-l-[5px] border-hazard bg-sunken px-3 py-2 text-sm text-hazard-ink">
                 {outcome.message}
                 {outcome.code === "pin_mismatch" && typeof outcome.attemptsRemaining === "number"
                   ? ` ${outcome.attemptsRemaining} ${outcome.attemptsRemaining === 1 ? "try" : "tries"} left.`
@@ -365,7 +365,7 @@ function GateToast({ note, paid }: { note: CreditNoteView; paid: boolean }) {
   }, []);
   if (!visible) return null;
   return (
-    <div role="status" className="handoff-upi fixed bottom-6 right-6 z-30 w-[min(360px,calc(100vw-3rem))] border-2 border-verified bg-paper-raised p-4 shadow-[0_16px_32px_-16px_rgba(18,23,27,0.5)]">
+    <div role="status" className="handoff-upi fixed bottom-6 right-6 z-30 w-[min(360px,calc(100vw-3rem))] border-[3px] border-verified bg-paper-raised p-4 ">
       <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-verified">Handoff verified</p>
       <p className="mt-1 font-display text-3xl tracking-tight">{formatPaise(note.amountPaise)}</p>
       <p className="mt-1 text-sm text-ink-soft">

@@ -210,7 +210,6 @@ export interface ValidationRecord {
 export interface RejectRule {
   code: string;
   rule: string;
-  blocked: number;
   note: string;
 }
 
@@ -323,20 +322,6 @@ export type ActivityKind =
   | "validation"
   | "pickup"
   | "settled";
-
-/* --------------------------------------------------------------- channels */
-
-export interface Channel {
-  id: string;
-  name: string;
-  rank: number | null;
-  status: "shipped" | "next" | "deferred";
-  /** What it costs to build, in plain words. */
-  effort: string;
-  reach: string;
-  why: string;
-  blockers: string[];
-}
 
 /* ---------------------------------------------------------- stored records */
 

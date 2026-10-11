@@ -32,9 +32,11 @@ export function ConsentBanner() {
     <div
       role="region"
       aria-label="Cookies and location"
-      className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-3xl border-2 border-ink bg-paper-raised p-4 text-ink shadow-[0_18px_50px_-18px_rgb(0_0_0/0.55)] sm:inset-x-6 sm:bottom-6 sm:p-5"
+      // A 5px edge and no shadow: on a white page the way to make something sit above
+      // the page is to draw it heavier, not to lift it.
+      className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-3xl border-[5px] border-ink bg-paper p-4 text-ink sm:inset-x-6 sm:bottom-6 sm:p-5"
     >
-      <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-copper">Cookies &amp; location</p>
+      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-copper">Cookies &amp; location</p>
       <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">
         EcoEPR uses one essential cookie to keep you signed in. With your permission, an intake also records this
         device&apos;s location, so the item is filed to its district and counted on the hotspot map. It is shown only
@@ -45,14 +47,14 @@ export function ConsentBanner() {
         <button
           type="button"
           onClick={() => choose(true)}
-          className="border-2 border-ink bg-ink px-4 py-2 font-mono text-[11px] uppercase tracking-[0.14em] text-paper hover:bg-paper hover:text-ink"
+          className="border-[3px] border-ink bg-ink px-5 py-2.5 font-mono text-[12px] font-bold uppercase tracking-[0.18em] text-paper hover:bg-paper hover:text-ink"
         >
           Accept cookies &amp; location
         </button>
         <button
           type="button"
           onClick={() => choose(false)}
-          className="border-2 border-ink bg-ink px-4 py-2 font-mono text-[11px] uppercase tracking-[0.14em] text-paper hover:bg-paper hover:text-ink"
+          className="border-[3px] border-ink bg-ink px-5 py-2.5 font-mono text-[12px] font-bold uppercase tracking-[0.18em] text-paper hover:bg-paper hover:text-ink"
         >
           Essential cookies only
         </button>

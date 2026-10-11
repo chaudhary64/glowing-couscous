@@ -233,7 +233,7 @@ export function DecisionQueue({
                   </p>
 
                   {failure?.id === item.id ? (
-                    <p className="mt-3 border-2 border-hazard bg-hazard-tint p-3 text-[13px] leading-relaxed text-ink">
+                    <p className="mt-3 border-[3px] border-hazard bg-sunken p-3 text-[13px] leading-relaxed text-ink">
                       {failure.message}
                     </p>
                   ) : null}
@@ -301,7 +301,7 @@ export function DecisionQueue({
         </p>
 
         {failure && !pending.some((item) => item.id === failure.id) ? (
-          <p className="mt-3 border-2 border-hazard bg-hazard-tint p-3 text-[13px] leading-relaxed text-ink">
+          <p className="mt-3 border-[3px] border-hazard bg-sunken p-3 text-[13px] leading-relaxed text-ink">
             {failure.message}
           </p>
         ) : null}

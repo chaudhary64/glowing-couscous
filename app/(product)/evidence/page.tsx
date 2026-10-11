@@ -131,7 +131,7 @@ export default async function EvidencePage({
                 autoComplete="off"
                 spellCheck={false}
                 maxLength={120}
-                className="w-full border-2 border-ink bg-paper px-3 py-2.5 font-mono text-[14px] text-ink placeholder:text-ink-muted/70 focus:border-copper"
+                className="w-full border-[3px] border-ink bg-paper px-3 py-2.5 font-mono text-[14px] text-ink placeholder:text-ink-muted/70 focus:border-copper"
               />
             </div>
             <Button type="submit" variant="secondary" className="shrink-0">
@@ -148,7 +148,7 @@ export default async function EvidencePage({
           </p>
 
           {lookup ? (
-            <div className="mt-4 border-t-2 border-ink pt-4">
+            <div className="mt-4 border-t-[3px] border-ink pt-4">
               {!lookup.configured ? (
                 <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
                   This deployment has no <span className="font-mono">DATABASE_URL</span>, so
@@ -157,7 +157,7 @@ export default async function EvidencePage({
                   here can walk from an id to one.
                 </p>
               ) : lookup.error ? (
-                <p className="max-w-3xl text-sm leading-relaxed text-hazard">
+                <p className="max-w-3xl text-sm leading-relaxed text-hazard-ink">
                   The lookup failed: {lookup.error}
                 </p>
               ) : lookup.asset === null ? (
@@ -242,7 +242,7 @@ export default async function EvidencePage({
             </div>
           ) : listing.error ? (
             <div className="p-4">
-              <p className="max-w-3xl text-sm leading-relaxed text-hazard">
+              <p className="max-w-3xl text-sm leading-relaxed text-hazard-ink">
                 The archive could not be listed: {listing.error}
               </p>
             </div>

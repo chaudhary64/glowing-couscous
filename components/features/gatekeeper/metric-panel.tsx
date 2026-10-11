@@ -25,12 +25,15 @@ export function MetricPanel() {
 
   return (
     <Panel
-      eyebrow="Holdout evaluation"
+      eyebrow="Holdout evaluation · authored"
       title="Metric panel"
       actions={
-        <Badge tone={gaps.length > 0 ? "review" : "verified"}>
-          {gaps.length > 0 ? `${gaps.length} below target` : "All at target"}
-        </Badge>
+        <span className="flex items-center gap-2">
+          <Badge tone="neutral">Authored evidence</Badge>
+          <Badge tone={gaps.length > 0 ? "review" : "verified"}>
+            {gaps.length > 0 ? `${gaps.length} below target` : "All at target"}
+          </Badge>
+        </span>
       }
     >
       <div className="flex flex-col">
@@ -63,11 +66,18 @@ export function MetricPanel() {
         <p className="mt-1.5 text-[12px] leading-relaxed text-ink-soft">
           {thresholdNote}
         </p>
+        <p className="mt-2 border-t border-rule pt-2 text-[12px] leading-relaxed text-ink-muted">
+          Every score in this panel, and the holdout figures below it, were written down
+          when the classifier was trained. Nothing in this deployment re-runs an
+          evaluation, so they are the argument for the feature rather than a measurement
+          of it — which is why the panel is badged as authored. The queue counts on the
+          rest of this page are read from the rows.
+        </p>
       </Surface>
 
       <FieldList columns={2} className="mt-5">
         <Field
-          label="Labelled holdout"
+          label="Labelled holdout (as published)"
           value={metricHoldout.labelled.toLocaleString("en-IN")}
           mono
         />

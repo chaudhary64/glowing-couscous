@@ -1,5 +1,11 @@
-import { AuthField, AuthNotice, AuthSubmit, AuthSwitch } from "@/components/auth/auth-form";
-import { ScreenHeader } from "@/components/ui/page-header";
+import {
+  AuthField,
+  AuthFrame,
+  AuthHero,
+  AuthNotice,
+  AuthSubmit,
+  AuthSwitch,
+} from "@/components/auth/auth-form";
 import { errorNotice } from "@/lib/auth/copy";
 
 /**
@@ -14,6 +20,10 @@ import { errorNotice } from "@/lib/auth/copy";
  * Every field carries `required`, so the empty-submit case is caught by the browser and
  * never costs a round trip; the route handler checks the same thing again for clients
  * that are not browsers.
+ *
+ * The display line is two lines with the second struck as an outline — the hero's device,
+ * used once, on the only screen here whose title is a phrase rather than a label. Both
+ * lines are inside the `h1`, so the heading still reads "Create an account".
  */
 
 type Search = Record<string, string | string[] | undefined>;
@@ -32,55 +42,58 @@ export default async function SignUpPage({
   const notice = errorNotice(pick(params.error));
 
   return (
-    <div className="flex flex-col gap-7">
-      <ScreenHeader
-        eyebrow="EcoEPR · Mumbai + Pune pilot"
-        title="Create an account"
+    <div className="flex flex-col gap-9">
+      <AuthHero
+        eyebrow="Account · create"
+        title="Create an"
+        titleTail="account"
         lede="Cognito sends a six-digit code to the address you give. Confirming it creates the account; a role is granted separately."
       />
 
       {notice ? <AuthNotice notice={notice} /> : null}
 
-      <form
-        method="post"
-        action="/api/auth/sign-up"
-        className="flex flex-col gap-5 border-2 border-ink bg-paper-raised p-5 sm:p-6"
-      >
-        <AuthField
-          label="Full name"
-          name="name"
-          autoComplete="name"
-          placeholder="Asha Kulkarni"
-        />
+      <form method="post" action="/api/auth/sign-up">
+        <AuthFrame
+          title="New account"
+          note="Confirmed by an emailed code"
+          action={<AuthSubmit>Create account</AuthSubmit>}
+        >
+          <AuthField
+            label="Full name"
+            name="name"
+            autoComplete="name"
+            placeholder="Asha Kulkarni"
+          />
 
-        <AuthField
-          label="Work email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          placeholder="you@organisation.in"
-          hint="This is the sign-in name, and where the confirmation code goes."
-        />
+          <AuthField
+            label="Work email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder="you@organisation.in"
+            hint="This is the sign-in name, and where the confirmation code goes."
+          />
 
-        <AuthField
-          label="Password"
-          name="password"
-          type="password"
-          autoComplete="new-password"
-          hint="At least 8 characters, with an upper-case letter, a lower-case letter and a number."
-        />
+          <AuthField
+            label="Password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            hint="At least 8 characters, with an upper-case letter, a lower-case letter and a number."
+          />
 
-        <AuthField
-          label="Password, again"
-          name="confirm"
-          type="password"
-          autoComplete="new-password"
-        />
-
-        <AuthSubmit>Create account</AuthSubmit>
+          <AuthField
+            label="Password, again"
+            name="confirm"
+            type="password"
+            autoComplete="new-password"
+          />
+        </AuthFrame>
       </form>
 
-      <AuthSwitch prompt="Already have an account?" href="/login" label="Sign in" />
+      <div className="flex flex-col items-center">
+        <AuthSwitch prompt="Already have an account?" href="/login" label="Sign in" />
+      </div>
     </div>
   );
 }

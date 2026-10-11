@@ -1,17 +1,13 @@
 import type { Metadata } from "next";
+import Image from "next/image";
+import type { ReactNode } from "react";
 
-import { AssaySequence, type AssayFacts } from "@/components/features/landing/assay-sequence";
-import { HeroBoard } from "@/components/features/landing/hero-board";
-import { CircuitSpine } from "@/components/motion/circuit-spine";
 import { LoopTrace } from "@/components/motion/loop-trace";
 import { RateTicker } from "@/components/motion/rate-ticker";
-import { SpotlightLayer } from "@/components/motion/spotlight-layer";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
-import { Panel, Surface } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { Field, FieldList } from "@/components/ui/field-list";
-import { SectionHeader } from "@/components/ui/page-header";
 import { Receipt, type ReceiptLine } from "@/components/ui/receipt";
 import { Stamp } from "@/components/ui/stamp";
 import { Stat, StatGrid } from "@/components/ui/stat";
@@ -20,8 +16,10 @@ import { focusItemId, getItem } from "@/lib/data/inventory";
 import { intakeStats } from "@/lib/data/intake";
 import { logisticsStats } from "@/lib/data/operations";
 import { RATE_CARD, type MaterialId } from "@/lib/data/rate-card";
+import { SIMULATED_CLAIM } from "@/lib/disclaimer";
 import { formatInr, formatMass, formatPct, formatRate, lineValue } from "@/lib/format";
-import { materialLabel, materialTone } from "@/lib/tone";
+import { materialLabel, materialTone, verdictLabel } from "@/lib/tone";
+import type { FeatureSlug } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "EcoEPR — Prove it went to a licensed recycler",
@@ -30,15 +28,27 @@ export const metadata: Metadata = {
 };
 
 /*
-  The landing page is written for the brand that carries the EPR obligation, not for
-  the operator who works the queue. Its thesis is the receipt: the one artefact that
-  proves a unit reached a licensed recycler. Everything below the hero exists to make
-  that artefact credible — where the number comes from, what the gate blocks, and what
-  this project does not claim.
+  The landing page is plain type on paper.
+
+  It is the brand surface, so it wears the warmer bone ground (app/(landing)/landing.css)
+  and nothing else: no cards, no shadows, no panels, no decorative motion. A section is a
+  mono eyebrow, a display line, a paragraph, and a hairline where the section ends. The one
+  framed object on the page is the receipt, because the receipt is the thing the product
+  exists to produce.
+
+  Seven content blocks, in one argument: **the problem** (the scale of the flow, and the
+  three things that break in it), **the proof** (the receipt), **how it works** (the three
+  instruments and the one rule that keeps them honest), **the loop** (the four screens,
+  photographed as they run), **the stack**, the honesty clause, and the way in.
+
+  The problem leads because the receipt means nothing until the reader knows why it is
+  worth having, and nothing is explained twice: the valuation rule is stated once, in the
+  third block, with the rate card collapsed behind a toggle rather than dumped on the page.
 */
 
 const item = getItem(focusItemId);
 const coreLoop = coreLoopSlugs.map(getFeature);
+const { valuation, gatekeeper } = item;
 
 /** The same receipt the valuation screen renders, built from the real rate card. */
 const receiptLines: ReceiptLine[] = item.materials.map((line) => {
@@ -54,31 +64,34 @@ const receiptLines: ReceiptLine[] = item.materials.map((line) => {
   };
 });
 
-/** The scroll sequence's captions: the same item, the same rate card, as the receipt. */
-const assayFacts: AssayFacts = {
-  itemId: item.id,
-  itemLabel: item.label,
-  city: item.city,
-  matchedClass: item.gatekeeper.matchedClass,
-  confidence: formatPct(item.gatekeeper.confidence),
-  fractions: [...item.materials]
-    .sort((a, b) => b.massGrams - a.massGrams)
-    .map((line) => ({
-      name: /^[A-Z][a-z]?$/.test(line.symbol) ? `${line.name} (${line.symbol})` : line.name,
-      mass: formatMass(line.massGrams),
-    })),
-  totalMass: formatMass(item.massGrams),
-  lines: receiptLines.filter((line) => !line.muted),
-  gross: formatInr(item.valuation.grossValue),
-  fee: formatInr(item.valuation.handlingFee),
-  net: formatInr(item.valuation.netToCollector),
-  validUntil: item.valuation.validUntil,
-};
+/** The three instruments the item passes: what it is, what it is worth, whether it clears. */
+const bench = [
+  {
+    index: "01",
+    name: "Assay",
+    title: "Assay by mass",
+    body: "Six fractions, weighed line by line. The item's mass is the exact sum of its lines, so the total on the receipt can never drift from the parts above it.",
+    figure: formatMass(item.massGrams),
+    note: `${item.materials.length} fractions · ${item.hazards.length ? "hazard line present" : "no hazard line"}`,
+  },
+  {
+    index: "02",
+    name: "Rate",
+    title: "Priced on the server",            body: "The per-class handling tariff is subtracted here, on this side of the wire, where an auditor can re-run it line by line rather than trusting a figure a model produced.",
+    figure: `${formatInr(valuation.grossValue)} − ${formatInr(valuation.handlingFee)}`,
+    note: `Net ${formatInr(valuation.netToCollector)} to the collector`,
+  },
+  {
+    index: "03",
+    name: "Gate",
+    title: "Read before payout",
+    body: "Valid or invalid on every upload, before a rupee is promised. A rejected submission names the rule it broke rather than guessing at what it might be.",
+    figure: formatPct(gatekeeper.confidence),
+    note: `${verdictLabel(gatekeeper.verdict)} · ${gatekeeper.matchedClass}`,
+  },
+];
 
-/** A handful of real rate-card lines, so the page shows rates rather than asserting them. */
-const showcaseRates: MaterialId[] = ["cu", "al", "au", "pb", "li"];
-
-/** What breaks today, each mapped to the capability that closes it. */
+/** The three failures, rendered inside block 01 rather than as a block of their own. */
 const gaps = [
   {
     title: "The collection is invisible",
@@ -95,255 +108,338 @@ const gaps = [
 ];
 
 const claims = [
-  "Credits are simulated. This is not a payout system, which is exactly why the gatekeeper exists.",
+  `${SIMULATED_CLAIM} That is exactly why the gatekeeper exists.`,
   "We route to CPCB-registered recyclers; we do not process waste ourselves.",
   "WhatsApp is the next channel, not part of this build — the same pipeline, different transport.",
 ];
 
+/** A handful of real rate-card lines, so the page shows rates rather than asserting them. */
+const showcaseRates: MaterialId[] = ["cu", "al", "au", "pb", "li"];
+
+/**
+ * The four loop screens as they were actually running, captured with a signed-in session by
+ * `npm run shots` (scripts/landing-shots.mjs). A screen is the one thing no paragraph can
+ * stand in for, and a judge cannot sign in from a slide.
+ */
+const loopShots: { slug: FeatureSlug; src: string; alt: string }[] = [
+  {
+    slug: "intake",
+    src: "/shots/01-intake.jpg",
+    alt: "The New intake screen: the capture console beside a photographed mainboard and its identified material fractions, each with a mass estimate and a confidence.",
+  },
+  {
+    slug: "valuation",
+    src: "/shots/02-valuation.jpg",
+    alt: "The Valuations screen: the priced-item queue above the metal breakdown of one item and its net figure to the collector.",
+  },
+  {
+    slug: "gatekeeper",
+    src: "/shots/03-validation.jpg",
+    alt: "The Validation queue: submissions waiting on a human, each with the rule it broke and the evidence behind the hold.",
+  },
+  {
+    slug: "pickup",
+    src: "/shots/04-pickups.jpg",
+    alt: "The Pickups screen: loads with their routed facility, stream, weight and settlement state.",
+  },
+];
+
+/**
+ * Built on AWS, and named. Every line here is a service the code calls — the same list
+ * lib/data/features.ts carries per capability — and the one thing that is not AWS is said
+ * out loud rather than folded into the badge.
+ */
+const awsStack = [
+  {
+    name: "Amazon Cognito",
+    role: "Who you are: the password, the groups and the session cookie this page signs in with. The app never stores a password of its own.",
+  },
+  {
+    name: "Amazon RDS",
+    role: "PostgreSQL, and the ledger: items, valuations, decisions and rate cards. Every read answers \"not configured\" rather than guessing when it is absent.",
+  },
+  {
+    name: "Amazon S3",
+    role: "The media archive: the collector's photograph and voice note, written under a key scoped to media/* and read back through the app, never a public URL.",
+  },
+  {
+    name: "Amazon DynamoDB",
+    role: "The load board, the recycler directory and the credit notes — with DynamoDB Streams as the trigger that settles a load.",
+  },
+  {
+    name: "AWS Lambda",
+    role: "One function serves the pickup API; a second consumes the stream and pays out once per settled load, never twice.",
+  },
+  {
+    name: "Amazon API Gateway",
+    role: "The front door to that API, with a Cognito JWT authorizer in front of every route.",
+  },
+  {
+    name: "AWS Amplify Hosting",
+    role: "Where this page is served from: SSR on Lambda, and the request ceiling that shapes what a model call can promise.",
+  },
+];
+
+/** The marker that opens an eyebrow, and the numbering the page's spine runs on. */
+function Eyebrow({ label, center = false }: { label: string; center?: boolean }) {
+  return (
+    <p
+      className={`flex items-center gap-2.5 font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-ink-muted ${
+        center ? "justify-center" : ""
+      }`}
+    >
+      <span aria-hidden className="size-2 shrink-0 bg-copper" />
+      {label}
+    </p>
+  );
+}
+
+/** One numbered band: eyebrow, display line, lede, then whatever the band has to show. */
+function Band({
+  id,
+  index,
+  name,
+  title,
+  lede,
+  children,
+}: {
+  id: string;
+  index: string;
+  name: string;
+  title: string;
+  lede?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section id={id} className="scroll-mt-24 border-b border-rule">
+      <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
+        <header className="max-w-3xl">
+          <Eyebrow label={`${index} / ${name}`} />
+          <h2
+            data-motion="scan"
+            className="mt-5 font-display text-[clamp(2rem,4.4vw,3.25rem)] uppercase leading-[0.95] tracking-tight"
+          >
+            {title}
+          </h2>
+          {lede ? (
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-ink-soft">{lede}</p>
+          ) : null}
+        </header>
+        <div className="mt-12">{children}</div>
+      </div>
+    </section>
+  );
+}
+
 export default function LandingPage() {
   return (
     <div className="relative flex flex-col">
-      {/* The page as a circuit: a trace routed through every data-node section. */}
-      <CircuitSpine />
-
       {/* ------------------------------------------------------------- hero */}
-      {/*
-        Ink ground, continuing the header: the gatekeeper's eye. The board sits behind the
-        content and a veil keeps the headline legible over it; without WebGL the section
-        is exactly this ground and nothing is missing.
-      */}
-      <section data-spotlight className="relative isolate overflow-hidden border-b-2 border-ink bg-ink text-paper">
-        <SpotlightLayer className="-z-[5]" />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 hidden bg-[linear-gradient(90deg,var(--color-ink)_0%,var(--color-ink)_34%,color-mix(in_oklab,var(--color-ink)_90%,transparent)_46%,color-mix(in_oklab,var(--color-ink)_45%,transparent)_58%,transparent_70%)] lg:block"
-        />
-        <div className="mx-auto grid w-full max-w-6xl gap-10 px-5 py-14 sm:px-8 lg:min-h-[calc(100dvh-56px)] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-center lg:gap-12 lg:py-20">
-          <div className="min-w-0">
-            <p className="rise-after font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-copper" style={{ "--n": 0 } as React.CSSProperties}>
-              Brand EPR compliance · Mumbai + Pune pilot
-            </p>
+      <section className="border-b border-rule">
+        <div className="mx-auto w-full max-w-6xl px-5 py-20 text-center sm:px-8 sm:py-28">
+          <Eyebrow label="Brand EPR compliance · Mumbai + Pune pilot" center />
 
-            <h1 className="mt-4 font-display text-5xl uppercase leading-[0.92] tracking-tight sm:text-6xl lg:text-7xl">
-              <span className="rise-line" style={{ "--n": 0 } as React.CSSProperties}>
-                <span>Prove it went to a</span>
-              </span>{" "}
-              <span className="rise-line" style={{ "--n": 1 } as React.CSSProperties}>
-                <span>licensed recycler.</span>
-              </span>
-            </h1>
+          {/* One line solid, one line struck as an outline: the second line is the claim,
+              the first is only the run-up to it. */}
+          <h1 className="mx-auto mt-7 max-w-4xl font-display text-[clamp(2.75rem,8.4vw,6.5rem)] uppercase leading-[0.92] tracking-tight">
+            Prove it went to a
+            <br />
+            <span className="display-outline">licensed recycler.</span>
+          </h1>
 
-            <p className="rise-after mt-5 max-w-xl text-base leading-relaxed text-paper/75" style={{ "--n": 1 } as React.CSSProperties}>
-              India generates 3.2 million tonnes of e-waste a year, and over 90% of it
-              moves through informal collectors — no safety protocol, no paper trail.
-              EcoEPR gives the kabadiwala a Hindi voice-note intake and gives you the
-              audit chain: a metal assay, a rate computed on the server, and an EPR
-              credit note stamped at a CPCB-registered recycler.
-            </p>
+          <p className="mx-auto mt-7 max-w-2xl text-base leading-relaxed text-ink-soft">
+            India generates 3.2 million tonnes of e-waste a year and over 90% of it moves
+            through informal collectors — no safety protocol, no paper trail. EcoEPR turns a
+            photo or a Hindi voice note into a metal assay, a rate computed on the server,
+            and an EPR credit note stamped at a CPCB-registered recycler.
+          </p>
 
-            <div className="rise-after mt-7 flex flex-wrap items-center gap-3" style={{ "--n": 2 } as React.CSSProperties}>
-              <ButtonLink
-                href="/dashboard"
-                className="border-copper! bg-copper! text-paper! hover:border-paper! hover:bg-paper! hover:text-ink!"
-              >
-                Open the app
-              </ButtonLink>
-            </div>
-
-            <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-paper/50">
-              The working screens need an account
-            </p>
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <ButtonLink href="/dashboard">Open the app</ButtonLink>
+            <ButtonLink href="/login" variant="secondary">
+              Sign in
+            </ButtonLink>
           </div>
 
-          {/*
-            One board, two compositions: on a phone it is a block between the copy and
-            the receipt, its edges dissolving into the ink; on a desktop it lies behind
-            everything, under the veil.
-          */}
-          <HeroBoard className="relative -mx-5 -my-4 h-[86vw] max-h-[520px] min-h-[300px] [mask-image:linear-gradient(180deg,transparent,#000_16%,#000_80%,transparent)] sm:-mx-8 lg:absolute lg:inset-0 lg:left-[18%] lg:-z-20 lg:m-0 lg:h-auto lg:[mask-image:none]" />
-
-          <div className="relative z-10 min-w-0 max-lg:-mt-10 lg:pl-8">
-            {/* Paper on the bench: the receipt keeps its own ink colour on the dark ground. */}
-            {/* It prints: the receipt feeds out of a slot as the page opens (globals.css). */}
-            <div className="receipt-printer">
-            <div className="receipt-paper text-ink shadow-[0_30px_80px_-20px_rgb(0_0_0/0.7)]">
-            <Receipt
-              title="Scrap rate receipt"
-              reference={item.id}
-              issuedAt="Issued 09 Oct 2026, 14:25 IST"
-              lines={receiptLines}
-              adjustments={[
-                {
-                  label: "Handling & licensed line fee",
-                  value: `−${formatInr(item.valuation.handlingFee)}`,
-                },
-              ]}
-              total={{
-                label: "Net to collector",
-                value: formatInr(item.valuation.netToCollector),
-                sub: `Valid until ${item.valuation.validUntil}`,
-              }}
-              note="Every figure is derived from the assay above and the rate card below. Nothing is issued until the gatekeeper reads Verified."
-              stamp={<Stamp verdict={item.gatekeeper.verdict} />}
-            />
-            </div>
-            </div>
-            <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-paper/50">
-              The one artefact a compliance officer can hold: a note that names the item,
-              the rate and the recycler.
-            </p>
-          </div>
+          <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+            The working screens need an account
+          </p>
         </div>
       </section>
 
       <RateTicker />
 
-      {/* ---------------------------------------------- the assay, in 3D */}
-      <AssaySequence facts={assayFacts} stamp={<Stamp verdict={item.gatekeeper.verdict} angle={-8} />} />
-
-      {/* ------------------------------------------------------ the numbers */}
-      <section data-node className="border-b-2 border-ink bg-paper-raised">
-        <div className="mx-auto w-full max-w-6xl px-5 py-10 sm:px-8">
-          <StatGrid columns={4}>
-            <Stat
-              label="E-waste generated"
-              value="3.2M"
-              unit="tonnes / year"
-              note="National annual volume. Over 90% is handled informally."
-            />
-            <Stat
-              label="Handled informally"
-              value="90%"
-              unit="of the flow"
-              note="Collected without a safety protocol and without a paper trail."
-            />
-            <Stat
-              label="Hazardous share"
-              value={formatPct(logisticsStats.hazardousShare)}
-              unit="of pilot pickups"
-              note="Batteries, leaded glass and capacitor banks on a licensed route."
-            />
-            <Stat
-              label="Median settlement"
-              value={logisticsStats.medianSettleHours.toFixed(1)}
-              unit="hours"
-              emphasis
-              note="From doorstep valuation to a settled credit note."
-            />
-          </StatGrid>
-        </div>
-      </section>
-
-      {/* ---------------------------------------------------------- the gap */}
-      <section id="gap" data-node className="scroll-mt-24 border-b-2 border-ink">
-        <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
-          <SectionHeader
-            eyebrow="The gap"
-            title="The mandate is legal. The paper trail is not."
-            note="A brand carries an EPR obligation from CPCB and no reliable way to prove it was met. Three things break between the doorstep and the compliance file."
+      {/* ------------------------------------------------------ the problem */}
+      {/* The scale and the three failures are one block, because they are one argument: the
+          obligation is large, and there are three specific reasons it cannot be met today.
+          Splitting them put the solution on screen before the problem it answers. */}
+      <Band
+        id="problem"
+        index="01"
+        name="The problem"
+        title="A legal mandate with no paper trail."
+        lede="A brand carries an EPR obligation from CPCB and no reliable way to prove it was met. India generates 3.2 million tonnes of e-waste a year and over 90% of it moves through informal collectors — and three things break between that doorstep and the compliance file."
+      >
+        <StatGrid columns={4}>
+          <Stat
+            label="E-waste generated"
+            value="3.2M"
+            unit="tonnes / year"
+            note="National annual volume. Over 90% is handled informally."
           />
-
-          <ul data-motion="rows" className="mt-6 grid gap-px border border-rule bg-rule md:grid-cols-3">
-            {gaps.map((gap) => (
-              <li key={gap.title} className="trace-card flex flex-col bg-paper-raised p-5">
-                <span aria-hidden className="size-2.5 bg-copper" />
-                <h3 className="mt-3 font-display text-lg uppercase leading-tight tracking-tight">
-                  {gap.title}
-                </h3>
-                <p className="mt-2 flex-1 text-[13px] leading-relaxed text-ink-soft">
-                  {gap.body}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      {/* ------------------------------------------------------- the loop */}
-      <section id="how" data-node className="scroll-mt-24 border-b-2 border-ink bg-paper-raised">
-        <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
-          <SectionHeader
-            eyebrow="The core loop"
-            title="One item, four screens."
-            note="Numbered because it is a real sequence: nothing is promised to the collector until step 03 clears the item."
+          <Stat
+            label="Handled informally"
+            value="90%"
+            unit="of the flow"
+            note="Collected without a safety protocol and without a paper trail."
           />
-
-          <LoopTrace className="mt-6">
-          <ol className="grid gap-px border border-rule bg-rule md:grid-cols-2 lg:grid-cols-4">
-            {coreLoop.map((feature, index) => (
-              <li key={feature.slug} className="flex flex-col bg-paper-raised p-5">
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-copper">
-                  Step {String(index + 1).padStart(2, "0")}
-                </p>
-                <h3 className="mt-2 font-display text-lg uppercase leading-tight tracking-tight">
-                  {feature.name}
-                </h3>
-                <p className="mt-2 flex-1 text-[13px] leading-snug text-ink-soft">
-                  {feature.tagline}
-                </p>
-              </li>
-            ))}
-          </ol>
-          </LoopTrace>
-
-          <p className="mt-4 text-[12px] leading-relaxed text-ink-muted">
-            The gatekeeper sits after valuation and before anything is promised to a
-            collector, so a credit is only minted once the item clears the valid/invalid
-            boolean. {formatPct(intakeStats.voiceShare)} of intakes arrive as a Hindi
-            voice note rather than a photo.
-          </p>
-        </div>
-      </section>
-
-      {/* -------------------------------------------------- why it holds up */}
-      <section id="proof" data-node className="scroll-mt-24 border-b-2 border-ink">
-        <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
-          <SectionHeader
-            eyebrow="Why it survives an audit"
-            title="The model never states a rupee figure."
-            note="The identification model returns vocabulary, not money. Every priced figure is arithmetic on this side of the wire."
+          <Stat
+            label="Hazardous share"
+            value={formatPct(logisticsStats.hazardousShare)}
+            unit="of pilot pickups"
+            note="Batteries, leaded glass and capacitor banks on a licensed route."
           />
+          <Stat
+            label="Median settlement"
+            value={logisticsStats.medianSettleHours.toFixed(1)}
+            unit="hours"
+            emphasis
+            note="From doorstep valuation to a settled credit note."
+          />
+        </StatGrid>
 
-          <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-            <div className="flex flex-col gap-6">
-              <p className="text-base leading-relaxed text-ink-soft">
-                The model reads the photograph and the Hindi voice note in a single
-                call and returns three things: an item class from a closed list, material
-                ids with mass estimates, and a verdict with a confidence. A reply whose
-                ids or verdict fall outside those closed lists is discarded rather than
-                guessed at — a rejected submission names the rule it broke.
-              </p>
+        {/* A ledger, not a card wall: three independent failures, so nothing is numbered. */}
+        <ul data-motion="rows" className="mt-14 border-t border-rule">
+          {gaps.map((gap) => (
+            <li
+              key={gap.title}
+              className="grid gap-x-10 gap-y-2 border-b border-rule py-6 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]"
+            >
+              <h3 className="flex items-start gap-3 font-display text-xl uppercase leading-tight tracking-tight">
+                <span aria-hidden className="mt-2 size-2 shrink-0 bg-copper" />
+                {gap.title}
+              </h3>
+              <p className="text-[15px] leading-relaxed text-ink-soft">{gap.body}</p>
+            </li>
+          ))}
+        </ul>
+      </Band>
 
-              <Panel eyebrow="The rule" title="Net = gross − handling">
-                <FieldList columns={1}>
-                  <Field
-                    label="Gross material value"
-                    value={formatInr(item.valuation.grossValue)}
-                    mono
-                  />
-                  <Field
-                    label="Handling & licensed line fee"
-                    value={`−${formatInr(item.valuation.handlingFee)}`}
-                    mono
-                  />
-                  <Field
-                    label="Net to collector"
-                    value={formatInr(item.valuation.netToCollector)}
-                    mono
-                    tone="copper"
-                  />
-                </FieldList>
-                <p className="mt-4 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-                  The handling fee is a per-class tariff, not a function of weight, so a
-                  light submission of a dear class can cost more to route than it yields.
-                  The collector is never shown a negative offer — the shortfall is the
-                  operator&apos;s cost, not a debt owed by the person in the lane.
-                </p>
-              </Panel>
+      {/* -------------------------------------------------------- the artefact */}
+      {/* The one framed object on the page, because it is the one object the product
+          produces. It follows the problem for that reason: the numbers above are what give
+          it a job — over 90% of the flow leaves no paper trail — and every band below it is
+          either the assay and the rate card it is derived from, or why it can be trusted.
+          Proof needs a question before it means anything. */}
+      <section id="artefact" className="scroll-mt-24 border-b border-rule">
+        <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-20">
+          <div className="mx-auto max-w-3xl">
+            <Eyebrow label="The artefact" center />
+            <div className="mt-8">
+              <Receipt
+                title="Scrap rate receipt"
+                reference={item.id}
+                issuedAt="Issued 09 Oct 2026, 14:25 IST"
+                lines={receiptLines}
+                adjustments={[
+                  {
+                    label: "Handling & licensed line fee",
+                    value: `−${formatInr(valuation.handlingFee)}`,
+                  },
+                ]}
+                total={{
+                  label: "Net to collector",
+                  value: formatInr(valuation.netToCollector),
+                  sub: `Valid until ${valuation.validUntil}`,
+                }}
+                note="Every figure is derived from the assay and the rate card below. Nothing is issued until the gatekeeper reads Verified."
+                stamp={<Stamp verdict={gatekeeper.verdict} />}
+              />
             </div>
+            <p className="mt-6 text-center text-[13px] leading-relaxed text-ink-muted">
+              The one artefact a compliance officer can hold: a note that names the item, the
+              rate and the recycler.
+            </p>
+          </div>
+        </div>
+      </section>
 
-            <div>
-              <Surface>
+      {/* ----------------------------------------------------- how it works */}
+      {/* The bench and the rule were two blocks making one point twice: what the three
+          instruments measure, and the single constraint that makes the money they produce
+          checkable. One block, said once, with the rate card itself collapsed behind a
+          toggle — a dense table nobody reads twice is noise, not evidence. */}
+      <Band
+        id="how"
+        index="02"
+        name="How it works"
+        title="One item, three instruments."
+        lede={`Assay, rate, gate — the path one submission takes. Every figure belongs to ${item.id}, the same item the receipt above prices; none of it is an average.`}
+      >
+        <ul data-motion="rows" className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
+          {bench.map((instrument) => (
+            <li key={instrument.name} className="border-t border-rule pt-5">
+              <p className="flex items-baseline gap-2.5 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-muted">
+                <span className="text-copper">{instrument.index}</span>
+                {instrument.name}
+              </p>
+              <h3 className="mt-4 font-display text-2xl uppercase leading-tight tracking-tight sm:text-3xl">
+                {instrument.title}
+              </h3>
+              <p className="mt-3 text-[15px] leading-relaxed text-ink-soft">{instrument.body}</p>
+              <p className="mt-5 font-mono text-[14px] tabular-nums text-ink">
+                {instrument.figure}
+              </p>
+              <p className="mt-1 font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-ink-muted">
+                {instrument.note}
+              </p>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-14 grid gap-10 border-t border-rule pt-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-16">
+          <div>
+            <h3 className="font-display text-2xl uppercase leading-tight tracking-tight sm:text-3xl">
+              The model never states a rupee figure.
+            </h3>
+            <p className="mt-4 text-base leading-relaxed text-ink-soft">
+              Microsoft Foundry reads the photograph and the Hindi voice note in a single call
+              and returns vocabulary: an item class from a closed list, material ids with mass
+              estimates, a verdict and a confidence. A reply whose ids or verdict fall outside
+              those closed lists is discarded rather than guessed at, and no priced figure is
+              ever among what comes back. Every rupee on this page is arithmetic on this side
+              of the wire, against a published schedule.
+            </p>
+
+            <FieldList columns={1} className="mt-8">
+              <Field label="Gross material value" value={formatInr(valuation.grossValue)} mono />
+              <Field
+                label="Handling & licensed line fee"
+                value={`−${formatInr(valuation.handlingFee)}`}
+                mono
+              />
+              <Field
+                label="Net to collector"
+                value={formatInr(valuation.netToCollector)}
+                mono
+                tone="copper"
+              />
+            </FieldList>
+
+            <p className="mt-6 text-[15px] leading-relaxed text-ink-muted">
+              The handling fee is a per-class tariff, not a function of weight, so a light
+              submission of a dear class can cost more to route than it yields. The collector
+              is never shown a negative offer — the shortfall is the operator&apos;s cost, not
+              a debt owed by the person in the lane.
+            </p>
+          </div>
+
+          <div>
+            <details className="border-t border-rule pt-4">
+              <summary className="cursor-pointer font-mono text-[12px] font-medium uppercase tracking-[0.16em] text-ink underline decoration-rule underline-offset-[6px] transition-colors hover:decoration-copper">
+                See the rate card
+              </summary>
+              <div className="mt-6">
                 <Table caption="EcoEPR rate card · representative lines">
                   <THead>
                     <TR>
@@ -380,55 +476,144 @@ export default function LandingPage() {
                     })}
                   </TBody>
                 </Table>
-              </Surface>
-              <p className="mt-3 text-[12px] leading-relaxed text-ink-muted">
-                Hazardous and inert fractions carry a rate of zero and a handling note
-                instead of a value, because they are a disposal cost rather than a payout.
-                Rates here are a labelled demo card; replacing them with a licensed feed
-                moves nothing else.
-              </p>
-            </div>
+                <p className="mt-5 text-[14px] leading-relaxed text-ink-muted">
+                  Hazardous and inert fractions carry a rate of zero and a handling note
+                  instead of a value, because they are a disposal cost rather than a payout.
+                  Rates here are a labelled demo card; replacing them with a licensed feed
+                  moves nothing else.
+                </p>
+              </div>
+            </details>
           </div>
+        </div>
+      </Band>
+
+      {/* ------------------------------------------------------- the loop */}
+      <Band
+        id="loop"
+        index="03"
+        name="The loop"
+        title="One item, four screens."
+        lede="Numbered because it is a real sequence: nothing is promised to the collector until step 03 clears the item. The four screens below are photographs of the running app with a session signed in, not mock-ups — npm run shots takes them again on demand."
+      >
+        <LoopTrace>
+          <ol className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+            {coreLoop.map((feature, index) => (
+              <li key={feature.slug} className="pt-6">
+                <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-copper">
+                  Step {String(index + 1).padStart(2, "0")}
+                </p>
+                <h3 className="mt-3 font-display text-xl uppercase leading-tight tracking-tight">
+                  {feature.name}
+                </h3>
+                <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">
+                  {feature.tagline}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </LoopTrace>
+
+        <p className="mt-8 max-w-3xl text-[13px] leading-relaxed text-ink-muted">
+          The gatekeeper sits after valuation and before anything is promised, so a credit is
+          only minted once the item clears the valid/invalid boolean. {formatPct(intakeStats.voiceShare)}{" "}
+          of intakes arrive as a Hindi voice note rather than a photo.
+        </p>
+
+        {/* The screens themselves. A judge cannot sign in from a slide, so the evidence is
+            the pixel: each of these is the running screen, captured with a session signed in
+            (scripts/landing-shots.mjs). The link opens the full-size file, because a 1440px
+            screen in a two-column grid is legible at a glance and not much further. */}
+        <ul data-motion="rows" className="mt-14 grid gap-8 border-t border-rule pt-10 sm:grid-cols-2">
+          {loopShots.map((shot) => {
+            const feature = getFeature(shot.slug);
+            return (
+              <li key={shot.slug}>
+                <Image
+                  src={shot.src}
+                  alt={shot.alt}
+                  width={1440}
+                  height={900}
+                  sizes="(min-width: 640px) 46vw, 100vw"
+                  className="block w-full border border-rule bg-paper-raised"
+                />
+                <p className="mt-3 flex flex-wrap items-baseline gap-x-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
+                  <span className="text-ink">{feature.productName}</span>
+                  <span className="tabular-nums">{feature.productHref}</span>
+                  <a
+                    href={shot.src}
+                    className="ml-auto underline decoration-rule underline-offset-4 hover:decoration-copper"
+                  >
+                    Full size
+                  </a>
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      </Band>
+
+      {/* ------------------------------------------------------------ the stack */}
+      {/* An explicit judging criterion, so it is a block and not a footnote. Named services
+          only, and the one part of the pipeline that is not AWS is named too: a strip that
+          claimed a logo it does not use would undo the honesty clause below it. */}
+      <section id="stack" className="scroll-mt-24 border-b border-rule">
+        <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 sm:py-16">
+          <Eyebrow label="Built on AWS" />
+          <p className="mt-5 max-w-3xl text-base leading-relaxed text-ink-soft">
+            Seven services, each doing the one thing it is good at. The identification model is
+            Microsoft Foundry, which is not AWS — it reads the photograph and the Hindi audio
+            in a single call, and it is named here rather than folded into the badge.
+          </p>
+          <ul data-motion="rows" className="mt-10 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+            {awsStack.map((service) => (
+              <li key={service.name} className="border-t border-rule pt-4">
+                <h3 className="font-display text-lg uppercase leading-tight tracking-tight">
+                  {service.name}
+                </h3>
+                <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">{service.role}</p>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
       {/* --------------------------------------------------------- honesty */}
-      <section data-node className="border-b-2 border-ink bg-paper-raised">
-        <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
-          <Panel eyebrow="Honesty clause" title="What we are not claiming">
-            <ul data-motion="rows" className="flex flex-col gap-3">
-              {claims.map((claim) => (
-                <li key={claim} className="flex gap-3 text-sm leading-relaxed">
-                  <span aria-hidden className="mt-2 size-2 shrink-0 bg-copper" />
-                  <span className="text-ink-soft">{claim}</span>
-                </li>
-              ))}
-            </ul>
-          </Panel>
-        </div>
-      </section>
+      <Band
+        id="honesty"
+        index="04"
+        name="Honesty clause"
+        title="What we are not claiming."
+        lede="A prototype that survives a demo is one that says where its edges are before someone finds them."
+      >
+        <ul data-motion="rows" className="flex max-w-3xl flex-col gap-4">
+          {claims.map((claim) => (
+            <li key={claim} className="flex gap-3 text-[15px] leading-relaxed">
+              <span aria-hidden className="mt-2.5 size-2 shrink-0 bg-copper" />
+              <span className="text-ink-soft">{claim}</span>
+            </li>
+          ))}
+        </ul>
+      </Band>
 
       {/* ------------------------------------------------------------- cta */}
-      {/* The board returns for the close: all X-ray now, turning slowly. */}
-      <section data-node data-spotlight className="relative isolate overflow-hidden bg-ink text-paper">
-        <SpotlightLayer className="-z-[5]" />
-        <HeroBoard
-          mode="xray"
-          className="relative h-[80vw] max-h-[420px] [mask-image:linear-gradient(180deg,transparent,#000_20%,#000_80%,transparent)] lg:absolute lg:inset-y-0 lg:right-0 lg:left-[54%] lg:-z-10 lg:h-auto lg:max-h-none lg:[mask-image:linear-gradient(90deg,transparent,#000_30%)]"
-        />
-        <div className="relative mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 lg:py-28">
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-copper">
+      <section className="bg-ink text-paper">
+        <div className="mx-auto w-full max-w-6xl px-5 py-20 text-center sm:px-8 sm:py-28">
+          <p className="flex items-center justify-center gap-2.5 font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-paper/60">
+            <span aria-hidden className="size-2 shrink-0 bg-copper" />
             Start here
           </p>
-          <h2 data-motion="scan" className="mt-3 max-w-3xl font-display text-4xl uppercase leading-[0.95] tracking-tight sm:text-5xl">
+          <h2
+            data-motion="scan"
+            className="mx-auto mt-6 max-w-3xl font-display text-[clamp(2.25rem,5.6vw,4.25rem)] uppercase leading-[0.95] tracking-tight"
+          >
             Open the working screens.
           </h2>
-          <p className="mt-4 max-w-xl text-base leading-relaxed text-paper/70">
+          <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-paper/70">
             Intake, valuation, the gatekeeper and pickup routing all run against a live
             multimodal model. Sign in with a demo account to work the queue.
           </p>
-
-          <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div className="mt-9 flex justify-center">
             <ButtonLink href="/dashboard" variant="inverse">
               Open the app
             </ButtonLink>

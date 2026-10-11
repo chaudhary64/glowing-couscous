@@ -1,6 +1,7 @@
 import { ViewTransition } from "react";
 
 import { LandingShell } from "@/components/layout/landing-shell";
+import "./landing.css";
 
 /**
  * The landing page is its own group because it is the only route with public

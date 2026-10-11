@@ -17,9 +17,9 @@ export function PageHeader({
   meta?: React.ReactNode;
 }) {
   return (
-    <header className="border-b-2 border-ink pb-6">
+    <header className="border-b-[5px] border-ink pb-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-copper">
+        <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-copper">
           Feature {String(feature.rank).padStart(2, "0")}
         </span>
         <span aria-hidden className="hidden h-3 w-px bg-rule sm:block" />
@@ -42,13 +42,13 @@ export function PageHeader({
 
       <div className="mt-5 grid gap-4 border-t border-rule pt-4 sm:grid-cols-2">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-ink-muted">
             What this screen does
           </p>
           <p className="mt-1 text-sm leading-relaxed">{feature.pageJob}</p>
         </div>
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-ink-muted">
             Why this rank
           </p>
           <p className="mt-1 text-sm leading-relaxed">{feature.proof}</p>
@@ -81,11 +81,11 @@ export function ScreenHeader({
   className?: string;
 }) {
   return (
-    <header className={cn("border-b-2 border-ink pb-5", className)}>
+    <header className={cn("border-b-[5px] border-ink pb-5", className)}>
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
         <div className="min-w-0 max-w-3xl">
           {eyebrow ? (
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-copper">
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-copper">
               {eyebrow}
             </p>
           ) : null}
@@ -122,7 +122,7 @@ export function SectionHeader({
     <div className={cn("flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1", className)}>
       <div>
         {eyebrow ? (
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-ink-muted">
             {eyebrow}
           </p>
         ) : null}
@@ -147,7 +147,7 @@ export function MetaRow({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+      <span className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-ink-muted">
         {label}
       </span>
       <span className="flex flex-wrap gap-1.5">{children}</span>

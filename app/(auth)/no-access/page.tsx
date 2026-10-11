@@ -88,7 +88,7 @@ export default async function NoAccessPage({
         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-muted">
           The role ladder
         </p>
-        <ol className="mt-3 border-2 border-ink">
+        <ol className="mt-3 border-[3px] border-ink">
           {ladder.map(([role, spec]) => {
             const mine = user?.role === role;
             return (

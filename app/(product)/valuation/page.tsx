@@ -11,6 +11,7 @@ import { Receipt, type ReceiptLine } from "@/components/ui/receipt";
 import { Stamp, VerdictMark } from "@/components/ui/stamp";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
+import { SIMULATED_CLAIM } from "@/lib/disclaimer";
 import { formatInr, formatIstStamp, formatMass, formatRate, lineValue } from "@/lib/format";
 import { getStoredItem, listPricedItems } from "@/lib/records/queues";
 import {
@@ -143,7 +144,7 @@ export default async function ValuationsPage({
               cleared · {held.length} held · {refused.length} refused
             </span>
             {queue.error ? (
-              <span className="text-[12px] leading-snug text-hazard">
+              <span className="text-[12px] leading-snug text-hazard-ink">
                 The queue could not be read: {queue.error}
               </span>
             ) : null}
@@ -227,7 +228,7 @@ export default async function ValuationsPage({
                       return (
                         <TR
                           key={item.id}
-                          className={isOpen ? "bg-copper-tint/50" : undefined}
+                          className={isOpen ? "bg-sunken" : undefined}
                         >
                           <TD>
                             {isOpen ? <Badge tone="copper">Open</Badge> : null}
@@ -303,8 +304,12 @@ export default async function ValuationsPage({
           ) : null}
 
           {openItem && openValuation && openVerdict ? (
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-              <div className="flex flex-col gap-8">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+              {/* `minmax(0,1fr)` at the base width, not just at `lg`: the implicit auto column
+                  is floored by its content's min-content, and a table inside a scroll box still
+                  reports its own min-content upward, which pushed this whole screen ~54px past
+                  a 390px viewport. A track that can go to zero lets the table scroll instead. */}
+              <div className="flex min-w-0 flex-col gap-8">
                 <section>
                   <SectionHeader
                     eyebrow={`Open item · ${openItem.id}`}
@@ -403,7 +408,7 @@ export default async function ValuationsPage({
                             </TR>
                           );
                         })}
-                        <TR className="border-t-2 border-ink bg-paper">
+                        <TR className="border-t-[3px] border-ink bg-paper">
                           <TD className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
                             Gross
                           </TD>
@@ -510,7 +515,7 @@ export default async function ValuationsPage({
                       ? `Valid until ${formatIstStamp(openValuation.validUntil)}`
                       : "The card in force carried no expiry",
                   }}
-                  note={`${openValuation.rateBasis}. Simulated credits — this prototype issues no real payout, and no ledger row is written.`}
+                  note={`${openValuation.rateBasis}. ${SIMULATED_CLAIM} No ledger row is written.`}
                   stamp={<Stamp verdict={openVerdict.verdict} />}
                 />
 

@@ -22,8 +22,8 @@ export function Stat({
   className?: string;
 }) {
   return (
-    <div className={cn("border-t-2 border-ink pt-2.5", className)}>
-      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
+    <div className={cn("border-t-[3px] border-ink pt-2.5", className)}>
+      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-ink-muted">
         {label}
       </p>
       <p className="mt-1 flex items-baseline gap-1.5">
@@ -37,7 +37,7 @@ export function Stat({
           {value}
         </span>
         {unit ? (
-          <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">
+          <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
             {unit}
           </span>
         ) : null}
