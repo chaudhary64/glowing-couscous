@@ -116,7 +116,11 @@ function referenceFixtureId(code: ItemClassCode): string | null {
 }
 
 /**
- * Price and gate a validated proposal. Pure: same proposal in, same numbers out.
+ * Price and gate a validated proposal. Pure: same proposal and same card in, same
+ * numbers out. The card in force is `loadRateCard()`, read beside the model call below
+ * and defaulted to the code card here so this stays a pure function of its inputs; a
+ * card the daily market feed wrote prices from the day's market rates, a seeded one
+ * from its own rows, and neither case needs to be told to this function.
  *
  * The EPR credit follows the fixture's own story rather than a formula invented
  * here. A verified or held item mints a note for its class; a rejected item earns
@@ -192,15 +196,20 @@ export function priceProposal(
     eprCreditNote = "not issued — item rejected";
   }
 
-  const valuation: Valuation = priceMaterials(lines, {
-    // A handling fee pays for moving material. With no fractions declared there is
-    // nothing to move, and charging for it would show a collector a negative net.
-    handlingFee: lines.length === 0 ? 0 : entry.handlingFee,
-    eprCreditInr,
-    eprCreditNote,
-    rateBasis: card.basis,
-    validUntil: card.validUntil,
-  });
+  const valuation: Valuation = {
+    ...priceMaterials(lines, {
+      // A handling fee pays for moving material. With no fractions declared there is
+      // nothing to move, and charging for it would show a collector a negative net.
+      handlingFee: lines.length === 0 ? 0 : entry.handlingFee,
+      eprCreditInr,
+      eprCreditNote,
+      rateBasis: card.basis,
+      validUntil: card.validUntil,
+    }),
+    // The stored card the rates came from, so a later question about a payout can name the
+    // rows it was computed from. Null for the card shipped in code.
+    rateCardId: card.cardId,
+  };
 
   const signals =
     proposal.gatekeeper.signals.length > 0
@@ -320,7 +329,6 @@ export async function analyseItem(input: AnalyseItemInput): Promise<AiAnalysis> 
   const started = Date.now();
   const provider = getAiProvider();
   const media = input.media ?? [];
-
   // The card is read beside the model call: nothing can be priced without it, and waiting
   // for it after the model answers would add a database round trip to every submission.
   const [call, card] = await Promise.all([

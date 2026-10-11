@@ -256,7 +256,8 @@ export async function recordPricedItem(input: PricedRecordInput): Promise<Priced
             massG: numeric(line.massGrams),
             // Stored, not recomputed on read: a line is priced at the moment of
             // valuation, and recomputing from today's card would restate a payout.
-            ratePaisePerKg: line.ratePerKg * 100,
+            // Rounded because the column is whole paise and `ratePerKg` is a float.
+            ratePaisePerKg: Math.round(line.ratePerKg * 100),
             valuePaise:
               Math.round((line.massGrams / 1000) * line.ratePerKg) * 100,
             handlingNote: line.handling,
@@ -284,6 +285,8 @@ export async function recordPricedItem(input: PricedRecordInput): Promise<Priced
         .values({
           itemId: created,
           version: 1,
+          // The daily card the rates came from, when one was in force.
+          rateCardId: analysis.valuation.rateCardId ?? null,
           grossValuePaise: analysis.valuation.grossValue * 100,
           handlingFeePaise: analysis.valuation.handlingFee * 100,
           netToCollectorPaise: analysis.valuation.netToCollector * 100,

@@ -13,8 +13,9 @@ import type { MaterialCategory, MaterialLine, Valuation } from "@/lib/types";
  * model could type a figure, the whole valuation story would be theatre.
  *
  * Rate provenance is honest about itself: the benchmarks are labelled in-app as
- * a demo rate card. Replace `RATE_CARD` with a licensed feed and nothing else
- * has to move.
+ * a demo rate card. With `METALPRICE_API_KEY` set, the metals the API's plan prices
+ * are re-priced once a day by `lib/rates/daily.ts`, starting from the rates here;
+ * everything else, and every rate without the feed, is this card.
  */
 
 export interface RateCardLine {

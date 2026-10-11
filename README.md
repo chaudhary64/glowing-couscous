@@ -223,6 +223,6 @@ build, because Amplify's SSR compute does not inherit the app's environment sett
 - Credits are **simulated**. This prototype moves no money — which is exactly why the
   gatekeeper exists.
 - EcoEPR **routes** e-waste to CPCB-registered recyclers; it does not process waste itself.
-- The rate card is a labelled demo card; replacing it with a licensed feed changes nothing
-  else.
+- The rate card is stored: the metals with a market price follow MetalpriceAPI once a
+  day, and every other line is a manual rate seeded from the card in code.
 - WhatsApp is the next channel, not part of this build.
