@@ -27,7 +27,7 @@ import type { MediaRecord } from "./media-assets";
  *    be the one thing this row must never do.
  *
  * 2. **The code is the id already on screen.** A live submission is known by
- *    `LIVE-2026-0431` (`AiAnalysis.id`, shown by every screen that renders a live
+ *    `LIVE-2026-04318826` (`AiAnalysis.id`, shown by every screen that renders a live
  *    result), so the row is stored under that string and an operator holding a
  *    valuation can look its evidence up in one indexed read on `intakes_code_uq`.
  *    Minting a second, separate sample id would give one submission two names, and

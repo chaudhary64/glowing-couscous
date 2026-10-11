@@ -457,10 +457,11 @@ if (db) {
   /**
    * A submission id nothing else in the table holds.
    *
-   * Shaped like a live one (`LIVE-2026-<4 digits>`, derived from the submission's own
-   * label, brand and mass) but probed for, because a run that crashed in the past could
-   * have left the same four digits behind and this check must not fail on somebody else's
-   * row — that is what cleanup is for, not what a passing check is for.
+   * In the older four-digit shape of a live id (`LIVE-2026-0431`; live ids now carry
+   * eight digits from a hash of the evidence) but probed for, because older rows or a run
+   * that crashed in the past could have left the same four digits behind and this check
+   * must not fail on somebody else's row — that is what cleanup is for, not what a
+   * passing check is for.
    */
   let probeCode = `LIVE-2026-${String(Date.now() % 10_000).padStart(4, "0")}`;
   for (let step = 0; step < 10; step += 1) {
@@ -615,8 +616,8 @@ if (db) {
     : [];
   check("...so the evidence it protects is still in place", stillThere.length === 1, `${stillThere.length} row(s)`);
 
-  // Two identical items priced twice carry the same id — the serial is derived from the
-  // label, brand and mass — so a second object is archived, listed and reported as
+  // Should a second object ever arrive under an id already taken (ids are a hash of the
+  // evidence; before that, of the description), it is archived, listed and reported as
   // unjoined rather than being given a row that would point at somebody else's evidence.
   const PROBE_G = Buffer.from("ecoepr archive probe G — a second object under a taken submission id");
   const secondObject = await archiveAndRecord(
