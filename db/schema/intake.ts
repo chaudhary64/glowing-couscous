@@ -145,7 +145,7 @@ export const intakes = pgTable(
     longitude: numeric("longitude", { precision: 9, scale: 6 }),
 
     /* --- how it was read --- */
-    /** Model that did the extraction, e.g. bedrock:claude-3-5-sonnet. */
+    /** Model that did the extraction, e.g. the Foundry deployment name `gpt-4.1-mini`. */
     extractionModel: text("extraction_model"),
     extractionConfidence: confidence("extraction_confidence"),
     extractionLatencyMs: integer("extraction_latency_ms"),
