@@ -29,7 +29,9 @@ test.describe("sign in", () => {
     await page.locator('input[name="email"]').fill(ACCOUNTS.viewer);
     await page.locator('input[name="password"]').fill(password());
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).not.toHaveURL(/\/login/);
+    // Signing in from the plain form, with no `next`, lands on the dashboard — not the
+    // public landing page at `/`.
+    await expect(page).toHaveURL("/dashboard");
     await page.goto("/dashboard");
     await expect(page).toHaveURL("/dashboard");
 

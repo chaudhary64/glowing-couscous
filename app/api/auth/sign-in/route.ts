@@ -34,8 +34,15 @@ export async function POST(request: Request) {
   const email = emailField(form);
   // Not trimmed: a leading or trailing space is a legitimate password character.
   const password = rawField(form, "password");
-  const next = safeNext(String(form.get("next") ?? ""));
-  const keep = next === "/" ? undefined : next;
+  // Where the session begins. Deliberately not `/`: the root is the public landing
+  // page, so a sign-in that ends there reads as if nothing happened — which is the bug
+  // this fixes, for every visitor who signed in from `/login` rather than being stopped
+  // at a gated page first. The proxy already sends a signed-in visitor away from the
+  // auth pages to `/dashboard`, including a user who holds no role (the guard explains
+  // that on `/no-access`), so both paths agree on where a session starts.
+  const requested = safeNext(String(form.get("next") ?? ""));
+  const next = requested === "/" ? "/dashboard" : requested;
+  const keep = next === "/dashboard" ? undefined : next;
 
   if (!email || !password) {
     return backToForm("/login", { error: "missing", next: keep });
