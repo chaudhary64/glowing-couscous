@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
-import { landingSections } from "@/lib/data/landing";
+import type { AuthUser } from "@/lib/auth/token";
+import { landingEntry, landingSections, type LandingEntryLink } from "@/lib/data/landing";
 import { SIMULATED_LABEL } from "@/lib/disclaimer";
 
 /**
@@ -40,12 +41,6 @@ function Arrow({ className }: { className?: string }) {
   );
 }
 
-const productLinks = [
-  { label: "Open the app", href: "/dashboard" },
-  { label: "Sign in", href: "/login" },
-  { label: "Create an account", href: "/signup" },
-] as const;
-
 /**
  * The wave the reference draws under its closing line, as geometry instead of an export.
  *
@@ -58,7 +53,18 @@ const productLinks = [
 const SINE_PATH =
   "M0.75 6 C8.87 3.7 16.69 1.5 25.75 1.5 C34.81 1.5 42.63 3.7 50.75 6 C58.87 8.3 66.69 10.5 75.75 10.5 C84.81 10.5 92.63 8.3 100.75 6 C108.87 3.7 116.69 1.5 125.75 1.5 C134.81 1.5 142.63 3.7 150.75 6 C158.87 8.3 166.69 10.5 175.75 10.5 C184.81 10.5 192.63 8.3 200.75 6 C208.87 3.7 216.69 1.5 225.75 1.5 C234.81 1.5 242.63 3.7 250.75 6 C258.87 8.3 266.69 10.5 275.75 10.5 C284.81 10.5 292.63 8.3 300.75 6 C308.87 3.7 316.69 1.5 325.75 1.5 C334.81 1.5 342.63 3.7 350.75 6 C358.87 8.3 366.69 10.5 375.75 10.5 C384.81 10.5 392.63 8.3 400.75 6 C408.87 3.7 416.69 1.5 425.75 1.5 C434.81 1.5 442.63 3.7 450.75 6 C458.87 8.3 466.69 10.5 475.75 10.5 C484.81 10.5 492.63 8.3 500.75 6 C508.87 3.7 516.69 1.5 525.75 1.5 C534.81 1.5 542.63 3.7 550.75 6 C558.87 8.3 566.69 10.5 575.75 10.5 C584.81 10.5 592.63 8.3 600.75 6";
 
-export function LandingFooter() {
+export function LandingFooter({ user }: { user: AuthUser | null }) {
+  /*
+    The product column and the arrow both follow the same rule as the header
+    (lib/data/landing.ts): an account to open when there is a session, the two ways to
+    get one when there is not. A signed-out reader was being pointed at "/dashboard"
+    from this footer as well, which is a redirect into the sign-in form and nothing more.
+  */
+  const entry = landingEntry(user !== null);
+  const productLinks: LandingEntryLink[] = [entry.primary, entry.secondary].filter(
+    (link): link is LandingEntryLink => link !== null,
+  );
+
   return (
     // Drawn in paper rather than ink, because the section above it is an ink block too.
     <footer className="relative isolate overflow-hidden border-t-2 border-paper/25 bg-ink text-paper">
@@ -106,8 +112,8 @@ export function LandingFooter() {
         </div>
 
         <Link
-          href="/dashboard"
-          aria-label="Open the app"
+          href={entry.primary.href}
+          aria-label={entry.primary.label}
           className="grid size-16 shrink-0 place-items-center bg-copper text-ink transition-colors hover:bg-paper"
         >
           <Arrow className="h-4 w-6" />

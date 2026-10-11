@@ -84,7 +84,7 @@ export async function AuthShell({ children }: { children: React.ReactNode }) {
 
       {/* The landing's sign-off, not a band retyped here: these screens are the public
           surface's, so they close the way the landing closes. */}
-      <LandingFooter />
+      <LandingFooter user={user} />
     </div>
   );
 }

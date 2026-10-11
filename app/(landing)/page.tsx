@@ -11,8 +11,10 @@ import { Field, FieldList } from "@/components/ui/field-list";
 import { Receipt, type ReceiptLine } from "@/components/ui/receipt";
 import { Stamp, VerdictMark } from "@/components/ui/stamp";
 import { Stat, StatGrid } from "@/components/ui/stat";
+import { getCurrentUser } from "@/lib/auth/dal";
 import { cn } from "@/lib/cn";
 import { coreLoopSlugs, getFeature } from "@/lib/data/features";
+import { landingEntry } from "@/lib/data/landing";
 import { focusItemId, getItem } from "@/lib/data/inventory";
 import { intakeStats } from "@/lib/data/intake";
 import { logisticsStats } from "@/lib/data/operations";
@@ -299,7 +301,16 @@ function Instrument({
   );
 }
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  /*
+    The hero and the closing band are the two other places this page offers a way in, and
+    they read the same pair the header and footer do (lib/data/landing.ts). A guest gets
+    "Sign in" — the working screens need an account — and someone already holding a
+    session gets "Open the app" rather than a second invitation to sign in they cannot use.
+  */
+  const user = await getCurrentUser();
+  const entry = landingEntry(user !== null);
+
   return (
     <div className="relative flex flex-col">
       {/* ------------------------------------------------------------- hero */}
@@ -323,15 +334,19 @@ export default function LandingPage() {
           </p>
 
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-            <ButtonLink href="/dashboard">Open the app</ButtonLink>
-            <ButtonLink href="/login" variant="secondary">
-              Sign in
-            </ButtonLink>
+            <ButtonLink href={entry.primary.href}>{entry.primary.label}</ButtonLink>
+            {entry.secondary ? (
+              <ButtonLink href={entry.secondary.href} variant="secondary">
+                {entry.secondary.label}
+              </ButtonLink>
+            ) : null}
           </div>
 
-          <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
-            The working screens need an account
-          </p>
+          {entry.secondary ? (
+            <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+              The working screens need an account
+            </p>
+          ) : null}
         </div>
       </section>
 
@@ -806,8 +821,8 @@ export default function LandingPage() {
             multimodal model. Sign in with a demo account to work the queue.
           </p>
           <div className="mt-9 flex justify-center">
-            <ButtonLink href="/dashboard" variant="inverse">
-              Open the app
+            <ButtonLink href={entry.primary.href} variant="inverse">
+              {entry.primary.label}
             </ButtonLink>
           </div>
         </div>
