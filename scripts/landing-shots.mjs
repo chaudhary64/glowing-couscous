@@ -3,7 +3,7 @@
  *
  * `04 / The Loop` claims four working screens; this is how the four images under it are
  * made, so they can be regenerated when a screen changes rather than drifting into a
- * mock. It signs in as the demo owner through the app's own API — the same route
+ * mock. It signs in as the demo admin through the app's own API — the same route
  * `tests/e2e/global-setup.ts` uses, and the only way in, because every screen here is
  * behind Cognito — then photographs the top of each screen at desktop width.
  *
@@ -37,7 +37,7 @@ mkdirSync(OUT, { recursive: true });
 
 const api = await request.newContext({ baseURL: BASE });
 const signIn = await api.post("/api/auth/sign-in", {
-  form: { email: "demo.owner@example.com", password },
+  form: { email: "demo.admin@example.com", password },
   headers: { origin: BASE },
   maxRedirects: 0,
 });

@@ -4,10 +4,12 @@
  * The API is behind a Cognito JWT authorizer, so API Gateway has already proved the
  * token is signed by this pool, unexpired, and issued to this app client. What it
  * cannot know is *authority*: that is `lib/auth/roles.ts` in the app, and this module is
- * the same ladder for the serverless half — same five group names, same order, one
- * table, so a role that opens `/pickups` in the product also opens `POST /pickups` here.
+ * the same ladder for the serverless half — same group names, same order, one table, so
+ * a role that opens `/pickups` in the product also opens `POST /pickups` here.
  *
- *   eco-owner ≤ eco-admin ≤ eco-officer ≤ eco-operator ≤ eco-viewer
+ *   eco-admin ≤ eco-officer ≤ eco-operator ≤ eco-viewer
+ *
+ * `eco-owner` was folded into Admin in the app; its members read as Admin here too.
  *
  * Lower is more powerful, exactly as in the app: a user may do something when their
  * rank is ≤ the route's minimum.
@@ -18,7 +20,7 @@
  * `lambda:InvokeFunction` can drive without a token. It answers 401 instead.
  */
 export const ROLE_RANK = {
-  "eco-owner": 1,
+  "eco-owner": 2,
   "eco-admin": 2,
   "eco-officer": 3,
   "eco-operator": 4,

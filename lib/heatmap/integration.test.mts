@@ -337,10 +337,10 @@ describe("dispatch", () => {
 
 describe("access", () => {
   it("lets every role view the map, but only operator and above dispatch", () => {
-    for (const role of ["eco-owner", "eco-admin", "eco-officer", "eco-operator", "eco-viewer"] as const) {
+    for (const role of ["eco-admin", "eco-officer", "eco-operator", "eco-viewer"] as const) {
       assert.equal(canOpen("/map", role).ok, true, `${role} should view /map`);
     }
-    for (const role of ["eco-owner", "eco-admin", "eco-officer", "eco-operator"] as const) {
+    for (const role of ["eco-admin", "eco-officer", "eco-operator"] as const) {
       assert.equal(canOpen("/map/dispatch", role).ok, true, `${role} should dispatch`);
     }
     assert.equal(canOpen("/map/dispatch", "eco-viewer").ok, false);

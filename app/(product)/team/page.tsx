@@ -1,8 +1,10 @@
+import { RolePicker } from "@/components/features/product/team/role-picker";
 import { Badge } from "@/components/ui/badge";
 import { Surface } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { requireAccess } from "@/lib/auth/dal";
+import { readPoolRoles, type PoolAccount } from "@/lib/auth/pool";
 import { ROLES, roleLabel, type Role } from "@/lib/auth/roles";
 import { formatTimestamp } from "@/lib/format";
 import { listMembers } from "@/lib/records/users";
@@ -12,15 +14,15 @@ export const instant = false;
 /**
  * The team, for the two roles that answer for it.
  *
- * Read-only on purpose. Who holds which role is the Cognito pool's business — a role is a
- * group, carried on the person's token — and this app has no admin credentials for the
- * pool, so a "change role" button here could only be a button that fails. What the app
- * does know is who has signed in, from the `users` rows written at sign-in, and that is
- * what this lists; the role ladder under it says what each group opens.
+ * Who has signed in comes from the `users` rows written at sign-in. Who holds which role
+ * is the Cognito pool's business — a role is a group, carried on the person's token — so
+ * the role column and its picker appear only when the server holds admin credentials for
+ * the pool (`lib/auth/pool.ts`). Without them the list stays read-only and says how to
+ * change a role, rather than showing a button that could only fail.
  */
 export default async function TeamPage() {
   const user = await requireAccess("/team");
-  const members = await listMembers();
+  const [members, pool] = await Promise.all([listMembers(), readPoolRoles()]);
   const active = members.rows.filter((member) => member.status === "active").length;
 
   return (
@@ -28,7 +30,11 @@ export default async function TeamPage() {
       <ScreenHeader
         eyebrow="Administration"
         title="Team"
-        lede={`Everyone who has signed in to EcoEPR, most recently seen first. Roles are groups in the Cognito pool and are changed there; you are signed in as ${roleLabel(user.role)}.`}
+        lede={`Everyone who has signed in to EcoEPR, most recently seen first. ${
+          pool.readable
+            ? "A role is a Cognito group; a change here takes effect the next time that person signs in."
+            : "Roles are groups in the Cognito pool and are changed there."
+        } You are signed in as ${roleLabel(user.role)}.`}
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={members.configured ? "verified" : "hazard"}>
@@ -39,6 +45,14 @@ export default async function TeamPage() {
                 {members.rows.length} account{members.rows.length === 1 ? "" : "s"} · {active} active
               </span>
             ) : null}
+            <Badge tone={pool.readable ? "verified" : "neutral"}>
+              {pool.readable ? "Roles read from the user pool" : "Roles not readable here"}
+            </Badge>
+            {pool.error ? (
+              <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-hazard-ink">
+                {pool.error}
+              </span>
+            ) : null}
             {members.error ? (
               <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-hazard-ink">
                 {members.error}
@@ -47,6 +61,19 @@ export default async function TeamPage() {
           </div>
         }
       />
+
+      {pool.readable ? null : (
+        <Surface tone="inset" className="p-4">
+          <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
+            To change roles from this screen, set{" "}
+            <span className="font-mono">COGNITO_ADMIN_ACCESS_KEY_ID</span> and{" "}
+            <span className="font-mono">COGNITO_ADMIN_SECRET_ACCESS_KEY</span> for an IAM user
+            allowed to administer this user pool (the actions are listed in{" "}
+            <span className="font-mono">.env.example</span>). Until then, roles are changed in
+            the Cognito console.
+          </p>
+        </Surface>
+      )}
 
       <Surface>
         {members.rows.length === 0 ? (
@@ -61,6 +88,7 @@ export default async function TeamPage() {
               <TR>
                 <TH>Name</TH>
                 <TH>Email</TH>
+                {pool.readable ? <TH>Role</TH> : null}
                 <TH>Status</TH>
                 <TH className="hidden sm:table-cell">Last seen</TH>
               </TR>
@@ -72,6 +100,15 @@ export default async function TeamPage() {
                   <TD mono className="text-[12px] break-all">
                     {member.email ?? "—"}
                   </TD>
+                  {pool.readable ? (
+                    <TD>
+                      <RoleCell
+                        account={member.email ? pool.byEmail.get(member.email.toLowerCase()) : undefined}
+                        name={member.name}
+                        self={Boolean(member.email && member.email.toLowerCase() === user.email?.toLowerCase())}
+                      />
+                    </TD>
+                  ) : null}
                   <TD>
                     <Badge tone={member.status === "active" ? "verified" : "neutral"}>
                       {member.status}
@@ -111,4 +148,25 @@ export default async function TeamPage() {
       </section>
     </div>
   );
+}
+
+/** A member's role: changeable, except your own, and absent for an account the pool lacks. */
+function RoleCell({
+  account,
+  name,
+  self,
+}: {
+  account: PoolAccount | undefined;
+  name: string;
+  self: boolean;
+}) {
+  if (!account) return <span className="text-[12px] text-ink-muted">Not in the pool</span>;
+  if (self) {
+    return (
+      <span className="text-[12px]">
+        {roleLabel(account.role)} <span className="text-ink-muted">· you</span>
+      </span>
+    );
+  }
+  return <RolePicker username={account.username} name={name} role={account.role} />;
 }

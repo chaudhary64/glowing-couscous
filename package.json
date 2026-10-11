@@ -28,6 +28,7 @@
     "test:e2e:report": "playwright show-report tests/e2e/.report"
   },
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1149.0",
     "@aws-sdk/client-dynamodb": "^3.1148.0",
     "@aws-sdk/client-s3": "^3.1148.0",
     "@aws-sdk/s3-request-presigner": "^3.1148.0",
@@ -46,9 +47,9 @@
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb-streams": "^3.1149.0",
-    "@playwright/test": "^1.64.0",
     "@gltf-transform/core": "4.5.0",
     "@gltf-transform/functions": "4.5.0",
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.23.1",
