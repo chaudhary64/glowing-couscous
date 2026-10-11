@@ -1,4 +1,5 @@
 import { desc, eq, inArray } from "drizzle-orm";
+import { cache } from "react";
 
 import { database, databaseConfigured } from "@/db/client";
 import {
@@ -364,8 +365,14 @@ export async function getStoredItem(
  * The verdict mix is per item — the latest verdict for each — and the money is summed
  * over cleared items only, which is the same rule the valuation screen has always
  * stated: a rejected or held item keeps its assay and promises nothing.
+ *
+ * Memoised per request: the product shell reads it for the rail's queue badge and the
+ * top strip, and the dashboard reads it again for its own figures, so a dashboard
+ * request still runs the queries once.
  */
-export async function storedCounts(): Promise<RecordsResult<StoredCounts> & {
+export const storedCounts = cache(readStoredCounts);
+
+async function readStoredCounts(): Promise<RecordsResult<StoredCounts> & {
   counts: StoredCounts | null;
 }> {
   if (!databaseConfigured()) {

@@ -7,21 +7,20 @@ import { useLayoutEffect, useRef } from "react";
 import { WorldToggle } from "@/components/world/world-toggle";
 import { productNav } from "@/lib/data/product-nav";
 import { pickups } from "@/lib/data/operations";
-import { validationQueue } from "@/lib/data/model";
 import { canOpen, roleLabel, type Role } from "@/lib/auth/roles";
 import type { ProductHref } from "@/lib/types";
 
 /**
  * Counts only appear where the number means work is waiting. A badge on
  * "Collectors" would be decoration; a badge on "Validation queue" is a to-do.
+ *
+ * The validation count is the database's (passed in by the shell), the same query the
+ * dashboard and the queue page show; it used to be the sample fixture, so the rail said
+ * 2 while both pages said 0. Pickups are still sample data, as the dashboard says.
  */
-const workCounts: Partial<Record<ProductHref, number>> = {
-  "/validation": validationQueue.filter((record) => record.verdict === "review")
-    .length,
-  "/pickups": pickups.filter(
-    (pickup) => pickup.status === "in-transit" || pickup.status === "assigned",
-  ).length,
-};
+const pickupsWaiting = pickups.filter(
+  (pickup) => pickup.status === "in-transit" || pickup.status === "assigned",
+).length;
 
 export interface NavViewer {
   name: string;
@@ -41,8 +40,19 @@ export interface NavViewer {
  * The same `canOpen` the proxy and the data access layer call is imported directly,
  * so there is no second copy of the matrix to fall out of step.
  */
-export function ProductNav({ viewer }: { viewer: NavViewer }) {
+export function ProductNav({
+  viewer,
+  awaitingDecision,
+}: {
+  viewer: NavViewer;
+  /** Items held for a human with no live decision, from the database; null without one. */
+  awaitingDecision: number | null;
+}) {
   const pathname = usePathname();
+  const workCounts: Partial<Record<ProductHref, number>> = {
+    "/validation": awaitingDecision ?? 0,
+    "/pickups": pickupsWaiting,
+  };
   const navList = useRef<HTMLDivElement>(null);
   const marker = useRef<HTMLSpanElement>(null);
 

@@ -4,8 +4,7 @@ import { connection } from "next/server";
 import { ProductNav } from "@/components/layout/product-nav";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { roleLabel } from "@/lib/auth/roles";
-import { intakeStats } from "@/lib/data/intake";
-import { logisticsStats } from "@/lib/data/operations";
+import { storedCounts } from "@/lib/records/queues";
 
 /**
  * Shell for the working app. Same ink rail and square rules as the docs, but the
@@ -34,7 +33,10 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
     name the person holding the session.
   */
   await connection();
-  const user = await getCurrentUser();
+  const [user, stored] = await Promise.all([getCurrentUser(), storedCounts()]);
+  // The same counts the dashboard shows, so the strip and the rail can never disagree
+  // with the page under them. Without a database they are simply left out.
+  const counts = stored.counts;
 
   return (
     <div className="flex min-h-full flex-col lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
@@ -44,6 +46,7 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
           email: user?.email ?? null,
           role: user?.role ?? null,
         }}
+        awaitingDecision={counts?.awaitingDecision ?? null}
       />
 
       <div className="flex min-w-0 flex-col">
@@ -52,11 +55,15 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
             <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
               Mumbai + Pune pilot
             </span>
-            <span className="hidden h-3 w-px bg-rule sm:block" />
-            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
-              {intakeStats.today} intakes today · {logisticsStats.notesIssued} credit
-              notes
-            </span>
+            {counts ? (
+              <>
+                <span className="hidden h-3 w-px bg-rule sm:block" />
+                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
+                  {counts.intakesToday} intakes today · {counts.awaitingDecision} awaiting a
+                  decision
+                </span>
+              </>
+            ) : null}
 
             <span className="ml-auto inline-flex items-center gap-2 border border-review/40 bg-review-tint px-2 py-0.5">
               <span aria-hidden className="size-1.5 bg-review" />
@@ -93,9 +100,10 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
         <footer className="border-t border-rule">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-5 py-6 sm:px-8">
             <p className="max-w-3xl text-[12px] leading-relaxed text-ink-muted">
-              Every figure on these screens is a fixture, not a live reading. Credits
-              are simulated, this is not a payout system, and we route to
-              CPCB-registered recyclers rather than processing waste ourselves.{" "}
+              Figures marked as counted are queries over the pilot&apos;s database; the
+              rest are sample data and say so. Credits are simulated, this is not a payout
+              system, and we route to CPCB-registered recyclers rather than processing
+              waste ourselves.{" "}
               <Link
                 href="/doc"
                 className="underline decoration-rule underline-offset-2 hover:decoration-copper"

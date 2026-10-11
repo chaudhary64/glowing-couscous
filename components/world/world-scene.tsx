@@ -287,9 +287,43 @@ function Dust({ count }: { count: number }) {
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
-      <pointsMaterial size={0.0065} color="#f2c4a2" transparent opacity={0.55} sizeAttenuation depthWrite={false} />
+      <pointsMaterial
+        size={0.0065}
+        color="#f2c4a2"
+        alphaMap={moteTexture()}
+        transparent
+        opacity={0.55}
+        sizeAttenuation
+        depthWrite={false}
+      />
     </points>
   );
+}
+
+let mote: THREE.Texture | null = null;
+/**
+ * A soft round mote. GL points are squares, which never shows at a distance, but a
+ * mote that drifts close to the camera grows to a hard-edged grey block. Used as the
+ * alpha map, this round falloff makes every mote a soft disc at any size.
+ */
+function moteTexture(): THREE.Texture {
+  if (mote) return mote;
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  if (context) {
+    const glow = context.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    // Alpha maps read the green channel, so the falloff is drawn in grey.
+    glow.addColorStop(0, "#fff");
+    glow.addColorStop(0.45, "#888");
+    glow.addColorStop(1, "#000");
+    context.fillStyle = glow;
+    context.fillRect(0, 0, size, size);
+  }
+  mote = new THREE.CanvasTexture(canvas);
+  return mote;
 }
 
 /** A small seeded PRNG (mulberry32): deterministic "random" layouts during render. */
