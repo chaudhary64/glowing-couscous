@@ -34,7 +34,73 @@ The AI **never states a price**. It answers in closed vocabularies (an item clas
 IDs with mass estimates, a verdict, a confidence); the server rejects anything outside those
 lists and prices the materials itself.
 
-## 3. Screens
+## 3. What runs today
+
+The pipeline is real, end to end. What is still sample data is labelled on the screen
+that shows it, and listed in section 11.
+
+| Area | State |
+| --- | --- |
+| AI pipeline (Azure AI Foundry + Azure Speech) | **Real**: three endpoints, closed-list validation, Hindi transcription |
+| Sign-in and roles (Cognito) | **Real**: JWKS-verified httpOnly session, four roles, one enforced access table |
+| Media archive (S3) | **Real**: every photo and voice note, keyed by SHA-256, read back through signed URLs |
+| Intake records (RDS) | **Real**: submission, item, assay, valuation, verdict and officer decisions |
+| Hotspot map | **Real**: geotagged intakes filed to India's districts and Mumbai's BMC wards |
+| Smart pickup and handoff | **Real**: API Gateway, two Lambdas, DynamoDB; routing, PIN handoff, settlement, payout |
+| Database schema | **Applied to RDS, partly wired**: 39 tables; media, intake, record and geo tables are used |
+| Money | **Simulated**: the UPI payout moves no money |
+
+### The gatekeeper
+
+Every upload is judged *verified*, *review* or *rejected* before anything is promised, and
+a rejection names its rule:
+
+| Rule | Means |
+| --- | --- |
+| R-01 | Not e-waste |
+| R-02 | Duplicate submission |
+| R-03 | Working device: it goes to reuse, so the credit is shown, then withheld |
+| R-04 | Swollen battery: forced onto a licensed battery route |
+
+A verified outcome needs a photo; a voice note alone is held for review. Each
+submission's id is derived from its photo, so the same photo can never be paid twice.
+Held items wait on `/validation` for an officer, and every decision records who made it
+and when.
+
+### Smart pickup
+
+One HTTP API (API Gateway) in front of one Lambda, [`aws/pickup/`](aws/pickup), with three
+DynamoDB tables: `ecoepr-recyclers`, `ecoepr-pickups` and `ecoepr-credit-notes`. Every
+route needs the user's own Cognito ID token; there is no API key.
+
+1. **Route:** the load goes only to a recycler licensed for its stream and within that
+   site's daily capacity. A load with no licensed destination is refused, never stored.
+2. **Handoff:** the collector's phone shows a 4-digit PIN. It expires after 15 minutes and
+   locks after 5 wrong tries.
+3. **Settle:** at the gate, staff weigh the load and type the PIN. The right PIN issues a
+   credit note; a weight far from the declared mass is flagged.
+4. **Pay:** the pickups table's DynamoDB Stream triggers `ecoepr-pickup-payout`, which
+   sends the simulated UPI credit exactly once per settled load.
+
+Every step is written to the load's audit trail.
+
+### Hotspot map
+
+Intakes are filed by point-in-polygon to India's 735 districts and, inside Mumbai, to its
+24 BMC wards. A **hotspot** is four or more detections within 150 m of each other in a
+rolling 21-day window, found by distance rather than grid cell so GPS jitter can't split a
+site. Gatekeeper-rejected items never count. The rule is one pure function,
+[`lib/heatmap/cluster.ts`](lib/heatmap/cluster.ts). Location is captured only with the
+visitor's consent, asked once up front. Operators can assign a van to a hotspot from the
+map.
+
+### Regions
+
+Collector, load and credit data stays in India (ap-south-1: Cognito, RDS, the pickup API
+and DynamoDB). The app on Amplify and the S3 archive run in eu-north-1, so an operator's
+request crosses regions to reach the pickup API, a deliberate trade-off.
+
+## 4. Screens
 
 | Group | Screens |
 | --- | --- |
@@ -44,7 +110,7 @@ lists and prices the materials itself.
 
 Plus the public landing page (`/`) and the sign-in, sign-up and confirm screens.
 
-## 4. Roles and access
+## 5. Roles and access
 
 One table — [`lib/auth/roles.ts`](lib/auth/roles.ts) — drives the proxy, the data access
 layer and the navigation, so a screen a role cannot open is neither shown nor linked, and a
@@ -52,8 +118,7 @@ direct visit answers with a page explaining what is required.
 
 | Role | Meant for | Opens |
 | --- | --- | --- |
-| **Owner** | The organisation | Everything an Admin can (billing isn't built yet) |
-| **Admin** | Team and prices | Team, Rate card, and everything an Officer can |
+| **Admin** | Team and prices | Team (including changing roles), Rate card, and everything an Officer can |
 | **Officer** | Compliance decisions | Valuations, Validation queue, Recyclers, and everything an Operator can |
 | **Operator** | Field work | Intake, Pickups, Collector handoff, Recycler gate, Handoff demo, Evidence, Collectors, Dispatch, Dashboard, Map |
 | **Viewer** | A municipality or brand analyst | Dashboard and Hotspot map, read-only |
@@ -61,24 +126,24 @@ direct visit answers with a page explaining what is required.
 > Rank is authority: lower is more powerful. `eco-owner` was folded into `eco-admin`, so an
 > older Owner account keeps working and reads as Admin.
 
-## 5. Demo accounts
+## 6. Demo accounts
 
 Sign in with **email and password** only. These exist on the demo Cognito pool and each
 account's role is a Cognito group.
 
 | # | Role | Email | Password | Access |
 | --- | --- | --- | --- | --- |
-| 1 | Owner | `demo.owner@example.com` | `Ecoepr1234` | All 8 screens |
-| 2 | Admin | `demo.admin@example.com` | `Ecoepr1234` | All 8 screens |
-| 3 | Officer | `demo.officer@example.com` | `Ecoepr1234` | All 8 screens |
-| 4 | Operator | `demo.operator@example.com` | `Ecoepr1234` | 5 screens — hidden: Valuations, Validation queue, Recyclers |
-| 5 | Viewer | `demo.viewer@example.com` | `Ecoepr1234` | Dashboard and Hotspot map only — hidden: 6 screens |
+| 1 | Admin | `demo.admin@example.com` | `Ecoepr1234` | All 14 screens |
+| 2 | Admin (legacy Owner) | `demo.owner@example.com` | `Ecoepr1234` | All 14 screens — the `eco-owner` group reads as Admin |
+| 3 | Officer | `demo.officer@example.com` | `Ecoepr1234` | 12 screens — hidden: Team, Rate card |
+| 4 | Operator | `demo.operator@example.com` | `Ecoepr1234` | 9 screens — hidden: Valuations, Validation queue, Recyclers, Team, Rate card |
+| 5 | Viewer | `demo.viewer@example.com` | `Ecoepr1234` | Dashboard and Hotspot map only — hidden: 12 screens |
 
 These are **demo-only accounts** with a shared password. Do not reuse them for anything
 that holds real data. The enforced matrix is [`lib/auth/roles.ts`](lib/auth/roles.ts); the
 navigation simply hides what the matrix refuses.
 
-## 6. Tech stack
+## 7. Tech stack
 
 - **Next.js 16** (App Router, React 19, server-side rendering) — one app serves the landing
   page and every working screen.
@@ -98,7 +163,7 @@ navigation simply hides what the matrix refuses.
 The full architecture diagram and a service-by-service breakdown are in
 [docs/demo-video-script.md](docs/demo-video-script.md).
 
-## 7. Getting started
+## 8. Getting started
 
 **Prerequisites:** Node.js 20.9 or newer, npm, and access to the demo Cognito pool,
 PostgreSQL database and S3 bucket.
@@ -131,7 +196,7 @@ Environment variables, grouped as they appear in [`.env.example`](.env.example):
 `npm run pickup:local` starts, seeds and relays the payout stream for. That gives you
 `/handoff`, `/gate` and `/demo` on a laptop with no AWS account.
 
-## 8. Scripts
+## 9. Scripts
 
 | Command | What it does |
 | --- | --- |
@@ -146,9 +211,9 @@ Environment variables, grouped as they appear in [`.env.example`](.env.example):
 
 `predev` and `prebuild` copy the MapLibre worker into `public/vendor/` from `node_modules`.
 
-## 9. Testing
+## 10. Testing
 
-The Playwright suite in [`tests/e2e`](tests/e2e) runs against a production build with real
+The Playwright suite in [`tests/e2e`](tests/e2e) (83 tests in 10 files) runs against a production build with real
 Cognito sign-ins, live Azure calls, and real S3 and RDS writes; the pickup tests run against
 DynamoDB Local. It covers auth and public pages, per-role access, the dashboard, intake,
 the gatekeeper verdicts, valuation, pickup and settlement, and the team screen.
@@ -156,7 +221,7 @@ the gatekeeper verdicts, valuation, pickup and settlement, and the team screen.
 On Amplify, `amplify.yml` copies the server-side variables into `.env.production` before the
 build, because Amplify's SSR compute does not inherit the app's environment settings.
 
-## 10. What we are not claiming
+## 11. What we are not claiming
 
 - Credits are **simulated**. This prototype moves no money — which is exactly why the
   gatekeeper exists.
@@ -164,6 +229,21 @@ build, because Amplify's SSR compute does not inherit the app's environment sett
 - The rate card is a labelled demo card; replacing it with a licensed feed changes nothing
   else.
 - WhatsApp is the next channel, not part of this build.
+
+### Not built yet
+
+- **Still sample data, and labelled as such:** the dashboard's "Loads in play" board, and
+  the intake screen's worked examples. Collectors have no profile records yet, so
+  `/collectors` is an activity view built from the loads.
+- **Auth gaps:** no token refresh (sessions end after an hour), no password reset, no MFA,
+  one role per person rather than per organisation, and no separate collector role.
+- **AI on Azure, not AWS:** Bedrock was the plan, but the AWS account was blocked from it
+  while this was built. Only the transport in `lib/ai/foundry.ts` is vendor-specific.
+- **The van round is not a driving route:** it is a priority order by detection count.
+- **The RDS security group is open to `0.0.0.0/0`**, because Amplify's SSR compute has no
+  static egress. It is compensated by `rds.force_ssl=1` and a long generated password.
+  The fix is an IAM role on the Amplify compute reading secrets from Secrets Manager. This
+  must not outlive the demo.
 
 ---
 
