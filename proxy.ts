@@ -68,6 +68,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // API routes authorize themselves; static assets never need a session.
-  matcher: ["/((?!api|_next|favicon.ico).*)"],
+  // API routes authorize themselves; static assets never need a session. `vendor/` is
+  // MapLibre's web worker (scripts/vendor-maplibre.mjs): the browser fetches it from a
+  // worker without the page's navigation, and a redirect to /login breaks the map.
+  // `models/` is the landing page's 3D board, which a signed-out visitor must load.
+  // `geo/` is public boundary data (India's districts) the map fetches from its worker.
+  matcher: ["/((?!api|_next|vendor/|models/|geo/|favicon.ico).*)"],
 };

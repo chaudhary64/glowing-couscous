@@ -8,14 +8,15 @@ import { cn } from "@/lib/cn";
 import type { Ward } from "@/lib/types";
 
 /**
- * The same numbers the scatter shows, in a form a ward officer can read, quote
- * and sort.
+ * The map's ward shading, as a list a ward officer can read, quote and sort.
  *
- * Density is the default order because that is how the map is drawn, so the list
- * and the scatter agree on what "worst" means. The controls exist because the
- * officer's next question changes: sometimes it is which ward has the most pickups
+ * `ward.density` is *pressure* — detections per km², relative to the busiest ward
+ * (= 100) — and `ward.pickups` / `ward.flaggedSites` are detections and detected sites,
+ * mapped from live data by `lib/heatmap/view.ts`. Pressure is the default order because
+ * that is how the map is shaded, so the list and the map agree on what "worst" means. The controls exist because the
+ * officer's next question changes: sometimes it is which ward has the most detections
  * left to service, sometimes which carries the flagged sites an inspection follows.
- * The sort runs on the client because all eight wards are already on the page —
+ * The sort runs on the client because every ward with data is already on the page —
  * reordering them should not cost a round trip.
  *
  * The row number is the position in whatever order is showing, so it renumbers with
@@ -26,18 +27,17 @@ type SortKey = "density" | "pickups" | "flaggedSites" | "name";
 type Direction = "desc" | "asc";
 
 const sortOptions: { key: SortKey; label: string; direction: Direction }[] = [
-  { key: "density", label: "Density", direction: "desc" },
-  { key: "pickups", label: "Pickups", direction: "desc" },
-  { key: "flaggedSites", label: "Flagged sites", direction: "desc" },
+  { key: "density", label: "Pressure", direction: "desc" },
+  { key: "pickups", label: "Detections", direction: "desc" },
+  { key: "flaggedSites", label: "Sites", direction: "desc" },
   { key: "name", label: "Ward name", direction: "asc" },
 ];
 
 function compare(a: Ward, b: Ward, key: SortKey, direction: Direction): number {
   const base = key === "name" ? a.name.localeCompare(b.name) : a[key] - b[key];
   if (base !== 0) return direction === "asc" ? base : -base;
-  // Equal on the chosen key — as two wards genuinely are on flagged sites. The
-  // tie-break is pressure, worst first, so the order is decided by the data rather
-  // than by whichever way the fixture happens to be written.
+  // Equal on the chosen key. The tie-break is pressure, worst first, so the order is
+  // decided by the data rather than by the order the rows arrived in.
   return b.density - a.density;
 }
 
@@ -48,10 +48,10 @@ function sortNote(key: SortKey, direction: Direction): string {
   }
   const subject =
     key === "density"
-      ? "density, the pressure score the markers are sized by"
+      ? "pressure, detections per km² relative to the busiest ward"
       : key === "pickups"
-        ? "geotagged pickups in the window"
-        : "flagged sites, the count an inspection follows";
+        ? "geotagged intakes in the window"
+        : "detected sites, the count a van round follows";
   return `Ranked by ${subject}, ${direction === "desc" ? "highest" : "lowest"} first.`;
 }
 
@@ -73,6 +73,10 @@ export function WardDensity({ wards }: { wards: Ward[] }) {
       : direction === "desc"
         ? "High → low"
         : "Low → high";
+
+  if (wards.length === 0) {
+    return <p className="text-sm leading-relaxed text-ink-soft">No ward has a geotagged intake in the window yet.</p>;
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -121,7 +125,7 @@ export function WardDensity({ wards }: { wards: Ward[] }) {
           {sortNote(sortKey, direction)}
         </p>
         <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
-          {totalPickups} geotagged pickups across {sorted.length} wards
+          {totalPickups} detection{totalPickups === 1 ? "" : "s"} across {sorted.length} ward{sorted.length === 1 ? "" : "s"}
         </p>
       </div>
 
@@ -149,7 +153,7 @@ export function WardDensity({ wards }: { wards: Ward[] }) {
                 tone={band.tone}
                 display={`${ward.density}/100`}
                 className="pt-1"
-                note={`${ward.pickups} pickups · ${ward.flaggedSites} flagged sites`}
+                note={`${ward.pickups} detection${ward.pickups === 1 ? "" : "s"} · ${ward.flaggedSites} site${ward.flaggedSites === 1 ? "" : "s"}`}
               />
             </li>
           );

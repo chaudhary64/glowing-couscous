@@ -92,6 +92,16 @@ export const GUARDS: readonly Guard[] = [
     paths: ["/dashboard"],
   },
   {
+    // Acting on the map — assigning a van to a hotspot, clearing one, recomputing the
+    // clusters — is pickup-board work, so it carries the pickup board's rank. Listed
+    // *before* `/map` because `guardFor` takes the first match: below it, `/map` would
+    // cover `/map/dispatch` and any signed-in viewer could dispatch a van.
+    id: "map-dispatch",
+    minRank: RANK_OPERATOR,
+    requirement: "operator or above",
+    paths: ["/map/dispatch"],
+  },
+  {
     id: "map",
     minRank: RANK_ANY_ROLE,
     requirement: "any assigned role",

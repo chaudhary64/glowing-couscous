@@ -40,17 +40,20 @@ export function Stamp({
     ? verdictStamps[verdict]
     : { label: label ?? "Stamped", tone: tone ?? "ink" };
 
+  // The outer span is struck (data-motion="stamp"); the inner one holds the angle, so
+  // the strike's transform never undoes the rotation.
   return (
-    <span
-      aria-hidden
-      className={cn(
-        "inline-block select-none border-[3px] px-3 py-1 font-display text-lg uppercase leading-none tracking-[0.18em]",
-        stampColors[resolved.tone],
-        className,
-      )}
-      style={{ transform: `rotate(${angle}deg)` }}
-    >
-      {resolved.label}
+    <span aria-hidden data-motion="stamp" className="inline-block">
+      <span
+        className={cn(
+          "inline-block select-none border-[3px] px-3 py-1 font-display text-lg uppercase leading-none tracking-[0.18em]",
+          stampColors[resolved.tone],
+          className,
+        )}
+        style={{ transform: `rotate(${angle}deg)` }}
+      >
+        {resolved.label}
+      </span>
     </span>
   );
 }

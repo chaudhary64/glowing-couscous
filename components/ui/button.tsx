@@ -64,6 +64,8 @@ export function ButtonLink({
     <Link
       href={href}
       title={title}
+      // Leans toward the pointer on public pages (components/motion/scanner-cursor).
+      data-magnetic
       className={cn(base, variants[variant], variant === "ghost" ? "" : "px-4 py-2", className)}
     >
       {children}

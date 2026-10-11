@@ -45,6 +45,8 @@ export function Field({
         {label}
       </dt>
       <dd
+        // A mono figure prints in like a receipt line (components/motion).
+        data-motion={mono && typeof value === "string" ? "print" : undefined}
         className={cn(
           "mt-1 text-sm leading-snug",
           mono && "font-mono text-[13px]",

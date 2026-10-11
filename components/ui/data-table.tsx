@@ -33,8 +33,8 @@ export function THead({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function TBody({ children }: { children: React.ReactNode }) {
-  return <tbody>{children}</tbody>;
+export function TBody({ children, ...rest }: React.ComponentProps<"tbody">) {
+  return <tbody {...rest}>{children}</tbody>;
 }
 
 export function TR({

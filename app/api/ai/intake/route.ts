@@ -1,6 +1,7 @@
 import { analyseIntake } from "@/lib/ai/analyse";
 import { aiErrorResponse, authorizeUser, jsonResponse, readPayload } from "@/lib/ai/http";
 import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
+import { locationWarning, recordLocation } from "@/lib/intake/location";
 import { recordPricedItem, pricedRecordWarning } from "@/lib/records/items";
 import { recordSubmission, submissionWarning } from "@/lib/s3/intakes";
 import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
@@ -140,5 +141,17 @@ export async function POST(request: Request) {
   const pricedNote = priced ? pricedRecordWarning(priced) : null;
   if (pricedNote) warnings.push(pricedNote);
 
-  return jsonResponse({ ...analysed.value, warnings, storage, records, submission, priced });
+  /**
+   * Where it was made — only when the handset gave a fix, and only once the submission
+   * row exists to attach it to. This is the geopoint `/map` counts. Like the two writes
+   * above, it reports and never fails the request (see `lib/intake/location.ts`).
+   */
+  const location = await recordLocation({
+    intakeId: submission?.submission?.id,
+    location: parsed.payload.location,
+  });
+  const locationNote = locationWarning(location);
+  if (locationNote) warnings.push(locationNote);
+
+  return jsonResponse({ ...analysed.value, warnings, storage, records, submission, priced, location });
 }
