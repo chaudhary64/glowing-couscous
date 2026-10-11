@@ -7,7 +7,8 @@
  * start with a 404 on the worker. The fix MapLibre provides is `setWorkerUrl()`; this
  * script puts the two files that URL needs — the worker and the shared chunk it imports —
  * at a versioned path under `public/vendor/`, which `components/features/heatmap/
- * hotspot-map.tsx` points at.
+ * hotspot-map.tsx` points at. The stylesheet goes there too: the map component links it
+ * only when it renders, so the other pages never preload 80 KB of map CSS.
  *
  * Runs as `predev` and `prebuild`, so the copy always matches the installed version and
  * is never committed (`public/vendor/` is gitignored).
@@ -22,7 +23,7 @@ const { version } = JSON.parse(readFileSync(path.join(pkgDir, "package.json"), "
 const target = path.join(root, "public", "vendor", `maplibre-gl-${version}`);
 
 mkdirSync(target, { recursive: true });
-for (const file of ["maplibre-gl-worker.mjs", "maplibre-gl-shared.mjs"]) {
+for (const file of ["maplibre-gl-worker.mjs", "maplibre-gl-shared.mjs", "maplibre-gl.css"]) {
   copyFileSync(path.join(pkgDir, "dist", file), path.join(target, file));
 }
-console.log(`[vendor] maplibre-gl ${version} worker → public/vendor/maplibre-gl-${version}/`);
+console.log(`[vendor] maplibre-gl ${version} worker + css → public/vendor/maplibre-gl-${version}/`);
