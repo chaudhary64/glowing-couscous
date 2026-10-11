@@ -13,6 +13,7 @@ import {
   valuations,
   verdictSignals,
 } from "@/db/schema";
+import { readableClass } from "@/lib/data/rate-card";
 
 import type {
   ExtractedField,
@@ -188,7 +189,7 @@ function verdictFromRow(
     modelVersion: row.modelVersion,
     checkedAt: row.checkedAt.toISOString(),
     ruleCode: undefined,
-    matchedClass: row.matchedClass ?? "Unclassified",
+    matchedClass: readableClass(row.matchedClass) ?? "Unclassified",
     reason: row.reason ?? "",
     signals: signals
       .filter((signal) => signal.verdictId === row.id)
@@ -820,7 +821,7 @@ export async function listRecentEvents(limit = 10): Promise<RecordsResult<Stored
         // gatekeeper arriving at the validation queue.
         kind: row.verdict === "verified" ? ("valuation" as const) : ("validation" as const),
         subject: `${row.itemCode} ${VERDICT_WORDS[row.verdict]}`,
-        detail: row.matchedClass ?? row.itemLabel,
+        detail: readableClass(row.matchedClass) ?? row.itemLabel,
         actor: row.modelVersion,
         href: row.verdict === "verified" ? ("/valuation" as const) : ("/validation" as const),
       })),

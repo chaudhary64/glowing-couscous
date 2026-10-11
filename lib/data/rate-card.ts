@@ -223,6 +223,20 @@ export const ITEM_CLASSES = {
 
 export type ItemClassCode = keyof typeof ITEM_CLASSES;
 
+/**
+ * A matched class as a person reads it. The model sometimes names the class by its code
+ * ("board_it") instead of its CPCB category; a code is shown as the category it stands
+ * for, and anything else is kept as the model wrote it.
+ */
+export function readableClass(matched: string): string;
+export function readableClass(matched: string | null): string | null;
+export function readableClass(matched: string | null): string | null {
+  if (!matched) return matched;
+  return Object.prototype.hasOwnProperty.call(ITEM_CLASSES, matched)
+    ? ITEM_CLASSES[matched as ItemClassCode].cpcb
+    : matched;
+}
+
 export const itemClassCodes = Object.keys(ITEM_CLASSES) as ItemClassCode[];
 
 export function isItemClassCode(value: unknown): value is ItemClassCode {

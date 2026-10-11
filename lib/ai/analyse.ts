@@ -11,6 +11,7 @@ import {
   itemMass,
   material,
   priceMaterials,
+  readableClass,
   type ItemClassCode,
 } from "@/lib/data/rate-card";
 import { formatInr, formatMass } from "@/lib/format";
@@ -221,7 +222,7 @@ export function priceProposal(
     // Carried separately from the model id: the rule is a policy decision, not a
     // model fact, and the screen labels it as such.
     ruleCode: ruleCode === "none" ? undefined : ruleCode,
-    matchedClass: proposal.gatekeeper.matchedClass || entry.cpcb,
+    matchedClass: readableClass(proposal.gatekeeper.matchedClass || entry.cpcb),
     reason: proposal.gatekeeper.reason || proposal.notes,
     signals,
   };
