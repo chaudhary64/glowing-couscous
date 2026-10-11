@@ -6,32 +6,46 @@
  * access layer (which decides for real), and by the UI (which explains a refusal).
  * One table, three readers, no chance of them disagreeing.
  *
- * The four values are Cognito groups in the pool. Rank is authority: lower is more
- * powerful, so "at least an operator" is `rank <= 4`. Admin is rank 2, not 1, because
- * rank 1 was Owner, which opened nothing Admin did not; keeping the numbers means the
- * pickup Lambda (aws/pickup/security.mjs) and every saved rank still agree.
+ * **Authority is a role set, not a rank ladder.** A guard names the groups that may
+ * open a screen and `canOpen` is a membership test. The five roles cannot be ordered
+ * as a prefix — a Collector reads the map and an Operator writes the board, so neither
+ * outranks the other, and a Viewer needs `/evidence` that an Operator also holds. The
+ * ladder that used to sit here (`minRank`, `rank <= minRank`) could only express
+ * "this role or more powerful", which cannot describe that matrix; it was replaced
+ * rather than stretched.
+ *
+ * `rank` survives, and authorises nothing: it is display ordering (the ladder on
+ * `/no-access` is sorted by it) and the tie-break when one person holds several
+ * groups, where the first group in this order wins. The same role-set shape is in
+ * `aws/pickup/security.mjs` for the serverless half, so the screen and the API it
+ * calls cannot disagree about who may act.
  */
 
 export const ROLES = {
   "eco-admin": {
     label: "Admin",
     rank: 2,
-    summary: "The team and who holds which role, the rate card in force, plus everything an officer can.",
+    summary: "The team and who holds which role, the rate card, and every other screen.",
   },
   "eco-officer": {
     label: "Officer",
     rank: 3,
-    summary: "Valuations, validation decisions and recyclers, plus everything an operator can.",
+    summary: "The recycler gate and the facilities, plus the screens an operator opens.",
   },
   "eco-operator": {
     label: "Operator",
     rank: 4,
-    summary: "Intake, pickups and settlements. No rate cards, no members.",
+    summary: "Intake, pickups and the handoff. No rate cards, no members.",
+  },
+  "eco-collector": {
+    label: "Collector",
+    rank: 5,
+    summary: "Their own submissions and the map. No capture console, no board.",
   },
   "eco-viewer": {
     label: "Viewer",
-    rank: 5,
-    summary: "Read-only, for a municipality or brand analyst.",
+    rank: 6,
+    summary: "Read-only: the dashboard, the map, and the evidence a brand has claimed.",
   },
 } as const;
 
@@ -46,25 +60,22 @@ const LEGACY_GROUPS: Readonly<Record<string, Role>> = {
   "eco-owner": "eco-admin",
 };
 
-/** Ranks used by the matrix below, named so the intent survives a re-read. */
-export const RANK_ANY_ROLE = 5;
-export const RANK_OPERATOR = 4;
-export const RANK_OFFICER = 3;
-export const RANK_ADMIN = 2;
-
 export const roleLabel = (role: Role | null): string =>
   role ? ROLES[role].label : "No role assigned";
 
+/** Display ordering, and the tie-break in `roleFromGroups`. Never an authorisation. */
 export const rankOf = (role: Role): number => ROLES[role].rank;
 
 const isRole = (value: string): value is Role =>
   Object.prototype.hasOwnProperty.call(ROLES, value);
 
 /**
- * The highest-authority role a user holds, or null when they hold none.
+ * The highest-placed role a user holds, or null when they hold none.
  *
- * A user can be in several groups. The strongest wins, which is the only choice that
- * does not silently downgrade an admin who was also added as a viewer for a demo.
+ * A user can be in several groups. Display order decides which one names them, which
+ * is the only choice that does not silently downgrade an admin who was also added as
+ * a viewer for a demo. It authorises nothing: every screen is a role-set test, so a
+ * user holding two groups is not quietly widened to either one's access.
  */
 export function roleFromGroups(groups: readonly string[] | undefined): Role | null {
   let best: Role | null = null;
@@ -83,104 +94,130 @@ export function roleFromGroups(groups: readonly string[] | undefined): Role | nu
 export type Guard = {
   /** Stable id, safe to put in a URL. */
   id: string;
-  /** Minimum authority: a user may open this when `rank <= minRank`. */
-  minRank: number;
+  /** The roles that may open this screen. Exactly these; there is no "or above". */
+  roles: readonly Role[];
   /** How the requirement reads to a person who was refused. */
   requirement: string;
   paths: string[];
 };
 
 /**
- * Who may open what. `/` is absent on purpose: the landing page is the public half of
- * this project, meant to be read by anyone.
- * The dashboard is gated at `/dashboard` so the two never share a path.
+ * Who may open what, frozen from the migration plan's target matrix. `/` is absent on
+ * purpose: the landing page is the public half of this project, meant to be read by
+ * anyone. The dashboard is gated at `/dashboard` so the two never share a path.
+ *
+ * The three accesses the migration doc dropped silently are preserved here — Officer
+ * keeps `/map`, Operator keeps `/collectors`, Operator keeps `/evidence` — and the
+ * three seats the doc does remove are removed: Validation and Valuations are
+ * admin-only, and the recycler gate is the officer's.
  */
 export const GUARDS: readonly Guard[] = [
   {
     id: "dashboard",
-    minRank: RANK_ANY_ROLE,
+    roles: ["eco-admin", "eco-officer", "eco-operator", "eco-collector", "eco-viewer"],
     requirement: "any assigned role",
     paths: ["/dashboard"],
   },
   {
-    // Acting on the map — assigning a van to a hotspot, clearing one, recomputing the
-    // clusters — is pickup-board work, so it carries the pickup board's rank. Listed
-    // *before* `/map` because `guardFor` takes the first match: below it, `/map` would
-    // cover `/map/dispatch` and any signed-in viewer could dispatch a van.
+    // Acting on the map — assigning a van to a hotspot, clearing one — is board work,
+    // so it carries the board's roles. Listed *before* `/map` because `guardFor` takes
+    // the first match: below it, `/map` would cover `/map/dispatch` and a collector or
+    // a viewer could dispatch a van.
     id: "map-dispatch",
-    minRank: RANK_OPERATOR,
-    requirement: "operator or above",
+    roles: ["eco-admin", "eco-operator"],
+    requirement: "Operator or Admin",
     paths: ["/map/dispatch"],
   },
   {
     id: "map",
-    minRank: RANK_ANY_ROLE,
+    roles: ["eco-admin", "eco-officer", "eco-operator", "eco-collector", "eco-viewer"],
     requirement: "any assigned role",
     paths: ["/map"],
   },
   {
     id: "intake",
-    minRank: RANK_OPERATOR,
-    requirement: "operator or above",
+    roles: ["eco-admin", "eco-operator"],
+    requirement: "Operator or Admin",
     paths: ["/intake"],
   },
   {
+    // The collector's own submissions, a read-only history. `/intakes` is not beneath
+    // `/intake` for `guardFor`'s prefix test — that compares against `base + "/"` — so
+    // the two screens hold different seats without either inheriting the other's.
+    id: "intakes",
+    roles: ["eco-admin", "eco-collector"],
+    requirement: "Collector or Admin",
+    paths: ["/intakes"],
+  },
+  {
     id: "pickups",
-    minRank: RANK_OPERATOR,
-    requirement: "operator or above",
+    roles: ["eco-admin", "eco-operator"],
+    requirement: "Operator or Admin",
     paths: ["/pickups"],
   },
   {
-    // The three handoff screens drive `POST /pickups`, `/pin` and `/settle`, which the
-    // Lambda holds to `eco-operator` or above — so the screens are held to the same
-    // rank, and nobody is shown a button the API will refuse. The phone and the gate are
-    // one account in this pilot; a collector role of their own is the next step.
+    // The two ends of the handoff are different seats now, which is the whole point of
+    // the migration: the Operator routes a load and shows the PIN, the Officer weighs
+    // it and types the PIN. They used to be one rank, so the screens shared a guard.
     id: "handoff",
-    minRank: RANK_OPERATOR,
-    requirement: "operator or above",
-    paths: ["/handoff", "/gate", "/demo"],
+    roles: ["eco-admin", "eco-operator"],
+    requirement: "Operator or Admin",
+    paths: ["/handoff"],
+  },
+  {
+    id: "gate",
+    roles: ["eco-admin", "eco-officer"],
+    requirement: "Officer or Admin",
+    paths: ["/gate"],
+  },
+  {
+    id: "demo",
+    roles: ["eco-admin", "eco-officer", "eco-operator"],
+    requirement: "Operator, Officer or Admin",
+    paths: ["/demo"],
   },
   {
     id: "collectors",
-    minRank: RANK_OPERATOR,
-    requirement: "operator or above",
+    roles: ["eco-admin", "eco-operator"],
+    requirement: "Operator or Admin",
     paths: ["/collectors"],
   },
   {
-    // Deliberately the same authority `/api/media/read` requires — it authorizes
-    // against `/intake`, which is this rank. A weaker guard here would render a Read
-    // button the API then refuses, and a stronger one would hide evidence from the
-    // operators who produce it.
+    // Deliberately held by the same roles the media read requires: a weaker guard here
+    // would render a Read button the API then refuses, and a stronger one would hide
+    // evidence from the operators who produce it. The Viewer's seat is read-only and
+    // scoped to the credits its brand claimed — the scope is `lib/auth/scope.ts`, not
+    // this table.
     id: "evidence",
-    minRank: RANK_OPERATOR,
-    requirement: "operator or above",
+    roles: ["eco-admin", "eco-operator", "eco-viewer"],
+    requirement: "Operator, Viewer or Admin",
     paths: ["/evidence"],
   },
   {
     id: "valuation",
-    minRank: RANK_OFFICER,
-    requirement: "officer or above",
+    roles: ["eco-admin"],
+    requirement: "Admin only",
     paths: ["/valuation"],
   },
   {
     id: "validation",
-    minRank: RANK_OFFICER,
-    requirement: "officer or above",
+    roles: ["eco-admin"],
+    requirement: "Admin only",
     paths: ["/validation"],
   },
   {
     id: "recyclers",
-    minRank: RANK_OFFICER,
-    requirement: "officer or above",
+    roles: ["eco-admin", "eco-officer"],
+    requirement: "Officer or Admin",
     paths: ["/recyclers"],
   },
   {
     // Who has an account, and the prices in force: the two things an admin answers
     // for. Both are read-only here — roles are Cognito groups and the card ships in
-    // code — so a viewer-level screen would leak the team list for no gain.
+    // code — so a wider screen would leak the team list for no gain.
     id: "administration",
-    minRank: RANK_ADMIN,
-    requirement: "admin or above",
+    roles: ["eco-admin"],
+    requirement: "Admin only",
     paths: ["/team", "/rates"],
   },
 ];
@@ -195,14 +232,14 @@ const normalise = (pathname: string): string => {
  * The guard covering a path, or null when the path is not gated.
  *
  * A guarded screen covers what is beneath it as well as itself: `/intake` and
- * `/intake/7` are the same authority, and matching only the exact string meant a
- * nested route added later silently lost its rank check — the proxy would still
- * require a session, so the hole would be invisible until someone noticed a viewer
- * reading an officer's screen.
+ * `/intake/7` are the same seat, and matching only the exact string meant a nested
+ * route added later silently lost its check — the proxy would still require a session,
+ * so the hole would be invisible until someone noticed a viewer reading an officer's
+ * screen.
  *
- * The comparison is against `path + "/"`, not a bare prefix, so `/map-archive` is
- * not covered by `/map`. `/` is excluded from the nested case for the obvious
- * reason: as a prefix it matches the entire site.
+ * The comparison is against `path + "/"`, not a bare prefix, so `/map-archive` is not
+ * covered by `/map` and `/intakes` is not covered by `/intake`. `/` is excluded from
+ * the nested case for the obvious reason: as a prefix it matches the entire site.
  */
 export function guardFor(pathname: string): Guard | null {
   const path = normalise(pathname);
@@ -236,7 +273,7 @@ export const isPublicPath = (pathname: string): boolean => {
 
 export type AccessVerdict =
   | { ok: true; guard: Guard | null }
-  | { ok: false; guard: Guard; reason: "no-role" | "insufficient-rank" };
+  | { ok: false; guard: Guard; reason: "no-role" | "role-not-allowed" };
 
 export function canOpen(
   pathname: string,
@@ -245,8 +282,8 @@ export function canOpen(
   const guard = guardFor(pathname);
   if (!guard) return { ok: true, guard: null };
   if (role === null) return { ok: false, guard, reason: "no-role" };
-  if (ROLES[role].rank > guard.minRank) {
-    return { ok: false, guard, reason: "insufficient-rank" };
+  if (!guard.roles.includes(role)) {
+    return { ok: false, guard, reason: "role-not-allowed" };
   }
   return { ok: true, guard };
 }

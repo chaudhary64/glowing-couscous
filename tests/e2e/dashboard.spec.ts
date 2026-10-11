@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-import { ACCOUNTS, ROLE_RANK, SCREENS, stateFile, type RoleName } from "./accounts";
+import { ACCOUNTS, SCREENS, stateFile, type RoleName } from "./accounts";
 
 /**
  * The dashboard is one screen for every role, but it must never offer a role a link
  * that lands on /no-access. Every link in the page body is checked against the same
- * matrix access.spec.ts walks, and the header's two actions against the role's rank.
+ * matrix access.spec.ts walks, and the header's two actions against the role's seats.
  */
 
 for (const role of Object.keys(ACCOUNTS) as RoleName[]) {
@@ -23,15 +23,16 @@ for (const role of Object.keys(ACCOUNTS) as RoleName[]) {
       for (const path of new Set(paths)) {
         const screen = SCREENS.find((s) => path === s.path || path.startsWith(`${s.path}/`));
         if (!screen) continue;
-        expect(ROLE_RANK[role] <= screen.minRank, `${role} is offered ${path}`).toBe(true);
+        expect(screen.roles.includes(role), `${role} is offered ${path}`).toBe(true);
       }
 
-      const rankOf = (path: string) => SCREENS.find((s) => s.path === path)!.minRank;
+      const mayOpen = (path: string) =>
+        (SCREENS.find((s) => s.path === path)?.roles ?? []).includes(role);
       await expect(main.getByRole("link", { name: "New intake", exact: true })).toHaveCount(
-        ROLE_RANK[role] <= rankOf("/intake") ? 1 : 0,
+        mayOpen("/intake") ? 1 : 0,
       );
       await expect(main.getByRole("link", { name: "Clear validation queue" })).toHaveCount(
-        ROLE_RANK[role] <= rankOf("/validation") ? 1 : 0,
+        mayOpen("/validation") ? 1 : 0,
       );
       // The district panel is the one thing every role can follow.
       await expect(main.getByRole("link", { name: "Full map →" })).toBeVisible();
