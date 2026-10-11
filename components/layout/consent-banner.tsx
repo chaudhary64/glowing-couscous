@@ -22,6 +22,14 @@ import { saveConsent, useConsent } from "@/lib/consent";
  * It pays for that with the trade-off this position has always had: until it is answered
  * it covers the foot of the page, which on the collector's phone is where "Hand over
  * e-waste" sits. It is answered once, and the notice leaves the moment it is.
+ *
+ * Covering the foot of the page is a matter of drawing, not of blocking. The wrapper that
+ * centres the card spans the whole viewport, and while it was taking pointer events it
+ * swallowed every click along that band — including the desktop rail's only "Sign out",
+ * which sits at the foot of the rail, and the phone's "Hand over e-waste". Only the card
+ * itself is clickable now: where the notice merely floats over a control, the control is
+ * still a control. A click the notice *does* answer is a click on the card, and the card
+ * is where both answers live.
  */
 export function ConsentBanner() {
   const consent = useConsent();
@@ -40,13 +48,14 @@ export function ConsentBanner() {
   };
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 px-3 pb-3 sm:px-6 sm:pb-6">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-3 pb-3 sm:px-6 sm:pb-6">
       <div
         role="region"
         aria-label="Cookies and location"
         // A 5px edge and no shadow: on a white page the way to make something stand out
-        // is to draw it heavier, not to lift it.
-        className="mx-auto max-w-3xl border-[5px] border-ink bg-paper p-4 text-ink sm:p-5"
+        // is to draw it heavier, not to lift it. `pointer-events-auto` undoes the
+        // wrapper's pass-through for the card alone.
+        className="pointer-events-auto mx-auto max-w-3xl border-[5px] border-ink bg-paper p-4 text-ink sm:p-5"
       >
         <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-copper">Cookies &amp; location</p>
         <p className="mt-2 text-[13px] leading-snug text-ink-soft">
