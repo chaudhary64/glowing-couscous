@@ -133,6 +133,8 @@ export interface Valuation {
   eprCreditNote: string;
   rateBasis: string;
   validUntil: string;
+  /** The stored daily card the rates came from (`rate_cards.id`); absent for the demo card. */
+  rateCardId?: string | null;
 }
 
 export type Verdict = "verified" | "rejected" | "review";

@@ -2,8 +2,6 @@ import { createHash } from "node:crypto";
 
 import {
   ITEM_CLASSES,
-  RATE_BASIS,
-  RATE_VALID_UNTIL,
   eprCreditFor,
   eprNoteId,
   handlingFeeFor,
@@ -18,6 +16,7 @@ import { formatInr, formatMass } from "@/lib/format";
 import { getAiProvider, type AiMediaPart } from "@/lib/ai/foundry";
 import { transcribeHindi } from "@/lib/ai/transcribe";
 import { parseIntakeProposal, parseItemProposal } from "@/lib/ai/parse";
+import { STATIC_SHEET, currentRates, type RateSheet } from "@/lib/rates/daily";
 import {
   INTAKE_SYSTEM_INSTRUCTION,
   ITEM_SYSTEM_INSTRUCTION,
@@ -120,7 +119,10 @@ function referenceFixtureId(code: ItemClassCode): string | null {
 }
 
 /**
- * Price and gate a validated proposal. Pure: same proposal in, same numbers out.
+ * Price and gate a validated proposal. Pure: same proposal and rate sheet in, same
+ * numbers out. The sheet is the card in force (`currentRates()`), and only its rates
+ * are read: what a material is, and how it is handled, still comes from the card in
+ * `lib/data/rate-card.ts`.
  *
  * The EPR credit follows the fixture's own story rather than a formula invented
  * here. A verified or held item mints a note for its class; a rejected item earns
@@ -133,13 +135,15 @@ export function priceProposal(
   source: AiSource,
   warnings: string[],
   evidence: string | null = null,
+  rates: RateSheet = STATIC_SHEET,
 ): AiAnalysis {
   const code = proposal.itemClass;
   const entry = ITEM_CLASSES[code];
 
-  const lines: MaterialLine[] = proposal.materials.map((line) =>
-    material(line.id, line.name, line.massGrams),
-  );
+  const lines: MaterialLine[] = proposal.materials.map((line) => ({
+    ...material(line.id, line.name, line.massGrams),
+    ratePerKg: rates.lines[line.id].ratePerKg,
+  }));
   const massGrams = itemMass(lines);
   const hazardous = isHazardous(lines);
   const { ruleCode } = proposal.gatekeeper;
@@ -190,15 +194,18 @@ export function priceProposal(
     eprCreditNote = "not issued — item rejected";
   }
 
-  const valuation: Valuation = priceMaterials(lines, {
-    // A handling fee pays for moving material. With no fractions declared there is
-    // nothing to move, and charging for it would show a collector a negative net.
-    handlingFee: lines.length === 0 ? 0 : handlingFeeFor(code),
-    eprCreditInr,
-    eprCreditNote,
-    rateBasis: RATE_BASIS,
-    validUntil: RATE_VALID_UNTIL,
-  });
+  const valuation: Valuation = {
+    ...priceMaterials(lines, {
+      // A handling fee pays for moving material. With no fractions declared there is
+      // nothing to move, and charging for it would show a collector a negative net.
+      handlingFee: lines.length === 0 ? 0 : handlingFeeFor(code),
+      eprCreditInr,
+      eprCreditNote,
+      rateBasis: rates.basis,
+      validUntil: rates.validUntil,
+    }),
+    rateCardId: rates.cardId,
+  };
 
   const signals =
     proposal.gatekeeper.signals.length > 0
@@ -318,6 +325,9 @@ export async function analyseItem(input: AnalyseItemInput): Promise<AiAnalysis> 
   const started = Date.now();
   const provider = getAiProvider();
   const media = input.media ?? [];
+  // The card in force is read while the model works. It never rejects, so it cannot
+  // fail a request the model answered.
+  const rates = currentRates();
 
   const call = await provider.generate({
     systemInstruction: ITEM_SYSTEM_INSTRUCTION,
@@ -351,6 +361,7 @@ export async function analyseItem(input: AnalyseItemInput): Promise<AiAnalysis> 
     },
     warnings,
     evidenceDigest(media),
+    await rates,
   );
 }
 
@@ -370,6 +381,8 @@ export async function analyseIntake(
   const started = Date.now();
   const provider = getAiProvider();
   const media = input.media ?? [];
+  // Read while the voice note is transcribed and the model works; see `analyseItem`.
+  const rates = currentRates();
 
   const audio = media.find((part) => part.mimeType.startsWith("audio/"));
   const images = media.filter((part) => !part.mimeType.startsWith("audio/"));
@@ -443,7 +456,7 @@ export async function analyseIntake(
     inputs: describeInputs(media, input.note),
   };
 
-  const analysis = priceProposal(parsed.value, source, warnings, evidenceDigest(media));
+  const analysis = priceProposal(parsed.value, source, warnings, evidenceDigest(media), await rates);
 
   return {
     fields: parsed.value.fields,
