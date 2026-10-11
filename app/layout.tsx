@@ -47,9 +47,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <body className="min-h-full">
+        <ConsentBanner />
         {children}
         <MotionObserver />
-        <ConsentBanner />
       </body>
     </html>
   );
