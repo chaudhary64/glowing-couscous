@@ -113,7 +113,7 @@ export default async function ValidationQueuePage() {
           label="Decided today"
           value={String(counts?.decidedToday ?? 0)}
           unit="decisions"
-          note="Rows in validation_decisions written since midnight IST. A reload does not lose them."
+          note="Decisions taken since midnight IST. A reload does not lose them."
         />
       </StatGrid>
 
@@ -121,7 +121,7 @@ export default async function ValidationQueuePage() {
         <SectionHeader
           eyebrow="Judgement calls"
           title="Held for a human"
-          note="Work the operator first, then the paperwork: rules, metrics and payout streams come after. Each action here writes a row; undo marks it undone rather than deleting it."
+          note="Work the operator first, then the paperwork: rules, metrics and payout streams come after. Every action here is recorded; undo marks it undone rather than deleting it."
         />
         <div className="mt-5">
           <DecisionQueue
@@ -154,7 +154,7 @@ export default async function ValidationQueuePage() {
             <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
               {configured
                 ? "No refusal is on file yet. Run something through the gatekeeper above that is not e-waste and it will be recorded here with the reason and the evidence behind it."
-                : "This deployment has no DATABASE_URL, so a refusal cannot be recorded and there is nothing to read back. The gatekeeper above still refuses; the refusal simply does not outlive the response."}
+                : "This deployment has no records database, so a refusal cannot be recorded and there is nothing to read back. The gatekeeper above still refuses; the refusal is simply not kept."}
             </p>
           </Surface>
         ) : (
@@ -236,7 +236,7 @@ export default async function ValidationQueuePage() {
         <SectionHeader
           eyebrow="Model health · authored benchmark"
           title="Holdout metrics against target"
-          note="Precision and recall are reported on the labelled holdout, not on live uploads. These numbers are the published benchmark from the write-up; the rows on this page are not a classifier, so nothing here recomputes them."
+          note="Precision and recall are reported on the labelled holdout, not on live uploads. These are the published benchmark from the write-up and are not recomputed from the rows on this page."
         />
         <div className="mt-5">
           <MetricPanel />
@@ -247,7 +247,7 @@ export default async function ValidationQueuePage() {
         <SectionHeader
           eyebrow="Controls"
           title="Rules that fire before a credit exists"
-          note="The vocabulary is the prompt's — R-01 to R-04 are the reasons a refusal can have. The total is counted from gatekeeper_verdicts; the per-rule split is not recorded anywhere, so the table shows no per-rule counts."
+          note="R-01 to R-04 are the reasons a refusal can carry. The total is counted; the per-rule split is not recorded anywhere, so the table shows no per-rule counts."
         />
         <div className="mt-5">
           <RejectRules refused={counts?.rejected ?? null} />

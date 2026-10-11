@@ -49,7 +49,7 @@ export default async function CollectorsPage() {
   const hazardous = collectors.reduce((sum, row) => sum + row.hazardous, 0);
 
   const notice = !activity.configured
-    ? "The smart-pickup service is not configured, so no collector activity can be read. Set PICKUP_LOCAL=true and run `npm run pickup:local`, or point PICKUP_API_URL at the deployed API."
+    ? "The pickup service is not connected, so no collector activity can be read."
     : activity.error
       ? `Collector activity could not be read: ${activity.error}`
       : null;
@@ -108,7 +108,7 @@ export default async function CollectorsPage() {
               label="Credit notes issued"
               value={String(notes)}
               unit="notes"
-              note="One note per settled load, written in the same transaction as the settlement."
+              note="One note per settled load."
             />
             <Stat
               label="Settled to collectors"

@@ -125,9 +125,8 @@ export default async function IntakePage() {
         <p className="flex flex-wrap items-center gap-2">
           <Badge tone="neutral">Sample data</Badge>
           <span className="text-[12px] leading-snug text-ink-muted">
-            The console below walks four fixed submissions, because those four cover
-            the four verdict paths. The table further down is what this database
-            actually holds.
+            The console below shows four fixed submissions, because those four cover the
+            four verdict paths. The table further down is the record this database holds.
           </span>
         </p>
         <IntakeConsole samples={intakeSamples} resolved={resolved} />
@@ -137,16 +136,15 @@ export default async function IntakePage() {
         <SectionHeader
           eyebrow="Recorded"
           title="Intakes captured"
-          note="The most recent submissions this database holds, each joined to the item it was priced as and to the fields the model read out of it."
+          note="The most recent submissions on file, each with the item it was priced as and the fields the model read out of it."
         />
 
         <Surface className="mt-4">
           {!log.configured ? (
             <p className="px-4 py-4 text-sm leading-relaxed text-ink-soft">
-              <Badge tone="hazard">No database</Badge> — this deployment has no
-              <span className="font-mono"> DATABASE_URL</span>, so nothing is recorded
-              and there is nothing to list. The capture panel above still analyses and
-              prices; the rows simply do not outlive the request.
+              <Badge tone="hazard">No database</Badge> — this deployment has no records
+              database, so nothing is recorded and there is nothing to list. The capture
+              panel above still analyses and prices; the result simply is not kept.
             </p>
           ) : log.rows.length === 0 ? (
             <p className="px-4 py-4 text-sm leading-relaxed text-ink-soft">

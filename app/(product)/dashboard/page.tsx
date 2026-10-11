@@ -70,7 +70,7 @@ export default async function DashboardPage() {
         lede={
           counts
             ? `${counts.intakesToday} intakes today, ${counts.itemsPriced} items priced, and ${counts.awaitingDecision} waiting on a human decision. Every panel here is counted: the tiles, the work queue and the activity feed from the pipeline's own rows, and the load board and collector ranking from the pickup service.`
-            : "The pipeline writes its submissions, prices, verdicts and decisions into Postgres, and this screen counts them. With no database configured there is nothing to count, and the panels below say what they could not read."
+            : "The pipeline records its submissions, prices, verdicts and decisions, and this screen counts them. With no database configured there is nothing to count, and the panels below say what they could not read."
         }
         actions={
           <>
@@ -138,11 +138,11 @@ export default async function DashboardPage() {
       ) : (
         <Surface tone="inset" className="p-4">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-            No <span className="font-mono">DATABASE_URL</span> is configured, so no count
-            can be taken: submissions, prices, verdicts and decisions are all written by
-            the pipeline but not read back here. The tiles are therefore absent rather
-            than showing zeroes, and each panel below says what it could not read instead
-            of drawing a plausible number in its place.
+            No records database is connected, so no count can be taken: submissions,
+            prices, verdicts and decisions are all written by the pipeline but not read
+            back here. The tiles are therefore absent rather than showing zeroes, and each
+            panel below says what it could not read instead of drawing a plausible number
+            in its place.
           </p>
         </Surface>
       )}
@@ -275,13 +275,13 @@ export default async function DashboardPage() {
           <SectionHeader
             eyebrow={configured ? "From the record" : "Unavailable"}
             title="Activity"
-            note="Drawn from the rows themselves — a submission, a verdict and a decision each carry their own timestamp — rather than written beside them."
+            note="Each entry is a submission, verdict or decision, shown with the time it was recorded."
           />
           <Surface className="mt-4">
             {events.rows.length === 0 ? (
               <p className="p-4 text-sm leading-relaxed text-ink-soft">
                 {configured
-                  ? "Nothing has been recorded yet. A capture on the intake screen appears here as soon as the model has priced it and the row is written."
+                  ? "Nothing has been recorded yet. A capture on the intake screen appears here as soon as the model has priced it and the record is written."
                   : "The feed needs a database. Without one there is no submission, verdict or decision to list."}
               </p>
             ) : (
@@ -332,7 +332,7 @@ export default async function DashboardPage() {
             <SectionHeader
               eyebrow={board.configured ? "From the pickup service" : "Unavailable"}
               title="Loads in play"
-              note={`Every load the smart-pickup service has routed, read from its own table. ${notesIssued.length} note${
+              note={`Every load the smart-pickup service has routed. ${notesIssued.length} note${
                 notesIssued.length === 1 ? "" : "s"
               } issued so far, ${formatInr(notesInr)} settled. A load leaves this board when the gate settles it against the weighed mass.`}
             />

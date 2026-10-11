@@ -157,11 +157,11 @@ export default async function ValuationsPage({
       {!queue.configured ? (
         <Panel eyebrow="Not wired" title="This screen cannot count anything">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-            No <span className="font-mono">DATABASE_URL</span> is configured, so there is
-            nowhere for a priced item to be written and nothing to read back. Showing the
-            sample rows here would be the one thing this screen must not do — a number
-            that looks counted and is not. Configure the database and price a submission
-            above; it appears in this queue as a row.
+            No records database is connected, so there is nowhere for a priced item to be
+            written and nothing to read back. Showing the sample rows here would be the one
+            thing this screen must not do — a number that looks counted and is not.
+            Configure the database and price a submission above; it appears in this queue
+            as a row.
           </p>
         </Panel>
       ) : null}
@@ -277,7 +277,7 @@ export default async function ValuationsPage({
                 </Table>
                 <p className="border-t border-rule px-3 py-3 text-[12px] leading-relaxed text-ink-muted">
                   A refused item stays in the queue for the audit trail but shows no payable
-                  figure, because no credit was minted for it. Held items show a dash until a
+                  figure, because no credit was issued for it. Held items show a dash until a
                   human decides them in the{" "}
                   <Link
                     href="/validation"
@@ -285,9 +285,7 @@ export default async function ValuationsPage({
                   >
                     validation queue
                   </Link>
-                  . The EPR note column stays a dash: the note is an{" "}
-                  <span className="font-mono">epr_credit_notes</span> row, and routing a load
-                  — feature 04 — is what registers it.
+                  . The EPR note column stays a dash until the item is routed to a recycler.
                 </p>
               </Surface>
             )}
@@ -296,7 +294,6 @@ export default async function ValuationsPage({
           {missingSelection ? (
             <Panel eyebrow="Not found" title={`No item holds the id ${requested}`}>
               <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-                The lookup is one exact match on <span className="font-mono">items_code_uq</span>.
                 Nothing is on file under that id, so the workspace below shows the newest
                 priced item instead.
               </p>
@@ -515,7 +512,7 @@ export default async function ValuationsPage({
                       ? `Valid until ${formatIstStamp(openValuation.validUntil)}`
                       : "The card in force carried no expiry",
                   }}
-                  note={`${openValuation.rateBasis}. ${SIMULATED_CLAIM} No ledger row is written.`}
+                  note={`${openValuation.rateBasis}. ${SIMULATED_CLAIM} No payment is settled by it.`}
                   stamp={<Stamp verdict={openVerdict.verdict} />}
                 />
 
@@ -580,9 +577,7 @@ export default async function ValuationsPage({
           ) : rows.length > 0 ? (
             <Panel eyebrow="Incomplete row" title="This item has no stored valuation or verdict">
               <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-                The item row is on file but the rows that make it a price —{" "}
-                <span className="font-mono">valuations</span> and{" "}
-                <span className="font-mono">gatekeeper_verdicts</span> — are not, so there is
+                The item is on file but its valuation and verdict are not, so there is
                 nothing to show in the workspace. That is a shape this screen renders rather
                 than hides.
               </p>

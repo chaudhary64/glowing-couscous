@@ -196,13 +196,30 @@ export function MotionObserver() {
 
     const seen = new WeakSet<Element>();
     const held = new WeakMap<Element, Animation[]>();
+    /*
+      The elements currently wearing a starting pose, kept in a Set because a WeakMap cannot
+      be walked and the cleanup has to cancel what it posed.
 
-    const release = (el: HTMLElement) => {
-      const kind = el.dataset.motion as Kind;
-      const played = MOTIONS[kind].play(el);
-      // The real animation now covers the pose; drop the hold.
+      The pose is taken from inside the observer's own callback, never from `adopt`. That is
+      the invariant that matters: a posed element is always one the live observer is watching
+      and will release. Measuring a rect in `adopt` and posing on that basis could pose an
+      element the running observer then never sees change — a second pass of this effect, or a
+      reload that restores a scroll position, is enough to do it — and an element held at
+      `clip-path: inset(0 100% 0 0)` with nobody left to release it is invisible content.
+    */
+    const posed = new Set<Element>();
+
+    /** Take a pose off an element and return it to plain DOM. Safe to call on a plain one. */
+    const drop = (el: Element) => {
       for (const a of held.get(el) ?? []) a.cancel();
       held.delete(el);
+      posed.delete(el);
+    };
+
+    const release = (el: HTMLElement) => {
+      const played = MOTIONS[el.dataset.motion as Kind].play(el);
+      // The real animation now covers the pose; drop the hold.
+      drop(el);
       // Once finished, let the animations go so the element is plain DOM again.
       Promise.all(played.map((a) => a.finished))
         .then(() => played.forEach((a) => a.cancel()))
@@ -212,12 +229,21 @@ export function MotionObserver() {
     const io = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          // Anything still below the viewport keeps waiting. An element the reader has
-          // already passed is released instead: its reveal will never be seen, and a pose
-          // that is never released is an invisible element.
-          if (!entry.isIntersecting && entry.boundingClientRect.top > 0) continue;
-          io.unobserve(entry.target);
-          release(entry.target as HTMLElement);
+          const el = entry.target as HTMLElement;
+          // Still below the viewport: take the starting pose, once, and keep watching. The
+          // pose is taken here and nowhere else, so it can only ever belong to this observer.
+          if (!entry.isIntersecting && entry.boundingClientRect.top > 0) {
+            if (!posed.has(el)) {
+              held.set(el, hold(el, el.dataset.motion as Kind));
+              posed.add(el);
+            }
+            continue;
+          }
+          // In view, or already passed: release what was posed. An element that never wore a
+          // pose — one on screen at load, or one reached by a jump — releases nothing and is
+          // left exactly as rendered, which is what keeps a visible element from blinking.
+          io.unobserve(el);
+          if (posed.has(el)) release(el);
         }
       },
       // The top margin reaches a whole document height up, which is what makes "already
@@ -230,13 +256,15 @@ export function MotionObserver() {
       { rootMargin: "100000px 0px -12% 0px" },
     );
 
+    /**
+     * Hand an element to the observer. The observer's first callback decides what happens to
+     * it: posing it if it is still below the fold, or leaving it alone and unobserving it if
+     * it is already on screen.
+     */
     const adopt = (el: HTMLElement) => {
       if (seen.has(el)) return;
       seen.add(el);
       if (!((el.dataset.motion ?? "") in MOTIONS)) return;
-      const rect = el.getBoundingClientRect();
-      if (rect.top < window.innerHeight * 0.88 && rect.bottom > 0) return; // already in view: leave it be
-      held.set(el, hold(el, el.dataset.motion as Kind));
       io.observe(el);
     };
 
@@ -255,6 +283,9 @@ export function MotionObserver() {
     return () => {
       io.disconnect();
       mo.disconnect();
+      // Poses this run applied are cancelled, not merely forgotten: the observers that would
+      // have released them are gone, and a pose that outlives its observer is invisible content.
+      for (const el of [...posed]) drop(el);
     };
   }, []);
 

@@ -9,8 +9,9 @@ import { ButtonLink } from "@/components/ui/button";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { Field, FieldList } from "@/components/ui/field-list";
 import { Receipt, type ReceiptLine } from "@/components/ui/receipt";
-import { Stamp } from "@/components/ui/stamp";
+import { Stamp, VerdictMark } from "@/components/ui/stamp";
 import { Stat, StatGrid } from "@/components/ui/stat";
+import { cn } from "@/lib/cn";
 import { coreLoopSlugs, getFeature } from "@/lib/data/features";
 import { focusItemId, getItem } from "@/lib/data/inventory";
 import { intakeStats } from "@/lib/data/intake";
@@ -31,19 +32,32 @@ export const metadata: Metadata = {
   The landing page is plain type on paper.
 
   It is the brand surface, so it wears the warmer bone ground (app/(landing)/landing.css)
-  and nothing else: no cards, no shadows, no panels, no decorative motion. A section is a
-  mono eyebrow, a display line, a paragraph, and a hairline where the section ends. The one
+  and nothing else: no cards, no shadows, no panels, no decorative motion. A band is a
+  mono eyebrow, a display line, a paragraph, and a hairline where the band ends. The one
   framed object on the page is the receipt, because the receipt is the thing the product
   exists to produce.
 
-  Seven content blocks, in one argument: **the problem** (the scale of the flow, and the
-  three things that break in it), **the proof** (the receipt), **how it works** (the three
-  instruments and the one rule that keeps them honest), **the loop** (the four screens,
-  photographed as they run), **the stack**, the honesty clause, and the way in.
+  The composition of the bands is borrowed whole from the Stivio landing page captured in
+  site-reaper/downloaded-site. Four moves, each kept in this brand's hand:
 
-  The problem leads because the receipt means nothing until the reader knows why it is
-  worth having, and nothing is explained twice: the valuation rule is stated once, in the
-  third block, with the rate card collapsed behind a toggle rather than dumped on the page.
+  - **An argument is a rail and a body.** The eyebrow, the display line and the lede sit
+    in a sticky left rail; everything the band has to show sits to their right. As the
+    reader scrolls a body, its opening claim stays on screen — the reader never has to
+    remember which section they are in. The receipt above and the stack below are the two
+    deliberate exceptions, because they are the two objects, not two claims.
+  - **An instrument is a readout.** Each of the three steps on the bench is a framed
+    panel holding the artefact that step actually produces — the mass ledger, the
+    arithmetic, the verdict — with the words that explain it underneath.
+  - **A list is a grid of hairlines.** The stack is named in a hairline grid rather than a
+    paragraph, because a claim about seven services is evidence only when you can count
+    them.
+  - **A boundary is a ruled row.** The honesty clause is an accordion: each row names a
+    limit in the summary, and the detail expands beneath it.
+
+  Numbering is kept because the page genuinely is an argument in order: the problem first,
+  because a receipt means nothing until the reader knows why it is worth having. Nothing is
+  explained twice — the valuation rule is stated once, in the second band, with the rate
+  card collapsed behind a toggle rather than dumped on the page.
 */
 
 const item = getItem(focusItemId);
@@ -64,34 +78,7 @@ const receiptLines: ReceiptLine[] = item.materials.map((line) => {
   };
 });
 
-/** The three instruments the item passes: what it is, what it is worth, whether it clears. */
-const bench = [
-  {
-    index: "01",
-    name: "Assay",
-    title: "Assay by mass",
-    body: "Six fractions, weighed line by line. The item's mass is the exact sum of its lines, so the total on the receipt can never drift from the parts above it.",
-    figure: formatMass(item.massGrams),
-    note: `${item.materials.length} fractions · ${item.hazards.length ? "hazard line present" : "no hazard line"}`,
-  },
-  {
-    index: "02",
-    name: "Rate",
-    title: "Priced on the server",            body: "The per-class handling tariff is subtracted here, on this side of the wire, where an auditor can re-run it line by line rather than trusting a figure a model produced.",
-    figure: `${formatInr(valuation.grossValue)} − ${formatInr(valuation.handlingFee)}`,
-    note: `Net ${formatInr(valuation.netToCollector)} to the collector`,
-  },
-  {
-    index: "03",
-    name: "Gate",
-    title: "Read before payout",
-    body: "Valid or invalid on every upload, before a rupee is promised. A rejected submission names the rule it broke rather than guessing at what it might be.",
-    figure: formatPct(gatekeeper.confidence),
-    note: `${verdictLabel(gatekeeper.verdict)} · ${gatekeeper.matchedClass}`,
-  },
-];
-
-/** The three failures, rendered inside block 01 rather than as a block of their own. */
+/** The three failures, rendered inside band 01 rather than as a band of their own. */
 const gaps = [
   {
     title: "The collection is invisible",
@@ -107,10 +94,24 @@ const gaps = [
   },
 ];
 
-const claims = [
-  `${SIMULATED_CLAIM} That is exactly why the gatekeeper exists.`,
-  "We route to CPCB-registered recyclers; we do not process waste ourselves.",
-  "WhatsApp is the next channel, not part of this build — the same pipeline, different transport.",
+/*
+  The honesty clause, as boundaries rather than a list of disclaimers: the summary states
+  the limit, the detail explains why the product is still worth having. The first row is
+  open on load, because a limit a reader has to click to find is not an honest limit.
+*/
+const boundaries = [
+  {
+    title: "We are not moving money.",
+    body: `${SIMULATED_CLAIM} The gatekeeper that reads every upload is real; the rupee it guards is not.`,
+  },
+  {
+    title: "We are not processing the waste.",
+    body: "We route to CPCB-registered recyclers; we do not process waste ourselves. The licensed line, the certificate and the audit are theirs — our job is the chain of evidence that gets a submission there.",
+  },
+  {
+    title: "WhatsApp is not in this build.",
+    body: "WhatsApp is the next channel, not part of this build — the same pipeline, different transport. Today the intake is the console and the Hindi voice note.",
+  },
 ];
 
 /** A handful of real rate-card lines, so the page shows rates rather than asserting them. */
@@ -147,7 +148,7 @@ const loopShots: { slug: FeatureSlug; src: string; alt: string }[] = [
 /**
  * Built on AWS, and named. Every line here is a service the code calls — the same list
  * lib/data/features.ts carries per capability — and the one thing that is not AWS is said
- * out loud rather than folded into the badge.
+ * out loud in its own row rather than folded into the badge.
  */
 const awsStack = [
   {
@@ -180,13 +181,14 @@ const awsStack = [
   },
 ];
 
-/** The marker that opens an eyebrow, and the numbering the page's spine runs on. */
+/** The marker that opens an eyebrow. */
 function Eyebrow({ label, center = false }: { label: string; center?: boolean }) {
   return (
     <p
-      className={`flex items-center gap-2.5 font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-ink-muted ${
-        center ? "justify-center" : ""
-      }`}
+      className={cn(
+        "flex items-center gap-2.5 font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-ink-muted",
+        center && "justify-center",
+      )}
     >
       <span aria-hidden className="size-2 shrink-0 bg-copper" />
       {label}
@@ -194,7 +196,13 @@ function Eyebrow({ label, center = false }: { label: string; center?: boolean })
   );
 }
 
-/** One numbered band: eyebrow, display line, lede, then whatever the band has to show. */
+/**
+ * One numbered band: a sticky rail carrying the claim, and the evidence to its right.
+ *
+ * The rail holds the eyebrow, the display line and the lede so that a reader scrolling a
+ * long body — the four screens, the seven services — never loses the sentence the body is
+ * an answer to. It is `self-start` because a stretched grid item has no room to stick.
+ */
 function Band({
   id,
   index,
@@ -213,21 +221,81 @@ function Band({
   return (
     <section id={id} className="scroll-mt-24 border-b border-rule">
       <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
-        <header className="max-w-3xl">
-          <Eyebrow label={`${index} / ${name}`} />
-          <h2
-            data-motion="scan"
-            className="mt-5 font-display text-[clamp(2rem,4.4vw,3.25rem)] uppercase leading-[0.95] tracking-tight"
-          >
-            {title}
-          </h2>
-          {lede ? (
-            <p className="mt-4 max-w-2xl text-base leading-relaxed text-ink-soft">{lede}</p>
-          ) : null}
-        </header>
-        <div className="mt-12">{children}</div>
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:gap-12">
+          <header className="lg:sticky lg:top-24 lg:self-start">
+            <Eyebrow label={`${index} / ${name}`} />
+            {/* Sized to the rail, not to the page: Archivo Black cannot break a word, and a
+                display size that overflows its column would spill into the gap beside it. */}
+            <h2
+              data-motion="scan"
+              className="mt-5 font-display text-[clamp(1.625rem,3vw,2.25rem)] uppercase leading-[0.95] tracking-tight"
+            >
+              {title}
+            </h2>
+            {lede ? (
+              <p className="mt-4 text-[15px] leading-relaxed text-ink-soft">{lede}</p>
+            ) : null}
+          </header>
+          <div className="min-w-0">{children}</div>
+        </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * One instrument on the bench: the readout it produces, framed, then the words that explain
+ * it. The frame is a hairline, not a slab — the receipt is the page's one heavy edge, and a
+ * wall of 3px cards would spend the page's only loud object three times over.
+ */
+function Instrument({
+  index,
+  name,
+  title,
+  body,
+  figure,
+  note,
+  footer,
+  artifact,
+  accent = false,
+}: {
+  index: string;
+  name: string;
+  title: string;
+  body: string;
+  figure: string;
+  note: string;
+  footer: string;
+  artifact: ReactNode;
+  /** Copper for the figure that carries the money. */
+  accent?: boolean;
+}) {
+  return (
+    <li className="flex flex-col">
+      {/* A readout, not a card wall: hairline frame, a fixed floor so the three line up, and
+          the artefact pinned to the top of the frame the way a screen reads. */}
+      <div className="flex h-full min-h-[19rem] flex-col border border-rule bg-paper-raised">
+        <p className="flex items-baseline gap-2.5 border-b border-rule px-3.5 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-ink-muted">
+          <span className="text-copper">{index}</span>
+          {name}
+        </p>
+        <div className="flex flex-1 flex-col px-3.5 py-4">{artifact}</div>
+        <p className="border-t border-rule px-3.5 py-2.5 font-mono text-[10px] uppercase leading-relaxed tracking-[0.12em] text-ink-muted">
+          {footer}
+        </p>
+      </div>
+
+      <h3 className="mt-4 font-display text-xl uppercase leading-tight tracking-tight">
+        {title}
+      </h3>
+      <p className="mt-2 text-[14px] leading-relaxed text-ink-soft">{body}</p>
+      <p className={cn("mt-4 font-mono text-[14px] tabular-nums", accent ? "text-copper" : "text-ink")}>
+        {figure}
+      </p>
+      <p className="mt-1 font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-ink-muted">
+        {note}
+      </p>
+    </li>
   );
 }
 
@@ -270,7 +338,7 @@ export default function LandingPage() {
       <RateTicker />
 
       {/* ------------------------------------------------------ the problem */}
-      {/* The scale and the three failures are one block, because they are one argument: the
+      {/* The scale and the three failures are one band, because they are one argument: the
           obligation is large, and there are three specific reasons it cannot be met today.
           Splitting them put the solution on screen before the problem it answers. */}
       <Band
@@ -280,7 +348,7 @@ export default function LandingPage() {
         title="A legal mandate with no paper trail."
         lede="A brand carries an EPR obligation from CPCB and no reliable way to prove it was met. India generates 3.2 million tonnes of e-waste a year and over 90% of it moves through informal collectors — and three things break between that doorstep and the compliance file."
       >
-        <StatGrid columns={4}>
+        <StatGrid columns={2}>
           <Stat
             label="E-waste generated"
             value="3.2M"
@@ -309,7 +377,7 @@ export default function LandingPage() {
         </StatGrid>
 
         {/* A ledger, not a card wall: three independent failures, so nothing is numbered. */}
-        <ul data-motion="rows" className="mt-14 border-t border-rule">
+        <ul data-motion="rows" className="mt-12 border-t border-rule">
           {gaps.map((gap) => (
             <li
               key={gap.title}
@@ -330,7 +398,8 @@ export default function LandingPage() {
           produces. It follows the problem for that reason: the numbers above are what give
           it a job — over 90% of the flow leaves no paper trail — and every band below it is
           either the assay and the rate card it is derived from, or why it can be trusted.
-          Proof needs a question before it means anything. */}
+          Proof needs a question before it means anything. Centred, and the only band with a
+          centred heading, because it is an object rather than a claim. */}
       <section id="artefact" className="scroll-mt-24 border-b border-rule">
         <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-20">
           <div className="mx-auto max-w-3xl">
@@ -365,10 +434,13 @@ export default function LandingPage() {
       </section>
 
       {/* ----------------------------------------------------- how it works */}
-      {/* The bench and the rule were two blocks making one point twice: what the three
+      {/* The bench and the rule were two bands making one point twice: what the three
           instruments measure, and the single constraint that makes the money they produce
-          checkable. One block, said once, with the rate card itself collapsed behind a
-          toggle — a dense table nobody reads twice is noise, not evidence. */}
+          checkable. One band, said once, and each instrument now shows its own readout
+          rather than describing it — a panel is what the reference page's three steps
+          taught, and a mass ledger and an arithmetic are things this product already
+          computes. The rate card stays collapsed behind a toggle: a dense table nobody
+          reads twice is noise, not evidence. */}
       <Band
         id="how"
         index="02"
@@ -376,25 +448,101 @@ export default function LandingPage() {
         title="One item, three instruments."
         lede={`Assay, rate, gate — the path one submission takes. Every figure belongs to ${item.id}, the same item the receipt above prices; none of it is an average.`}
       >
-        <ul data-motion="rows" className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
-          {bench.map((instrument) => (
-            <li key={instrument.name} className="border-t border-rule pt-5">
-              <p className="flex items-baseline gap-2.5 font-mono text-[11px] uppercase tracking-[0.2em] text-ink-muted">
-                <span className="text-copper">{instrument.index}</span>
-                {instrument.name}
-              </p>
-              <h3 className="mt-4 font-display text-2xl uppercase leading-tight tracking-tight sm:text-3xl">
-                {instrument.title}
-              </h3>
-              <p className="mt-3 text-[15px] leading-relaxed text-ink-soft">{instrument.body}</p>
-              <p className="mt-5 font-mono text-[14px] tabular-nums text-ink">
-                {instrument.figure}
-              </p>
-              <p className="mt-1 font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-ink-muted">
-                {instrument.note}
-              </p>
-            </li>
-          ))}
+        <ul data-motion="rows" className="grid gap-x-6 gap-y-10 sm:grid-cols-2 xl:grid-cols-3">
+          <Instrument
+            index="01"
+            name="Assay"
+            title="Assay by mass"
+            body="Six fractions, weighed line by line. The item's mass is the exact sum of its lines, so the total on the receipt can never drift from the parts above it."
+            figure={formatMass(item.massGrams)}
+            note={`${item.materials.length} fractions · ${item.hazards.length ? "hazard line present" : "no hazard line"}`}
+            footer="Line-by-line weights · nothing estimated"
+            artifact={
+              <ul className="flex flex-col">
+                {item.materials.map((line) => (
+                  <li
+                    key={line.id}
+                    className="flex items-baseline gap-2 border-b border-dotted border-rule py-1.5"
+                  >
+                    <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-ink-soft">
+                      {line.name}
+                    </span>
+                    <span className="shrink-0 font-mono text-[11px] tabular-nums text-ink">
+                      {formatMass(line.massGrams)}
+                    </span>
+                  </li>
+                ))}
+                {/* The whole point of the instrument, stated as the last line of its ledger. */}
+                <li className="flex items-baseline gap-2 pt-2.5">
+                  <span className="min-w-0 flex-1 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-ink-muted">
+                    Σ Item mass
+                  </span>
+                  <span className="shrink-0 font-mono text-[12px] font-bold tabular-nums text-ink">
+                    {formatMass(item.massGrams)}
+                  </span>
+                </li>
+              </ul>
+            }
+          />
+
+          <Instrument
+            index="02"
+            name="Rate"
+            title="Priced on the server"
+            body="The per-class handling tariff is subtracted here, on this side of the wire, where an auditor can re-run it line by line rather than trusting a figure a model produced."
+            figure={`${formatInr(valuation.grossValue)} − ${formatInr(valuation.handlingFee)}`}
+            note={`Net ${formatInr(valuation.netToCollector)} to the collector`}
+            footer="Server-side arithmetic · no model figure"
+            accent
+            artifact={
+              <FieldList columns={1} className="gap-y-0">
+                <Field
+                  label="Gross material value"
+                  value={formatInr(valuation.grossValue)}
+                  mono
+                />
+                <Field
+                  label="Handling & licensed line fee"
+                  value={`−${formatInr(valuation.handlingFee)}`}
+                  mono
+                />
+                <Field
+                  label="Net to collector"
+                  value={formatInr(valuation.netToCollector)}
+                  mono
+                  tone="copper"
+                  className="border-t-[3px] border-ink"
+                />
+              </FieldList>
+            }
+          />
+
+          <Instrument
+            index="03"
+            name="Gate"
+            title="Read before payout"
+            body="Valid or invalid on every upload, before a rupee is promised. A rejected submission names the rule it broke rather than guessing at what it might be."
+            figure={formatPct(gatekeeper.confidence)}
+            note={`${verdictLabel(gatekeeper.verdict)} · ${gatekeeper.matchedClass}`}
+            footer={`${gatekeeper.modelVersion} · ${gatekeeper.checkedAt}`}
+            artifact={
+              <div className="flex flex-col items-start gap-4">
+                <VerdictMark verdict={gatekeeper.verdict} />
+                <FieldList columns={1} className="w-full gap-y-0">
+                  <Field label="Matched class" value={gatekeeper.matchedClass} />
+                  <Field
+                    label="Confidence"
+                    value={formatPct(gatekeeper.confidence)}
+                    mono
+                  />
+                  <Field
+                    label="Rule fired"
+                    value={gatekeeper.ruleCode ?? "None — nothing triggered"}
+                  />
+                </FieldList>
+              </div>
+            }
+          />
         </ul>
 
         <div className="mt-14 grid gap-10 border-t border-rule pt-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-16">
@@ -554,20 +702,31 @@ export default function LandingPage() {
       </Band>
 
       {/* ------------------------------------------------------------ the stack */}
-      {/* An explicit judging criterion, so it is a block and not a footnote. Named services
-          only, and the one part of the pipeline that is not AWS is named too: a strip that
-          claimed a logo it does not use would undo the honesty clause below it. */}
+      {/* An explicit judging criterion, so it is a band and not a footnote. The heading is
+          full width and the services are a hairline grid, because a claim about seven
+          services is evidence only when you can count them. Named services only, and the one
+          part of the pipeline that is not AWS gets its own ruled row: a strip that claimed a
+          logo it does not use would undo the honesty clause below it. */}
       <section id="stack" className="scroll-mt-24 border-b border-rule">
-        <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 sm:py-16">
+        <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-20">
           <Eyebrow label="Built on AWS" />
-          <p className="mt-5 max-w-3xl text-base leading-relaxed text-ink-soft">
-            Seven services, each doing the one thing it is good at. The identification model is
-            Microsoft Foundry, which is not AWS — it reads the photograph and the Hindi audio
-            in a single call, and it is named here rather than folded into the badge.
+          <h2
+            data-motion="scan"
+            className="mt-5 max-w-3xl font-display text-[clamp(2rem,4.4vw,3.25rem)] uppercase leading-[0.95] tracking-tight"
+          >
+            Seven services, one route.
+          </h2>
+          <p className="mt-4 max-w-3xl text-base leading-relaxed text-ink-soft">
+            &ldquo;Runs on AWS&rdquo; is a claim; a list is the evidence. Each service below is
+            one the code actually calls, doing the one thing it is good at.
           </p>
-          <ul data-motion="rows" className="mt-10 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+
+          <ul
+            data-motion="rows"
+            className="mt-12 grid gap-x-8 gap-y-7 sm:grid-cols-2 lg:grid-cols-4"
+          >
             {awsStack.map((service) => (
-              <li key={service.name} className="border-t border-rule pt-4">
+              <li key={service.name} className="border-t-[3px] border-ink pt-4">
                 <h3 className="font-display text-lg uppercase leading-tight tracking-tight">
                   {service.name}
                 </h3>
@@ -575,10 +734,23 @@ export default function LandingPage() {
               </li>
             ))}
           </ul>
+
+          <p className="mt-10 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-dashed border-rule pt-4 font-mono text-[11px] uppercase leading-relaxed tracking-[0.14em] text-ink-muted">
+            <span className="text-copper">Not AWS</span>
+            <span className="text-ink">Microsoft Foundry</span>
+            <span className="normal-case tracking-normal">
+              reads the photograph and the Hindi audio in a single call, and is named here
+              rather than folded into the badge.
+            </span>
+          </p>
         </div>
       </section>
 
       {/* --------------------------------------------------------- honesty */}
+      {/* A boundary a reader has to click to find is not an honest boundary, so the first
+          row is open on load and every summary states its limit in full. The rule under
+          each row is the same hairline the stack is ruled with; the accordion is the only
+          interaction on the page. */}
       <Band
         id="honesty"
         index="04"
@@ -586,14 +758,34 @@ export default function LandingPage() {
         title="What we are not claiming."
         lede="A prototype that survives a demo is one that says where its edges are before someone finds them."
       >
-        <ul data-motion="rows" className="flex max-w-3xl flex-col gap-4">
-          {claims.map((claim) => (
-            <li key={claim} className="flex gap-3 text-[15px] leading-relaxed">
-              <span aria-hidden className="mt-2.5 size-2 shrink-0 bg-copper" />
-              <span className="text-ink-soft">{claim}</span>
+        <ul data-motion="rows" className="border-t border-rule">
+          {boundaries.map((boundary, index) => (
+            <li key={boundary.title} className="border-b border-rule">
+              <details className="group" open={index === 0}>
+                <summary className="flex cursor-pointer list-none items-baseline justify-between gap-6 py-5 [&::-webkit-details-marker]:hidden">
+                  <h3 className="font-display text-lg uppercase leading-tight tracking-tight sm:text-xl">
+                    {boundary.title}
+                  </h3>
+                  <span
+                    aria-hidden
+                    className="shrink-0 font-mono text-lg leading-none text-copper"
+                  >
+                    <span className="group-open:hidden">+</span>
+                    <span className="hidden group-open:inline">−</span>
+                  </span>
+                </summary>
+                <p className="max-w-2xl pb-6 text-[15px] leading-relaxed text-ink-soft">
+                  {boundary.body}
+                </p>
+              </details>
             </li>
           ))}
         </ul>
+
+        <p className="mt-8 max-w-2xl text-[13px] leading-relaxed text-ink-muted">
+          The gatekeeper exists for the first boundary. A prototype that pays out on any
+          photograph would be a demonstration of the problem, not of the fix.
+        </p>
       </Band>
 
       {/* ------------------------------------------------------------- cta */}

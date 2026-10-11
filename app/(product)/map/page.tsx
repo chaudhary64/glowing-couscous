@@ -59,9 +59,9 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
   const limits = [
     `Every point is a real intake: ${data.livePointCount} geotagged in the last ${data.rule.windowDays} days. Submissions the gatekeeper rejected are not counted — a photo of a bottle is not e-waste pressure.`,
     "Only intakes made with \"Use this device\u2019s location\" appear. An intake without a fix is still recorded and paid; it just adds no point here.",
-    "Points are snapped to a ~38 m cell before they leave the server. The map shows where pickups cluster, never the doorway a collector stood at.",
+    "Points are rounded to a ~38 m cell before display, so the map shows where pickups cluster, never the doorway a collector stood at.",
     "Pressure is relative: detections per km², scaled so the busiest district (or, inside Mumbai, ward) reads 100. It ranks areas against each other; it is not an absolute measure of dumping.",
-    "District outlines are the 2021 Local Government Directory set, simplified to about 1 km. A fix within 5 km of an outline (a shoreline, a border river) is filed to the nearest district; one further out, at sea or abroad, is recorded but not filed.",
+    "District outlines are the 2021 Local Government Directory set, simplified to about 1 km. A fix near an outline — a shoreline or a border river — is filed to the nearest district; one at sea or abroad is recorded but not filed.",
     "It reports where pickups happened, not where vans are now — nothing here is live vehicle tracking. The van round is a priority order, not a driving route.",
     "A site is a routing suggestion for a ward officer, never an accusation about a place or a person.",
   ];

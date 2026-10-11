@@ -65,7 +65,7 @@ export function EvidenceViewer({ assets }: { assets: EvidenceAsset[] }) {
             state: "refused",
             message:
               body?.message ??
-              `The read was refused with HTTP ${response.status}, and the response carried no explanation.`,
+              `Could not open this object: the request was refused with HTTP ${response.status}.`,
           },
         }));
         return;
@@ -81,7 +81,7 @@ export function EvidenceViewer({ assets }: { assets: EvidenceAsset[] }) {
         ...current,
         [key]: {
           state: "refused",
-          message: `The app could not be reached to sign a read: ${
+          message: `Could not open this object — the app could not be reached: ${
             error instanceof Error ? error.message : String(error)
           }`,
         },
@@ -156,10 +156,10 @@ export function EvidenceViewer({ assets }: { assets: EvidenceAsset[] }) {
                     onClick={() => void read(asset.storageKey)}
                   >
                     {reading?.state === "loading"
-                      ? "Signing…"
+                      ? "Opening…"
                       : reading?.state === "refused"
                         ? "Try again"
-                        : "Read"}
+                        : "Open"}
                   </Button>
                 )}
               </div>
@@ -209,15 +209,13 @@ export function EvidenceViewer({ assets }: { assets: EvidenceAsset[] }) {
                 )}
 
                 <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">
-                  Signed read · expires {formatTimestamp(reading.expiresAt)}
+                  Link expires {formatTimestamp(reading.expiresAt)}
                 </p>
 
                 {unserved[asset.storageKey] ? (
                   <p className="mt-2 text-[12px] leading-relaxed text-hazard-ink">
-                    The link was signed, but S3 would not serve the bytes behind it. That
-                    means the key has no object at it — a signature is proof of nothing on
-                    its own, because signing happens locally without asking S3 whether the
-                    object exists.
+                    The link was created, but no object was served behind it — the record
+                    points at something that is not in the archive.
                   </p>
                 ) : null}
               </div>

@@ -70,7 +70,7 @@ export default async function PickupsPage() {
   ).length;
 
   const notice = !board.configured
-    ? "The smart-pickup service is not configured, so no load can be read. Set PICKUP_LOCAL=true and run `npm run pickup:local`, or point PICKUP_API_URL at the deployed API."
+    ? "The pickup service is not connected, so no load can be read."
     : board.error
       ? `The load board could not be read: ${board.error}`
       : null;
@@ -134,7 +134,7 @@ export default async function PickupsPage() {
               label="Notes issued"
               value={String(loads.filter((load) => Boolean(load.creditNoteId)).length)}
               unit="notes"
-              note="One note per settled load, written in the same transaction as the settlement."
+              note="One note per settled load."
             />
             <Stat
               label="Settled to collectors"
@@ -232,8 +232,7 @@ export default async function PickupsPage() {
 
                   <p className="border-t border-rule px-3 py-3 text-[12px] leading-relaxed text-ink-muted">
                     A settled row means the note was issued against weight verified at the
-                    recycler gate. The board reads the same rows the service writes; nothing
-                    here is authored.
+                    recycler gate. Nothing on this board is authored.
                   </p>
                 </>
               )}
@@ -246,7 +245,7 @@ export default async function PickupsPage() {
                 <SectionHeader
                   eyebrow="Audit trail"
                   title={focus ? `${focus.pickupId}` : "No load to open"}
-                  note="Every step the service took, written in the same transaction as the state change it describes."
+                  note="Every step the service recorded, in order."
                 />
                 {focus ? (
                   <Badge tone={pickupTone(focus.status)}>{pickupLabel(focus.status)}</Badge>
@@ -314,9 +313,8 @@ export default async function PickupsPage() {
                   )}
 
                   <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-                    Routing settles the destination before an id is minted, so a load with no
-                    licensed line is refused rather than recorded. That is why the trail
-                    starts at “routed” and never at a failed attempt.
+                    A load with no licensed line is refused rather than recorded, which is
+                    why the trail starts at “routed” and never at a failed attempt.
                   </p>
                 </Panel>
               ) : (

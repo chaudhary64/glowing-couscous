@@ -85,7 +85,7 @@ export default async function EvidencePage({
       <ScreenHeader
         eyebrow="Operations · Evidence"
         title="Evidence archive"
-        lede="Every photo and voice note that passes through a valuation is written to object storage under a key derived from its own bytes, so the evidence outlives the request that priced it. A read is signed per request and expires within the hour."
+        lede="Every photo and voice note behind a valuation, kept here so a price can always be checked against the evidence it came from. Open any one to view or play it."
         actions={
           <ButtonLink href="/intake" variant="secondary">
             Submit something new
@@ -94,23 +94,23 @@ export default async function EvidencePage({
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={archive ? "verified" : "hazard"}>
-              {archive ? "Bucket configured" : "Archive off"}
+              {archive ? "Archive ready" : "Archive off"}
             </Badge>
             <Badge tone={listing.configured ? "neutral" : "hazard"}>
-              {listing.configured ? "Rows recorded" : "No database"}
+              {listing.configured ? "Records available" : "No database"}
             </Badge>
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
-              {joined} of {assets.length} joined to a submission
+              {joined} of {assets.length} linked to a submission
             </span>
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
-              {attributed} of {assets.length} attributed to a user row
+              {attributed} of {assets.length} with a named uploader
             </span>
           </div>
         }
       />
 
       <section>
-        <Panel eyebrow="Lookup" title="The object behind a valuation">
+        <Panel eyebrow="Lookup" title="Evidence behind a valuation">
           <form
             method="get"
             action="/evidence"
@@ -141,20 +141,17 @@ export default async function EvidencePage({
 
           <p className="mt-3 max-w-3xl text-[12px] leading-relaxed text-ink-muted">
             The id a priced result carries — the <span className="font-mono">LIVE-2026-…</span>{" "}
-            string the valuation screen shows. It is one indexed read on{" "}
-            <span className="font-mono">intakes_code_uq</span>, and it matches exactly: no
-            near-matches, because the failure this lookup must not have is handing an
-            operator the photograph behind somebody else&rsquo;s submission.
+            string the valuation screen shows. The match is exact, so an id only ever
+            returns its own submission.
           </p>
 
           {lookup ? (
             <div className="mt-4 border-t-[3px] border-ink pt-4">
               {!lookup.configured ? (
                 <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-                  This deployment has no <span className="font-mono">DATABASE_URL</span>, so
-                  no id can be resolved: the archive&rsquo;s rows were never recorded. The
-                  bytes are in the bucket under their content-addressed keys, and nothing
-                  here can walk from an id to one.
+                  This deployment has no records database, so no id can be resolved: the
+                  archive&rsquo;s rows were never recorded, and nothing here can walk from
+                  an id to an object.
                 </p>
               ) : lookup.error ? (
                 <p className="max-w-3xl text-sm leading-relaxed text-hazard-ink">
@@ -163,11 +160,8 @@ export default async function EvidencePage({
               ) : lookup.asset === null ? (
                 <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
                   Nothing in the archive holds <span className="font-mono">{code}</span>.
-                  Either that id was never priced here, or it was priced and the{" "}
-                  <span className="font-mono">intakes</span> row was not written — an id is
-                  findable only once the submission behind it is recorded. The third shape
-                  is an analysis that failed: the object is archived, nothing was priced,
-                  and no id was minted for it.
+                  Either that id was never priced here, or the submission behind it was not
+                  recorded — an id is findable only once its submission is on file.
                 </p>
               ) : (
                 <>
@@ -183,9 +177,8 @@ export default async function EvidencePage({
                     ) : null}
                   </div>
                   <p className="mt-2 max-w-3xl text-[12px] leading-relaxed text-ink-muted">
-                    The row this resolves through is a submission, not a valuation: the
-                    priced figures were computed for one request and are not stored, so
-                    this is the evidence the price came from rather than the price.
+                    This is the evidence the price came from, not the price itself: priced
+                    figures are computed for one request and are not stored.
                   </p>
                   <Surface className="mt-3">
                     <EvidenceViewer assets={[lookup.asset]} />
@@ -202,22 +195,22 @@ export default async function EvidencePage({
           label="Objects listed"
           value={listing.configured ? String(assets.length) : "—"}
           unit="most recent"
-          note={`Newest first, bounded at ${LIST_LIMIT} so a screen cannot ask for the whole table.`}
+          note={`Newest first, up to ${LIST_LIMIT}.`}
         />
         <Stat
           label="Photos"
           value={listing.configured ? String(photos) : "—"}
-          note="Stills, read back through a signed GetObject."
+          note="Photographs submitted for a valuation."
         />
         <Stat
           label="Voice notes"
           value={listing.configured ? String(voiceNotes) : "—"}
-          note="The Hindi clips the transcript was produced from, kept as recorded."
+          note="The Hindi clips the transcript was made from."
         />
         <Stat
           label="Listed bytes"
           value={listing.configured ? formatBytes(listedBytes) : "—"}
-          note="Sizes as stored. The exact byte count is what the key was derived from."
+          note="Combined size of the objects listed above."
         />
       </StatGrid>
 
@@ -225,19 +218,16 @@ export default async function EvidencePage({
         <SectionHeader
           eyebrow="Most recent"
           title="Archived submissions"
-          note="Read signs a fresh link for one object and nothing else. The bucket itself stays private, and no page or asset URL is public."
+          note="Each image or clip opens through a private link created on demand that expires shortly after; nothing here is publicly reachable."
         />
 
         <Surface className="mt-4">
           {!listing.configured ? (
             <div className="p-4">
               <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-                This deployment has no <span className="font-mono">DATABASE_URL</span>, so
-                the archive&rsquo;s rows were never recorded and there is nothing to list.
-                The objects themselves are in the bucket under their keys — the bytes were
-                written before the row was attempted — but finding one without its row
-                means recomputing a SHA-256 by hand, which is the whole reason the row
-                exists.
+                This deployment has no records database, so the archive&rsquo;s rows were
+                never recorded and there is nothing to list. The objects themselves were
+                written, but without a record there is no way to find one from here.
               </p>
             </div>
           ) : listing.error ? (
@@ -249,10 +239,8 @@ export default async function EvidencePage({
           ) : assets.length === 0 ? (
             <div className="p-4">
               <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-                Nothing has been archived yet. The first submission through{" "}
-                <span className="font-mono">/intake</span> writes an object, its row, and
-                the submission that joins it to what was priced, and all three appear here
-                as soon as that request answers.
+                Nothing has been archived yet. The first submission on the intake screen
+                appears here as soon as it is recorded.
               </p>
             </div>
           ) : (
@@ -260,10 +248,8 @@ export default async function EvidencePage({
           )}
 
           <p className="border-t border-rule px-4 py-3 text-[12px] leading-relaxed text-ink-muted">
-            A read is refused outright when the archive is switched off, when the session
-            does not open this screen, or when the request does not come from this app.
-            Those are the API&rsquo;s decisions, not this page&rsquo;s, and it shows the
-            refusal as given rather than paraphrasing it.
+            Opening an object takes an account allowed to see this screen. Anything else is
+            refused, and the refusal is shown as given rather than paraphrased.
           </p>
         </Surface>
       </section>
@@ -296,9 +282,7 @@ const LIST_LIMIT = 24;
  * whether it was known.
  */
 const LIMITS = [
-  "Only the primary asset is joined to a submission. `intakes.media_id` is unique, so a photograph submitted with a voice note beside it is one submission pointing at the photograph: the clip is archived and listed here with nothing to look it up by.",
-  "The trail stops at the submission id. The row behind it is an `intakes` row — `items` and `valuations` are still unwritten — so the id a valuation is known by is recorded and the priced figures themselves are not: they are computed per request and live only in that response.",
-  "Attribution is mostly empty, and that is the database telling the truth: no users row is created when someone signs in yet, so an uploader resolves only where a row already exists.",
-  "A signature is not an existence check. Signing happens locally without asking S3 anything, so a well-formed link whose object was never written answers 403 from the bucket rather than an error from the app.",
-  "No retention policy and no Object Lock. Expiring evidence on a schedule is a decision about legal exposure, and it is not one a default should make.",
+  "Only the primary asset is joined to a submission: a photograph sent alongside a voice note is one submission, and the clip is archived without a lookup of its own.",
+  "Priced figures are computed for a single request and are not stored, so this screen shows the evidence a price came from rather than the price itself.",
+  "No retention policy: evidence is kept until it is removed deliberately.",
 ];

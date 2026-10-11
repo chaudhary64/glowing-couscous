@@ -59,7 +59,7 @@ export default async function RecyclersPage() {
   );
 
   const notice = !directory.configured
-    ? "The smart-pickup service is not configured, so the directory cannot be read. Set PICKUP_LOCAL=true and run `npm run pickup:local`, or point PICKUP_API_URL at the deployed API. The table below is therefore absent rather than empty — an unread registry and an empty one look the same on a screen, and they are not the same fact."
+    ? "The pickup service is not connected, so the directory cannot be read. The table below is therefore absent rather than empty — an unread registry and an empty one look the same on a screen, and they are not the same fact."
     : directory.error
       ? `The directory could not be read: ${directory.error}`
       : null;

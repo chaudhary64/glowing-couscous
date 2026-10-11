@@ -142,7 +142,7 @@ const COPY: Record<LiveMode, { caption: string; action: string; body: string }> 
   intake: {
     caption: "Live intake",
     action: "Read this intake",
-    body: "A photo, a voice note in Hindi, or both. The voice note is transcribed first (Hindi, Azure Speech), then the photograph and the transcript are read together — the extracted fields and the price come back with it.",
+    body: "A photo, a voice note in Hindi, or both. The voice note is transcribed first, then the photograph and the transcript are read together — the extracted fields and the price come back with it.",
   },
   gatekeeper: {
     caption: "Live gatekeeper",
