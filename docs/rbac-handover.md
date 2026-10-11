@@ -5,28 +5,54 @@ reasoning, the target matrix, the deploy strategy and the step numbers this docu
 referring to. This file is the split — what is already finished, what each of the three people
 owns, and the traps that are already known so nobody has to find them twice.
 
-Everything here is written against the contract frozen on branch `rbac-contract-v1`
-(commit `6ff9af2`, tag `rbac-contract-v1`). Phase A — steps 1–9 of the runbook — is done.
+Everything here is written against the contract frozen on `rbac-contract-v1` — commit
+`6ff9af2`, pushed to `origin` with the tag of the same name. Phase A — steps 1–9 of the runbook —
+is done, and this document has been sent to everyone who owns a track.
 
 ---
 
 ## 0. Start here
 
+The branch is on the remote — `origin` is `git@github.com:chaudhary64/glowing-couscous.git`.
+Fetch it and cut your track from it:
+
 ```bash
 git fetch origin
-git switch -c rbac/track-a rbac-contract-v1     # or track-b / track-c
+git switch -c rbac/track-a origin/rbac-contract-v1     # or track-b / track-c
 ```
 
-If the branch is not on the remote yet, whoever owns delivery pushes it once:
+Two commands tell you whether you have the right revision. `git status -sb` should say your branch
+is up to date with `origin/rbac-contract-v1`, and `git log --oneline -5` should contain
+`6ff9af2 Make authority a role set, and give the Collector a seat of its own` — the contract
+commit. If it does not, run `git fetch --prune origin` before you start: you are on an older
+revision of the contract, and the whole point of Phase A was to freeze one.
 
-```bash
-git push -u origin rbac-contract-v1
-git push origin rbac-contract-v1                # the tag
-```
+**Branch from the branch, not the tag.** `rbac-contract-v1` is both, and they no longer mean the
+same thing:
 
-`main` has **not** been merged into and is untouched. The runbook's step 8 says "merge to main
-and tag"; that was deliberately split so the three tracks can start in parallel without waiting
-for a merge review. Nothing is deployed from this branch yet.
+| Ref | Points at | What it is |
+| --- | --- | --- |
+| `origin/rbac-contract-v1` | the branch head | the contract **plus** later revisions of this document — **take this one** |
+| tag `rbac-contract-v1` | `bd97acb` | the published freeze of the contract code and the first version of this document; left where it was rather than force-moved, so it is immutable |
+
+The **contract code is identical** in both. `lib/auth/roles.ts`, `lib/auth/scope.ts`,
+`aws/pickup/security.mjs`, `db/schema/enums.ts` and `tests/e2e/accounts.ts` have not changed since
+`6ff9af2`, and `git diff 6ff9af2 origin/rbac-contract-v1` shows this document and nothing else.
+Only the wording of this file has moved on.
+
+### How the three tracks land
+
+Each of you works on your own branch and opens a pull request **against `rbac-contract-v1`**, not
+against `main`. The three merge into the contract in the order A → B → C (step 24), re-running
+`npx tsc --noEmit && npm run lint` after each one, and the merged result goes to `main` only
+afterwards. If your branch lives for more than a day, `git fetch origin && git rebase
+origin/rbac-contract-v1` rather than merging back — the contract files are the ones that will
+conflict, and a rebase shows you which of them you touched that you should not have.
+
+`main` has **not** been merged into and is untouched. The runbook's step 8 says "merge to main and
+tag"; that was deliberately split so the three tracks can start in parallel without waiting for a
+merge review. Nothing is deployed from this branch yet: the Lambda carries the role sets, and the
+app the world can reach still runs `main`.
 
 ### The one rule that keeps the merge clean
 
