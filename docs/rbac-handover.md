@@ -22,10 +22,17 @@ git switch -c rbac/track-a origin/rbac-contract-v1     # or track-b / track-c
 ```
 
 Two commands tell you whether you have the right revision. `git status -sb` should say your branch
-is up to date with `origin/rbac-contract-v1`, and `git log --oneline -5` should contain
-`6ff9af2 Make authority a role set, and give the Collector a seat of its own` — the contract
-commit. If it does not, run `git fetch --prune origin` before you start: you are on an older
-revision of the contract, and the whole point of Phase A was to freeze one.
+is up to date with `origin/rbac-contract-v1`, and the contract commit should be in your history:
+
+```bash
+git log --oneline --grep "Make authority a role set"
+# 6ff9af2 Make authority a role set, and give the Collector a seat of its own
+```
+
+No `-5` window on that on purpose — this document gains commits of its own, and a fixed window
+would eventually report a false negative and send you chasing a problem you do not have. If
+either command comes up empty, run `git fetch --prune origin` before you start: you are on an
+older revision of the contract, and the whole point of Phase A was to freeze one.
 
 **Branch from the branch, not the tag.** `rbac-contract-v1` is both, and they no longer mean the
 same thing:
