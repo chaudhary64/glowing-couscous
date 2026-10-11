@@ -7,7 +7,7 @@ owns, and the traps that are already known so nobody has to find them twice.
 
 Everything here is written against the contract frozen on `rbac-contract-v1` — commit
 `6ff9af2`, pushed to `origin` with the tag of the same name. Phase A — steps 1–9 of the runbook —
-is done, and this document has been sent to everyone who owns a track.
+is done, so each of the three tracks below can start from it without waiting on anything else.
 
 ---
 
