@@ -6,26 +6,22 @@
  * access layer (which decides for real), and by the UI (which explains a refusal).
  * One table, three readers, no chance of them disagreeing.
  *
- * The five values are the Cognito groups created in the pool, in the same order as
- * the `membership_role` enum in db/schema/identity.ts. Rank is authority: 1 is the
- * most powerful, so "at least an operator" is `rank <= 4`.
+ * The four values are Cognito groups in the pool. Rank is authority: lower is more
+ * powerful, so "at least an operator" is `rank <= 4`. Admin is rank 2, not 1, because
+ * rank 1 was Owner, which opened nothing Admin did not; keeping the numbers means the
+ * pickup Lambda (aws/pickup/security.mjs) and every saved rank still agree.
  */
 
 export const ROLES = {
-  "eco-owner": {
-    label: "Owner",
-    rank: 1,
-    summary: "Everything, including members and billing.",
-  },
   "eco-admin": {
     label: "Admin",
     rank: 2,
-    summary: "Organization settings, members, facilities and rate cards.",
+    summary: "The team and who holds which role, the rate card in force, plus everything an officer can.",
   },
   "eco-officer": {
     label: "Officer",
     rank: 3,
-    summary: "Validation decisions, EPR filings, credit approvals.",
+    summary: "Valuations, validation decisions and recyclers, plus everything an operator can.",
   },
   "eco-operator": {
     label: "Operator",
@@ -41,10 +37,20 @@ export const ROLES = {
 
 export type Role = keyof typeof ROLES;
 
+/**
+ * Groups that no longer have a role of their own, and the role they now read as.
+ * `eco-owner` was folded into Admin: its members keep working without anyone editing
+ * the pool, and a new account belongs in `eco-admin`.
+ */
+const LEGACY_GROUPS: Readonly<Record<string, Role>> = {
+  "eco-owner": "eco-admin",
+};
+
 /** Ranks used by the matrix below, named so the intent survives a re-read. */
 export const RANK_ANY_ROLE = 5;
 export const RANK_OPERATOR = 4;
 export const RANK_OFFICER = 3;
+export const RANK_ADMIN = 2;
 
 export const roleLabel = (role: Role | null): string =>
   role ? ROLES[role].label : "No role assigned";
@@ -58,12 +64,17 @@ const isRole = (value: string): value is Role =>
  * The highest-authority role a user holds, or null when they hold none.
  *
  * A user can be in several groups. The strongest wins, which is the only choice that
- * does not silently downgrade an owner who was also added as a viewer for a demo.
+ * does not silently downgrade an admin who was also added as a viewer for a demo.
  */
 export function roleFromGroups(groups: readonly string[] | undefined): Role | null {
   let best: Role | null = null;
-  for (const group of groups ?? []) {
-    if (!isRole(group)) continue;
+  for (const name of groups ?? []) {
+    const group = isRole(name)
+      ? name
+      : Object.prototype.hasOwnProperty.call(LEGACY_GROUPS, name)
+        ? LEGACY_GROUPS[name]
+        : null;
+    if (!group) continue;
     if (best === null || ROLES[group].rank < ROLES[best].rank) best = group;
   }
   return best;
@@ -162,6 +173,15 @@ export const GUARDS: readonly Guard[] = [
     minRank: RANK_OFFICER,
     requirement: "officer or above",
     paths: ["/recyclers"],
+  },
+  {
+    // Who has an account, and the prices in force: the two things an admin answers
+    // for. Both are read-only here — roles are Cognito groups and the card ships in
+    // code — so a viewer-level screen would leak the team list for no gain.
+    id: "administration",
+    minRank: RANK_ADMIN,
+    requirement: "admin or above",
+    paths: ["/team", "/rates"],
   },
 ];
 

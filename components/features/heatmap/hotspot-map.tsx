@@ -1,9 +1,13 @@
 "use client";
 
-import "maplibre-gl/dist/maplibre-gl.css";
 
 import { useEffect, useRef, useState } from "react";
-import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
+import type {
+  GeoJSONSource,
+  LayerSpecification,
+  Map as MapLibreMap,
+  MapLayerMouseEvent,
+} from "maplibre-gl";
 
 import { WARD_SOURCE, WARDS } from "@/lib/geo/wards";
 import { HOTSPOT_RULE } from "@/lib/heatmap/cluster";
@@ -34,6 +38,29 @@ import type { HeatmapCluster, HeatmapPoint, HeatmapWard } from "@/lib/heatmap/st
 
 const STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
 const MAPLIBRE_VERSION = "6.11.2";
+
+/**
+ * OpenFreeMap's road-shield layers compare `ref_length` to a number, and most roads carry
+ * no `ref_length`, so MapLibre logged "Expected value to be of type number, but found
+ * null" three times per load before treating the comparison as false. A missing value is
+ * read as 99 instead, which fails the same `<= 6` test: the map draws exactly as before
+ * and the console stays quiet.
+ */
+function quietShields(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  if (value.length === 2 && value[0] === "get" && value[1] === "ref_length") {
+    return ["coalesce", value, 99];
+  }
+  return value.map(quietShields);
+}
+
+function withQuietShields(layers: LayerSpecification[]): LayerSpecification[] {
+  return layers.map((layer) =>
+    "filter" in layer && layer.filter
+      ? ({ ...layer, filter: quietShields(layer.filter) } as LayerSpecification)
+      : layer,
+  );
+}
 
 /**
  * The design tokens, as MapLibre needs them: canvas paint cannot read CSS variables, so
@@ -189,7 +216,6 @@ export function HotspotMap({
 
         map = new maplibre.Map({
           container: container.current,
-          style: STYLE_URL,
           // The opening view only; later changes reframe (below) without rebuilding.
           bounds: toBounds(openingFrame.current),
           fitBoundsOptions: { padding: 32, maxZoom: 13 },
@@ -198,6 +224,11 @@ export function HotspotMap({
           pitchWithRotate: false,
           maxZoom: 17,
           minZoom: 3.5,
+        });
+        // The style is set here rather than in the options, because only `setStyle` can
+        // amend it (see `quietShields`) before MapLibre validates and draws it.
+        map.setStyle(STYLE_URL, {
+          transformStyle: (_previous, next) => ({ ...next, layers: withQuietShields(next.layers) }),
         });
         map.touchZoomRotate.disableRotation();
         map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
@@ -552,6 +583,13 @@ export function HotspotMap({
 
   return (
     <div className="relative aspect-[4/3] w-full border border-ink bg-paper-raised">
+      {/* MapLibre's stylesheet, loaded only where a map renders: imported at module level
+          it was preloaded on every page and reported as unused on all but this one. */}
+      <link
+        rel="stylesheet"
+        href={`/vendor/maplibre-gl-${MAPLIBRE_VERSION}/maplibre-gl.css`}
+        precedence="default"
+      />
       {/* Inline, not a class: MapLibre's stylesheet sets `.maplibregl-map { position:
           relative }` on this element, which would beat `absolute inset-0` and collapse
           the map to zero height. */}

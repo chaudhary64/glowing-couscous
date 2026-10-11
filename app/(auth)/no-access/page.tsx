@@ -74,8 +74,8 @@ export default async function NoAccessPage({
             ? "This account has no role yet"
             : `This screen needs ${need ?? "more authority"}`,
           detail: hasNoRole
-            ? "The account exists and the password is correct, but no role was granted after sign-up. An owner or admin adds one in the Cognito console; until then the app has nothing to open."
-            : `Your role opens the screens beneath it. Ask an owner or an admin to widen this one if the request is legitimate.`,
+            ? "The account exists and the password is correct, but no role was granted after sign-up. An admin adds one on the Team screen or in the Cognito console; until then the app has nothing to open."
+            : `Your role opens the screens beneath it. Ask an admin to widen this one if the request is legitimate.`,
         }}
       />
 

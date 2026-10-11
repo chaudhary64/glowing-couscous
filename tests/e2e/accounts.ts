@@ -1,18 +1,20 @@
 /**
- * The five Cognito demo accounts, one per role, and what each role may open.
+ * The four Cognito demo accounts, one per role, and what each role may open.
  * The password is read from E2E_PASSWORD (in .env.local), never committed.
  */
-export type RoleName = "owner" | "admin" | "officer" | "operator" | "viewer";
+export type RoleName = "admin" | "officer" | "operator" | "viewer";
 
 export const ACCOUNTS: Record<RoleName, string> = {
-  owner: "demo.owner@example.com",
   admin: "demo.admin@example.com",
   officer: "demo.officer@example.com",
   operator: "demo.operator@example.com",
   viewer: "demo.viewer@example.com",
 };
 
-export const ROLE_RANK: Record<RoleName, number> = { owner: 1, admin: 2, officer: 3, operator: 4, viewer: 5 };
+export const ROLE_RANK: Record<RoleName, number> = { admin: 2, officer: 3, operator: 4, viewer: 5 };
+
+/** Still in the pool's old `eco-owner` group, which the app now reads as Admin. */
+export const LEGACY_OWNER = "demo.owner@example.com";
 
 /** Every guarded screen, its minimum rank (lib/auth/roles.ts) and its nav label. */
 export const SCREENS = [
@@ -28,6 +30,8 @@ export const SCREENS = [
   { path: "/valuation", minRank: 3, nav: "Valuations", title: "Valuations" },
   { path: "/validation", minRank: 3, nav: "Validation queue", title: "Validation queue" },
   { path: "/recyclers", minRank: 3, nav: "Recyclers", title: "Recyclers" },
+  { path: "/team", minRank: 2, nav: "Team", title: "Team" },
+  { path: "/rates", minRank: 2, nav: "Rate card", title: "Rate card" },
 ] as const;
 
 export const stateFile = (role: RoleName) => `tests/e2e/.auth/${role}.json`;

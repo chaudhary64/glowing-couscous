@@ -127,7 +127,7 @@ export default async function EvidencePage({
                 id="code"
                 name="code"
                 defaultValue={code}
-                placeholder="LIVE-2026-0431"
+                placeholder="LIVE-2026-04318826"
                 autoComplete="off"
                 spellCheck={false}
                 maxLength={120}

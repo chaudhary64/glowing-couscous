@@ -56,8 +56,9 @@ export default defineConfig({
         },
         {
           // A production build, so the tests exercise what Amplify serves rather than
-          // the dev server's on-demand compilation.
-          command: `npx next build && npx next start -p ${PORT}`,
+          // the dev server's on-demand compilation. `npm run build`, not `next build`,
+          // so the `prebuild` hook vendors the map's worker and stylesheet first.
+          command: `npm run build && npx next start -p ${PORT}`,
           url: BASE_URL,
           reuseExistingServer: true,
           timeout: 300_000,

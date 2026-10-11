@@ -18,6 +18,7 @@ export function VanRound({
   wards,
   actions,
   note,
+  canOpenBoard = true,
 }: {
   hotspots: HotspotCluster[];
   wards: Ward[];
@@ -25,6 +26,8 @@ export function VanRound({
   actions?: (spot: HotspotCluster) => ReactNode;
   /** Replaces the closing note, which otherwise describes the fixture route. */
   note?: ReactNode;
+  /** Whether this role may open the pickup board; a viewer may not, so it is not linked. */
+  canOpenBoard?: boolean;
 }) {
   const route = [...hotspots]
     .filter((spot) => spot.status !== "cleared")
@@ -38,12 +41,14 @@ export function VanRound({
       eyebrow="Routing"
       title="Next van round"
       actions={
-        <Link
-          href="/pickups"
-          className="font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-        >
-          Open the pickup board →
-        </Link>
+        canOpenBoard ? (
+          <Link
+            href="/pickups"
+            className="font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
+          >
+            Open the pickup board →
+          </Link>
+        ) : undefined
       }
       bodyClassName="p-0"
     >
@@ -89,7 +94,7 @@ export function VanRound({
 
               {actions ? (
                 <div className="mt-2.5">{actions(spot)}</div>
-              ) : (
+              ) : !canOpenBoard ? null : (
                 <Link
                   href="/pickups"
                   className="mt-2.5 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"

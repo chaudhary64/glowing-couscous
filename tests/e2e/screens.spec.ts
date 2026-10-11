@@ -3,13 +3,13 @@ import { expect, test, type Page } from "@playwright/test";
 import { SCREENS, stateFile } from "./accounts";
 
 /**
- * Every product screen renders for the owner without a server error or a browser
+ * Every product screen renders for the admin without a server error or a browser
  * console error. The data on the read-only screens (dashboard, map, collectors,
  * recyclers, pickups) is fixture and database data; these checks prove the page
  * assembles, not what the numbers are.
  */
 
-test.use({ storageState: stateFile("owner") });
+test.use({ storageState: stateFile("admin") });
 
 function watchErrors(page: Page): string[] {
   const errors: string[] = [];

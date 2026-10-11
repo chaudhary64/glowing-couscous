@@ -12,7 +12,8 @@ export function Table({
   caption?: string;
 }) {
   return (
-    <div className="w-full overflow-x-auto">
+    // Focusable and named, so a keyboard user can scroll a table wider than the screen.
+    <div className="w-full overflow-x-auto" tabIndex={0} role="region" aria-label={caption ?? "Table"}>
       <table className={cn("w-full border-collapse text-left", className)}>
         {caption ? (
           <caption className="pb-2 text-left font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">

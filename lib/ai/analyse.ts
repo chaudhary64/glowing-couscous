@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import {
   ITEM_CLASSES,
   RATE_BASIS,
@@ -9,7 +11,7 @@ import {
   itemMass,
   material,
   priceMaterials,
-  stableSerial,
+  readableClass,
   type ItemClassCode,
 } from "@/lib/data/rate-card";
 import { formatInr, formatMass } from "@/lib/format";
@@ -130,6 +132,7 @@ export function priceProposal(
   proposal: ProposalItem | ProposalIntake,
   source: AiSource,
   warnings: string[],
+  evidence: string | null = null,
 ): AiAnalysis {
   const code = proposal.itemClass;
   const entry = ITEM_CLASSES[code];
@@ -161,7 +164,12 @@ export function priceProposal(
     );
   }
 
-  const serialSeed = [
+  // The id is seeded by the evidence when there is any (see `evidenceDigest`), so one
+  // upload keeps one id however the model words it, and two items described alike
+  // ("Laptop motherboard, 450 g") never share one. Seeded by the description alone, every
+  // later item described like an earlier one collided on `intakes_code_uq` and was
+  // never recorded. Without media nothing is recorded, and the words are all there is.
+  const serialSeed = evidence ?? [
     proposal.itemLabel,
     proposal.brand,
     massGrams,
@@ -214,12 +222,12 @@ export function priceProposal(
     // Carried separately from the model id: the rule is a policy decision, not a
     // model fact, and the screen labels it as such.
     ruleCode: ruleCode === "none" ? undefined : ruleCode,
-    matchedClass: proposal.gatekeeper.matchedClass || entry.cpcb,
+    matchedClass: readableClass(proposal.gatekeeper.matchedClass || entry.cpcb),
     reason: proposal.gatekeeper.reason || proposal.notes,
     signals,
   };
 
-  const id = `LIVE-2026-${stableSerial(serialSeed)}`;
+  const id = `LIVE-2026-${submissionSerial(serialSeed)}`;
   const summary: ResolvedItemSummary = {
     id,
     label: proposal.itemLabel,
@@ -287,6 +295,24 @@ export function priceProposal(
   };
 }
 
+/**
+ * The SHA-256 of a request's primary evidence — the photograph when there is one,
+ * otherwise the clip, the same choice `lib/s3/intakes.ts` makes for the submission row
+ * (`intakes_media_uq`) — or null when nothing was attached.
+ */
+function evidenceDigest(media: AiMediaPart[]): string | null {
+  const primary = media.find((part) => part.mimeType.startsWith("image/")) ?? media[0];
+  if (!primary) return null;
+  const bytes = Buffer.from(primary.dataBase64.replace(/\s+/g, ""), "base64");
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+/** Eight digits: wide enough that unrelated submissions do not meet in the same id. */
+function submissionSerial(seed: string): string {
+  const digest = createHash("sha256").update(seed).digest();
+  return String(digest.readUIntBE(0, 6) % 100_000_000).padStart(8, "0");
+}
+
 /** Identify, assay and gate one submission. Throws on unpriceable output. */
 export async function analyseItem(input: AnalyseItemInput): Promise<AiAnalysis> {
   const started = Date.now();
@@ -324,6 +350,7 @@ export async function analyseItem(input: AnalyseItemInput): Promise<AiAnalysis> 
       inputs: describeInputs(media, input.note),
     },
     warnings,
+    evidenceDigest(media),
   );
 }
 
@@ -416,7 +443,7 @@ export async function analyseIntake(
     inputs: describeInputs(media, input.note),
   };
 
-  const analysis = priceProposal(parsed.value, source, warnings);
+  const analysis = priceProposal(parsed.value, source, warnings, evidenceDigest(media));
 
   return {
     fields: parsed.value.fields,

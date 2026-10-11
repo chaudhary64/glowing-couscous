@@ -176,7 +176,7 @@ export async function authorizeUser(
       denied: failure(
         "forbidden",
         verdict.reason === "no-role"
-          ? `This account has no role yet, so it cannot ${action.refuse}. An owner or admin grants one in the Cognito console.`
+          ? `This account has no role yet, so it cannot ${action.refuse}. An admin grants one on the Team screen or in the Cognito console.`
           : `${action.subject} is limited to ${verdict.guard.requirement}; this account is ${roleLabel(user.role)}.`,
         403,
       ),

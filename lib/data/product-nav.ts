@@ -39,4 +39,11 @@ export const productNav: ProductNavGroup[] = [
       { label: "Recyclers", href: "/recyclers", hint: "CPCB-registered destinations" },
     ],
   },
+  {
+    label: "Administration",
+    items: [
+      { label: "Team", href: "/team", hint: "Everyone with an account, and when they were last seen" },
+      { label: "Rate card", href: "/rates", hint: "The material prices every valuation uses" },
+    ],
+  },
 ];

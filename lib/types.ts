@@ -34,7 +34,9 @@ export type ProductHref =
   | "/map"
   | "/collectors"
   | "/recyclers"
-  | "/evidence";
+  | "/evidence"
+  | "/team"
+  | "/rates";
 
 /**
  * The sign-in flow. Public: these are the pages a landing CTA is allowed to send a
