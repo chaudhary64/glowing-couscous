@@ -12,6 +12,7 @@
     "db:check": "drizzle-kit check",
     "db:studio": "drizzle-kit studio",
     "s3:check": "node --import ./scripts/ts-paths.mjs --env-file=.env.local scripts/s3-check.mts",
+    "rates:seed": "node --import ./scripts/ts-paths.mjs --env-file=.env.local scripts/rates-seed.mts",
     "predev": "node scripts/vendor-maplibre.mjs",
     "prebuild": "node scripts/vendor-maplibre.mjs",
     "test:heatmap": "node --import ./scripts/ts-paths.mjs --test lib/heatmap/heatmap.test.mts",

@@ -3,8 +3,8 @@ import { Surface } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { requireAccess } from "@/lib/auth/dal";
-import { ITEM_CLASSES, RATE_BASIS, RATE_CARD, RATE_VALID_UNTIL } from "@/lib/data/rate-card";
 import { formatInr, formatRate } from "@/lib/format";
+import { loadRateCard } from "@/lib/rates/card";
 import { materialLabel, materialTone } from "@/lib/tone";
 import type { MaterialCategory } from "@/lib/types";
 
@@ -15,33 +15,42 @@ const GRADE_ORDER: MaterialCategory[] = ["precious", "base", "hazardous", "inert
 /**
  * The rate card in force, for the roles that answer for prices.
  *
- * Read-only, because the card is code: `lib/data/rate-card.ts` is what the server prices
- * every valuation from, so a change to a rate is a reviewed commit rather than an edit in
- * a form. Showing it here means an admin can answer "why was this item worth ₹86" without
- * opening the repository, from the same table the pricing code reads.
+ * Read-only, and read from the database: `rate_cards`, `rate_card_lines` and
+ * `rate_card_classes` hold the same rows the pricing path prices every valuation from,
+ * written by `npm run rates:seed`. So an admin can answer "why was this item worth ₹86"
+ * without opening the repository, from the table the pricing code actually used — and the
+ * page and the price cannot disagree, because they are the same rows. With no card seeded
+ * the page falls back to the card shipped in code and says which one it is showing.
  */
 export default async function RatesPage() {
   await requireAccess("/rates");
 
-  const materials = Object.values(RATE_CARD).sort(
+  const card = await loadRateCard();
+  const materials = Object.values(card.materials).sort(
     (a, b) =>
       GRADE_ORDER.indexOf(a.category) - GRADE_ORDER.indexOf(b.category) ||
       b.ratePerKg - a.ratePerKg,
   );
-  const classes = Object.values(ITEM_CLASSES);
+  const classes = Object.values(card.classes);
 
   return (
     <div className="flex flex-col gap-10">
       <ScreenHeader
         eyebrow="Administration"
         title="Rate card"
-        lede="The prices every valuation is computed from, on the server. The card ships with the code, so changing a rate is a reviewed change to the repository, not an edit here."
+        lede="The prices every valuation is computed from. The card is stored, so changing a rate is a governed write rather than a deploy — and this screen shows the same rows the pricing code reads."
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <Badge tone="neutral">{RATE_BASIS}</Badge>
+            <Badge tone={card.source === "database" ? "verified" : "neutral"}>
+              {card.source === "database" ? "Read from the database" : "Card shipped in code"}
+            </Badge>
+            <Badge tone="neutral">{card.basis}</Badge>
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
-              Valid until {RATE_VALID_UNTIL}
+              Valid until {card.validUntil}
             </span>
+            {card.error ? (
+              <span className="text-[12px] leading-snug text-hazard-ink">{card.error}</span>
+            ) : null}
           </div>
         }
       />

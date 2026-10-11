@@ -228,8 +228,8 @@ export default async function CollectorsPage() {
 
                   <p className="border-t border-rule px-3 py-3 text-[12px] leading-relaxed text-ink-muted">
                     A settled row means the credit note was issued against weight verified at
-                    the recycler gate. Nothing on this page is authored — there is no sample
-                    roster behind it.
+                    the recycler gate. Nothing on this page is authored — every figure is
+                    summed from the loads the service holds.
                   </p>
                 </>
               )}

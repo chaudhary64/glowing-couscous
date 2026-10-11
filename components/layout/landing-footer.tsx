@@ -136,8 +136,8 @@ export function LandingFooter({ user }: { user: AuthUser | null }) {
             <p className="mt-4 max-w-md text-[13px] leading-relaxed text-paper/60">
               EcoEPR routes hazardous e-waste to CPCB-registered recyclers; it does not
               process waste itself. This prototype runs a real multimodal model and a real
-              Cognito pool, and every figure on the working screens is read from the rows the
-              pipeline wrote unless the panel says it is sample data.
+              Cognito pool, and every figure on the working screens is read from a row the
+              pipeline wrote — anything authored says so on its own panel.
             </p>
             {/* The sign-off: an outline that fills with copper as it scrolls into view. */}
             <p

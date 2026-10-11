@@ -2,7 +2,7 @@ import { desc, eq, inArray } from "drizzle-orm";
 
 import { database, databaseConfigured } from "@/db/client";
 import { intakes, mediaAssets, users } from "@/db/schema";
-import type { EvidenceAsset } from "@/lib/types";
+import type { EvidenceAsset, VoiceNote } from "@/lib/types";
 
 import {
   archiveMediaParts,
@@ -188,6 +188,52 @@ export async function recordArchivedObjects(
       .trim();
     console.error("[db] recording the archived media failed", message);
     return { configured: true, records: [], error: message.slice(0, 200) };
+  }
+}
+
+/**
+ * Write the recogniser's transcript back onto the voice asset it belongs to.
+ *
+ * The archive runs *beside* the model call, so when the row is written the transcript
+ * does not exist yet — it is a product of the analysis, not of the bytes. `media_assets`
+ * has carried `language`, `duration_seconds`, `transcript`, `translation` and `word_count`
+ * columns since the schema was written and nothing filled them, which is why a screen
+ * reading a stored voice submission back could not show what the collector said. This is
+ * the one write that closes it.
+ *
+ * Keyed by the content-addressed storage key, so it targets the object the row already
+ * describes and can never attach a transcript to a different clip. Like every write on
+ * this path it reports and never throws: a stored transcript is worth having, and not
+ * worth failing a price the operator has already paid for.
+ */
+export async function recordTranscript(
+  storageKey: string,
+  note: VoiceNote,
+): Promise<{ configured: boolean; error: string | null }> {
+  if (!databaseConfigured()) return { configured: false, error: null };
+  const connection = database();
+  if (!connection) return { configured: false, error: null };
+
+  try {
+    await connection.db
+      .update(mediaAssets)
+      .set({
+        language: note.language,
+        durationSeconds: note.durationSeconds,
+        transcript: note.transcript,
+        translation: note.translation,
+        wordCount: note.words,
+      })
+      .where(eq(mediaAssets.storageKey, storageKey));
+    return { configured: true, error: null };
+  } catch (error) {
+    const cause =
+      error instanceof Error && error.cause instanceof Error ? error.cause.message : null;
+    const message = (cause ?? (error instanceof Error ? error.message : String(error)))
+      .replace(/\s+/g, " ")
+      .trim();
+    console.error("[db] recording the transcript failed", message);
+    return { configured: true, error: message.slice(0, 200) };
   }
 }
 

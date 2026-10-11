@@ -8,48 +8,26 @@ import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
-import { intakeSamples } from "@/lib/data/intake";
-import { getItem } from "@/lib/data/inventory";
 import { formatConfidence, formatInr, formatMass, formatPct, formatTimestamp } from "@/lib/format";
 import { listRecentIntakes, storedCounts } from "@/lib/records/queues";
 import { conditionTone, verdictLabel, verdictTone } from "@/lib/tone";
-import type { IntakeSample, ResolvedItemSummary } from "@/lib/types";
 
 export const instant = false;
 
 /**
- * Built on the server so the sample console never reaches into the inventory fixture.
+ * The intake screen, counted and read rather than authored.
  *
- * This is the only fixture-shaped thing left on the screen: the console walks four fixed
- * submissions on purpose, because those four walk four different verdict paths — credited,
- * hazard-routed, held, refused — and no live stream is guaranteed to contain all four.
- * Everything above and below it is a query.
+ * Every panel here is a row: the tallies from `storedCounts`, the capture console from
+ * `listRecentIntakes`, and the record table below from the same read. There is no fixture
+ * left on the screen — the console shows the submissions this database actually holds,
+ * so a live capture appears in it as soon as it is priced and written.
  */
-function resolvedEntry(sample: IntakeSample): [string, ResolvedItemSummary] {
-  const item = getItem(sample.resolvedItemId);
-  return [
-    sample.id,
-    {
-      id: item.id,
-      label: item.label,
-      category: item.category,
-      brand: item.brand,
-      condition: item.condition,
-      massGrams: item.massGrams,
-      netToCollector: item.valuation.netToCollector,
-      creditNote: item.valuation.eprCreditNote,
-      verdict: item.gatekeeper.verdict,
-    },
-  ];
-}
-
 export default async function IntakePage() {
   const user = await requireAccess("/intake");
   const canValue = mayOpen(user.role, "/valuation");
 
-  const [tallies, log] = await Promise.all([storedCounts(), listRecentIntakes(6)]);
+  const [tallies, log] = await Promise.all([storedCounts(), listRecentIntakes(8)]);
   const counts = tallies.counts;
-  const resolved = Object.fromEntries(intakeSamples.map(resolvedEntry));
   const readError = tallies.error ?? log.error;
 
   return (
@@ -124,16 +102,7 @@ export default async function IntakePage() {
         />
       </StatGrid>
 
-      <div className="flex flex-col gap-3">
-        <p className="flex flex-wrap items-center gap-2">
-          <Badge tone="neutral">Sample data</Badge>
-          <span className="text-[12px] leading-snug text-ink-muted">
-            The console below shows four fixed submissions, because those four cover the
-            four verdict paths. The table further down is the record this database holds.
-          </span>
-        </p>
-        <IntakeConsole samples={intakeSamples} resolved={resolved} canValue={canValue} />
-      </div>
+      <IntakeConsole intakes={log.rows} canValue={canValue} />
 
       <section>
         <SectionHeader

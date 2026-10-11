@@ -251,6 +251,14 @@ export const rateCardLines = pgTable(
       .notNull()
       .references(() => rateCards.id, { onDelete: "cascade" }),
 
+    /**
+     * The material's id in the pricing vocabulary (`cu`, `au`, `pb-glass`), which is what
+     * the identification model returns and `priceProposal` looks a line up by. Nullable
+     * because a line can arrive from a smelter with no id of ours — the name is then the
+     * only key, exactly as this column's neighbourhood describes.
+     */
+    code: text("code"),
+
     materialName: text("material_name").notNull(),
     symbol: text("symbol"),
     category: materialCategory("category").notNull(),
@@ -277,5 +285,44 @@ export const rateCardLines = pgTable(
       table.materialName,
     ),
     check("rate_card_lines_rate_chk", sql`${table.ratePaisePerKg} >= 0`),
+  ],
+);
+
+/**
+ * The per-class schedule: the handling fee taken off the material value, and the EPR
+ * credit the brand can book.
+ *
+ * Kept beside `rate_card_lines` because the two are one card: an item is priced by its
+ * material lines against the rates, then its class decides the fee and the compliance
+ * credit. The class schedule used to live only in `lib/data/rate-card.ts`, which meant
+ * `/rates` could show one number while `priceProposal` used another. Both now read this.
+ */
+export const rateCardClasses = pgTable(
+  "rate_card_classes",
+  {
+    id: primaryKeyId(),
+    rateCardId: uuid("rate_card_id")
+      .notNull()
+      .references(() => rateCards.id, { onDelete: "cascade" }),
+
+    /** The pricing vocabulary's class code, e.g. `board_it` — what the model returns. */
+    code: text("code").notNull(),
+
+    /** What the class is called on a screen, e.g. "IT & telecom board assembly". */
+    label: text("label").notNull(),
+    /** The CPCB category it maps onto, e.g. "E-waste · Class E2 IT & telecom". */
+    cpcb: text("cpcb"),
+
+    handlingFeePaise: money("handling_fee_paise").notNull(),
+    eprCreditPaise: money("epr_credit_paise").notNull(),
+
+    displayOrder: integer("display_order").default(0).notNull(),
+
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("rate_card_classes_code_uq").on(table.rateCardId, table.code),
+    check("rate_card_classes_handling_chk", sql`${table.handlingFeePaise} >= 0`),
+    check("rate_card_classes_epr_chk", sql`${table.eprCreditPaise} >= 0`),
   ],
 );

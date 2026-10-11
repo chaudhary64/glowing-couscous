@@ -2,18 +2,14 @@ import { createHash } from "node:crypto";
 
 import {
   ITEM_CLASSES,
-  RATE_BASIS,
-  RATE_VALID_UNTIL,
-  eprCreditFor,
   eprNoteId,
-  handlingFeeFor,
   isHazardous,
   itemMass,
-  material,
   priceMaterials,
   readableClass,
   type ItemClassCode,
 } from "@/lib/data/rate-card";
+import { CODE_RATE_CARD, loadRateCard, materialFrom, type RateCardSet } from "@/lib/rates/card";
 import { formatInr, formatMass } from "@/lib/format";
 import { getAiProvider, type AiMediaPart } from "@/lib/ai/foundry";
 import { transcribeHindi } from "@/lib/ai/transcribe";
@@ -133,12 +129,18 @@ export function priceProposal(
   source: AiSource,
   warnings: string[],
   evidence: string | null = null,
+  /*
+    The card in force, read from the database by the callers below and defaulted to the
+    code card so this stays a pure function of its inputs — same proposal and same card,
+    same numbers out. The default is what keeps every existing call site correct.
+  */
+  card: RateCardSet = CODE_RATE_CARD,
 ): AiAnalysis {
   const code = proposal.itemClass;
-  const entry = ITEM_CLASSES[code];
+  const entry = card.classes[code] ?? ITEM_CLASSES[code];
 
   const lines: MaterialLine[] = proposal.materials.map((line) =>
-    material(line.id, line.name, line.massGrams),
+    materialFrom(card, line.id, line.name, line.massGrams),
   );
   const massGrams = itemMass(lines);
   const hazardous = isHazardous(lines);
@@ -176,7 +178,7 @@ export function priceProposal(
     proposal.unitCount,
   ].join("|");
 
-  const scheduleCredit = eprCreditFor(code, true) * proposal.unitCount;
+  const scheduleCredit = entry.eprCreditInr * proposal.unitCount;
   let eprCreditInr: number;
   let eprCreditNote: string;
   if (verdict !== "rejected") {
@@ -193,11 +195,11 @@ export function priceProposal(
   const valuation: Valuation = priceMaterials(lines, {
     // A handling fee pays for moving material. With no fractions declared there is
     // nothing to move, and charging for it would show a collector a negative net.
-    handlingFee: lines.length === 0 ? 0 : handlingFeeFor(code),
+    handlingFee: lines.length === 0 ? 0 : entry.handlingFee,
     eprCreditInr,
     eprCreditNote,
-    rateBasis: RATE_BASIS,
-    validUntil: RATE_VALID_UNTIL,
+    rateBasis: card.basis,
+    validUntil: card.validUntil,
   });
 
   const signals =
@@ -319,16 +321,21 @@ export async function analyseItem(input: AnalyseItemInput): Promise<AiAnalysis> 
   const provider = getAiProvider();
   const media = input.media ?? [];
 
-  const call = await provider.generate({
-    systemInstruction: ITEM_SYSTEM_INSTRUCTION,
-    prompt: itemPrompt({
-      note: input.note,
-      declaredMassGrams: input.declaredMassGrams,
-      hasPhoto: hasImage(media),
+  // The card is read beside the model call: nothing can be priced without it, and waiting
+  // for it after the model answers would add a database round trip to every submission.
+  const [call, card] = await Promise.all([
+    provider.generate({
+      systemInstruction: ITEM_SYSTEM_INSTRUCTION,
+      prompt: itemPrompt({
+        note: input.note,
+        declaredMassGrams: input.declaredMassGrams,
+        hasPhoto: hasImage(media),
+      }),
+      media,
+      schema: itemResponseSchema(),
     }),
-    media,
-    schema: itemResponseSchema(),
-  });
+    loadRateCard(),
+  ]);
 
   const parsed = parseItemProposal(call.text);
   if (!parsed.ok) throw new AiProposalInvalidError(parsed.errors);
@@ -351,6 +358,7 @@ export async function analyseItem(input: AnalyseItemInput): Promise<AiAnalysis> 
     },
     warnings,
     evidenceDigest(media),
+    card,
   );
 }
 
@@ -385,18 +393,21 @@ export async function analyseIntake(
     );
   }
 
-  const call = await provider.generate({
-    systemInstruction: INTAKE_SYSTEM_INSTRUCTION,
-    prompt: itemPrompt({
-      note: input.note,
-      hasPhoto: hasImage(images),
-      intake: true,
-      transcript: transcript?.text,
+  const [call, card] = await Promise.all([
+    provider.generate({
+      systemInstruction: INTAKE_SYSTEM_INSTRUCTION,
+      prompt: itemPrompt({
+        note: input.note,
+        hasPhoto: hasImage(images),
+        intake: true,
+        transcript: transcript?.text,
+      }),
+      media: images,
+      schema: itemResponseSchema({ intake: true }),
+      temperature: 0.3,
     }),
-    media: images,
-    schema: itemResponseSchema({ intake: true }),
-    temperature: 0.3,
-  });
+    loadRateCard(),
+  ]);
 
   const defaultMode = hasImage(images) ? "photo" : "voice";
   const parsed = parseIntakeProposal(call.text, defaultMode);
@@ -443,7 +454,7 @@ export async function analyseIntake(
     inputs: describeInputs(media, input.note),
   };
 
-  const analysis = priceProposal(parsed.value, source, warnings, evidenceDigest(media));
+  const analysis = priceProposal(parsed.value, source, warnings, evidenceDigest(media), card);
 
   return {
     fields: parsed.value.fields,

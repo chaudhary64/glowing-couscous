@@ -410,6 +410,21 @@ export interface StoredItem extends StoredItemSummary {
   gatekeeper: GatekeeperVerdict | null;
   /** The latest decision that has not been undone, when one was taken. */
   decision: StoredDecision | null;
+  /**
+   * `intakes.ward_code` of the submission it resolved from, when the join resolves.
+   *
+   * The item carries no location of its own — `recordPricedItem` writes the device, the
+   * assay and the money, and leaves `items.ward_code` null — so the ward a load belongs to
+   * is read from the submission that produced it. Null means no geotagged intake, which is
+   * a real outcome, not a gap to fill.
+   */
+  wardCode: string | null;
+  /**
+   * `items.collector_id`, when a collector is on the item. Null is the normal case today:
+   * nothing provisions a collector at submission time, so a load routes with the collector
+   * unknown rather than with an invented one.
+   */
+  collectorId: string | null;
 }
 
 /** One submission, joined to what it was priced as. */
@@ -422,6 +437,15 @@ export interface StoredIntake {
   model: string | null;
   confidence: number | null;
   latencyMs: number | null;
+  /**
+   * The Hindi voice note behind a voice submission, as `media_assets` holds it, or null.
+   *
+   * Null is the honest answer for a photo, and also for a clip whose transcript was
+   * never written back to the asset — the columns exist for exactly this and are filled
+   * by the route once the recogniser has answered. Nothing is reconstructed from the
+   * fields: a transcript that is not stored is not shown.
+   */
+  voiceNote: VoiceNote | null;
   /** The parsed record, as `intake_fields` holds it. Empty when none was kept. */
   fields: ExtractedField[];
   item: StoredItemSummary | null;

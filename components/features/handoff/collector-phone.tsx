@@ -6,7 +6,7 @@ import { UpiOverlay } from "./upi-overlay";
 import { fetchJson, usePoll } from "./use-poll";
 import { Badge } from "@/components/ui/badge";
 import { formatMass } from "@/lib/format";
-import type { DemoLoad } from "@/lib/pickup/demo";
+import type { HandoffLoad } from "@/lib/pickup/load";
 import {
   formatPaise,
   isApiError,
@@ -35,7 +35,7 @@ export function CollectorPhone({
   load,
   onRouted,
 }: {
-  load: DemoLoad;
+  load: HandoffLoad;
   /** Tells a split-screen parent which load the gate should open. */
   onRouted?: (pickupId: string) => void;
 }) {
@@ -100,7 +100,9 @@ export function CollectorPhone({
       </div>
 
       <div className="flex flex-1 flex-col px-5 py-5">
-        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-copper">Namaste, {load.collectorName.split(" ")[0]}</p>
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-copper">
+          {load.collectorName ? `Namaste, ${load.collectorName.split(" ")[0]}` : "Namaste"}
+        </p>
         <h2 className="mt-1 font-display text-2xl uppercase leading-tight tracking-tight">Today&rsquo;s load</h2>
 
         <div className="mt-4 border border-rule bg-paper p-4">

@@ -41,37 +41,46 @@ async function typePin(page: Page, pin: string) {
 
 const wrong = (pin: string) => String((Number(pin) + 1) % 10000).padStart(4, "0");
 
-test("hand over → PIN → weigh and verify → ₹450.00 UPI payment on the phone", async ({ page }) => {
+test("hand over → PIN → weigh and verify → UPI payment on the phone", async ({ page }) => {
   await page.goto("/demo");
   const pin = await handOver(page);
 
-  // The gate opens the load the phone just routed, routed past the unlicensed site.
+  /*
+    The gate opens the load the phone just routed. Nothing here is a fixed demo load —
+    the item is the newest cleared, located one this database holds — so the assertions
+    read the load's own figures rather than a constant: the weighbridge is prefilled with
+    its declared mass, and the price the gate quotes is the figure the note must carry.
+  */
   await expect(gate(page).getByRole("heading", { name: "Weigh and verify" })).toBeVisible();
-  await expect(gate(page).getByText("GreenLoop Battery Line")).toBeVisible();
-  await expect(gate(page).getByText("Hazardous").first()).toBeVisible();
-  await expect(gate(page).getByLabel("Weighbridge reading (kg)")).toHaveValue("37.5");
-  await expect(gate(page).getByText("₹450.00").first()).toBeVisible();
+  const mass = gate(page).getByLabel("Weighbridge reading (kg)");
+  expect(Number(await mass.inputValue())).toBeGreaterThan(0);
+
+  // The preview beside the weight quotes what the weighed load will pay.
+  const preview = gate(page).locator("p", { hasText: "Pays" }).first();
+  await expect(preview).toBeVisible();
+  const figure = ((await preview.textContent()) ?? "").match(/₹[\d,]+\.\d{2}/)?.[0];
+  expect(figure, "the gate quotes a price for the weighed mass").toBeTruthy();
 
   // A wrong PIN is refused and costs a try.
   await typePin(page, wrong(pin));
   await expect(gate(page).getByRole("alert")).toContainText("4 tries left");
 
-  // The right one settles.
+  // The right one settles, for the figure the preview quoted.
   await typePin(page, pin);
   const toast = page.getByRole("status").filter({ hasText: "Handoff verified" });
   await expect(toast).toBeVisible();
-  await expect(toast).toContainText("₹450.00");
+  await expect(toast).toContainText(figure!);
 
   // The payout arrives via the stream and the phone turns green.
   const upi = phone(page).getByRole("status").filter({ hasText: "UPI payment" });
   await expect(upi).toBeVisible({ timeout: 20_000 });
-  await expect(upi).toContainText("₹450.00");
+  await expect(upi).toContainText(figure!);
   await expect(upi).toContainText("Successful");
-  await expect(upi).toContainText("c-1042@ecoepr");
+  await expect(upi).toContainText("@ecoepr");
 
   // And the gate's audit trail tells the whole story.
-  for (const line of ["Routed to RX-02", "Handoff PIN issued", "Wrong PIN entered", "PIN verified at the gate", "Settled · ₹450.00", "UPI payout sent"]) {
-    await expect(gate(page).getByText(line)).toBeVisible({ timeout: 10_000 });
+  for (const line of ["Routed to", "Handoff PIN issued", "Wrong PIN entered", "PIN verified at the gate", "Settled ·", "UPI payout sent"]) {
+    await expect(gate(page).getByText(line, { exact: false }).first()).toBeVisible({ timeout: 10_000 });
   }
 });
 
@@ -106,8 +115,10 @@ test("the gate warns when the weighbridge disagrees with the declared mass", asy
   await page.getByRole("button", { name: "New handoff" }).click();
   const pin = await handOver(page);
   const mass = gate(page).getByLabel("Weighbridge reading (kg)");
-  await mass.fill("25");
-  await expect(gate(page).getByText(/-33\.3% against the declared/)).toBeVisible();
+  const declared = Number(await mass.inputValue());
+  // Double the declared mass: a variance the screen must flag whatever the load weighs.
+  await mass.fill(String(declared * 2));
+  await expect(gate(page).getByText(/% against the declared/)).toBeVisible();
   await typePin(page, pin);
   await expect(gate(page).getByText("Mass variance · review")).toBeVisible();
 });

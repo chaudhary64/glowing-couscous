@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { database, databaseConfigured } from "@/db/client";
 import {
@@ -8,6 +8,7 @@ import {
   itemHazards,
   items,
   materialLines,
+  mediaAssets,
   users,
   validationDecisions,
   valuations,
@@ -30,6 +31,7 @@ import type {
   StoredItemSummary,
   StoredValuation,
   Verdict,
+  VoiceNote,
 } from "@/lib/types";
 
 /**
@@ -139,6 +141,8 @@ interface ItemRow {
   brand: string | null;
   condition: StoredItemSummary["condition"];
   massG: string | null;
+  wardCode: string | null;
+  collectorId: string | null;
   createdAt: Date;
 }
 
@@ -151,6 +155,10 @@ const itemColumns = {
   brand: items.brand,
   condition: items.condition,
   massG: items.massG,
+  // The ward is the submission's, not the item's: the item is where the material ended
+  // up, the intake is where it was photographed, and only the latter carries a fix.
+  wardCode: intakes.wardCode,
+  collectorId: items.collectorId,
   createdAt: items.createdAt,
 };
 
@@ -300,6 +308,8 @@ async function assembleItems(rows: ItemRow[]): Promise<StoredItem[]> {
       eprCreditInr: storedValuation?.eprCreditInr ?? null,
       eprCreditNote: storedValuation?.eprCreditNote ?? null,
       storedAt: row.createdAt.toISOString(),
+      wardCode: row.wardCode,
+      collectorId: row.collectorId,
       materials,
       hazards: hazardRows.filter((hazard) => hazard.itemId === row.id).map((h) => h.label),
       valuation: storedValuation,
@@ -336,6 +346,33 @@ export async function listPricedItems(limit = 12): Promise<RecordsResult<StoredI
     return { configured: true, error: null, rows: await assembleItems(rows) };
   } catch (error) {
     return failed<StoredItem>("the priced queue", error);
+  }
+}
+
+/**
+ * The priced items that carry a location, newest first.
+ *
+ * The handoff load needs a city, and the city comes from where the submission was
+ * geotagged — so the filter belongs in the query, not in a scan that reads every item to
+ * find the two that have a ward. A submission made with no fix leaves `intakes.ward_code`
+ * null and is simply absent here, which is the honest reading: without a location the
+ * router has nothing to pick a licensed destination from.
+ */
+export async function listLocatedItems(limit = 25): Promise<RecordsResult<StoredItem>> {
+  if (!databaseConfigured()) return notConfigured<StoredItem>();
+  const connection = database();
+  if (!connection) return notConfigured<StoredItem>();
+  try {
+    const rows = await connection.db
+      .select(itemColumns)
+      .from(items)
+      .leftJoin(intakes, eq(items.intakeId, intakes.id))
+      .where(isNotNull(intakes.wardCode))
+      .orderBy(desc(items.createdAt))
+      .limit(limit);
+    return { configured: true, error: null, rows: await assembleItems(rows) };
+  } catch (error) {
+    return failed<StoredItem>("the located items", error);
   }
 }
 
@@ -489,6 +526,30 @@ const fieldColumns = {
   ordinal: intakeFields.ordinal,
 };
 
+/**
+ * The voice note as `media_assets` holds it, or null.
+ *
+ * A row with no transcript is not a voice note: the recogniser returned silence, or the
+ * write-back never happened. Either way there is nothing to show, and reconstructing a
+ * note from the parsed fields would put words in the collector's mouth.
+ */
+function voiceNoteFromRow(row: {
+  language: string | null;
+  durationSeconds: number | null;
+  transcript: string | null;
+  translation: string | null;
+  wordCount: number | null;
+}): VoiceNote | null {
+  if (!row.transcript || row.transcript.trim().length === 0) return null;
+  return {
+    language: row.language ?? "Hindi (hi-IN)",
+    durationSeconds: row.durationSeconds ?? 0,
+    transcript: row.transcript,
+    translation: row.translation ?? "",
+    words: row.wordCount ?? row.transcript.trim().split(/\s+/).length,
+  };
+}
+
 /** The submissions this database holds, newest first, joined to what they became. */
 export async function listRecentIntakes(
   limit = 6,
@@ -499,6 +560,13 @@ export async function listRecentIntakes(
 
   try {
     const { db } = connection;
+    /*
+      The voice note is joined in from the asset the submission points at, not
+      reconstructed from its fields. A photo has no transcript and a clip whose recogniser
+      answer was never written back has `null` in every column here, which is the honest
+      reading — the console shows the parsed fields either way and says nothing it cannot
+      cite.
+    */
     const rows = await db
       .select({
         id: intakes.id,
@@ -509,8 +577,14 @@ export async function listRecentIntakes(
         model: intakes.extractionModel,
         confidence: intakes.extractionConfidence,
         latencyMs: intakes.extractionLatencyMs,
+        language: mediaAssets.language,
+        durationSeconds: mediaAssets.durationSeconds,
+        transcript: mediaAssets.transcript,
+        translation: mediaAssets.translation,
+        wordCount: mediaAssets.wordCount,
       })
       .from(intakes)
+      .leftJoin(mediaAssets, eq(intakes.mediaId, mediaAssets.id))
       .orderBy(desc(intakes.submittedAt))
       .limit(limit);
 
@@ -555,6 +629,7 @@ export async function listRecentIntakes(
         model: row.model,
         confidence: score(row.confidence),
         latencyMs: row.latencyMs,
+        voiceNote: voiceNoteFromRow(row),
         fields: fieldRows
           .filter((field) => field.intakeId === row.id)
           .map(

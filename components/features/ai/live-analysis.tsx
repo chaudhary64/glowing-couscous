@@ -137,7 +137,7 @@ const COPY: Record<LiveMode, { caption: string; action: string; body: string }> 
   valuation: {
     caption: "Live valuation",
     action: "Value this item",
-    body: "Photograph the item and it is identified, assayed into material fractions and priced off the same rate card the sample records use. Add a note if the collector has already weighed it.",
+    body: "Photograph the item and it is identified, assayed into material fractions and priced off the same stored rate card every priced item is computed from. Add a note if the collector has already weighed it.",
   },
   intake: {
     caption: "Live intake",

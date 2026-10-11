@@ -5,7 +5,7 @@ import { useState } from "react";
 import { CollectorPhone, PhoneFrame } from "./collector-phone";
 import { RecyclerGate } from "./recycler-gate";
 import { Button } from "@/components/ui/button";
-import type { DemoLoad } from "@/lib/pickup/demo";
+import type { HandoffLoad } from "@/lib/pickup/load";
 
 /**
  * The split-screen demo: the collector's phone on the left, the recycler's gate on the
@@ -16,7 +16,7 @@ import type { DemoLoad } from "@/lib/pickup/demo";
  * compliance trail and the API has no delete — so each take starts from a fresh load
  * and the previous one stays in the table, settled and paid.
  */
-export function HandoffDemo({ load }: { load: DemoLoad }) {
+export function HandoffDemo({ load }: { load: HandoffLoad }) {
   const [run, setRun] = useState(0);
   const [pickupId, setPickupId] = useState<string | null>(null);
 

@@ -24,7 +24,7 @@ export function VanRound({
   wards: Ward[];
   /** Replaces the "send a van" link per stop — the live map passes dispatch buttons. */
   actions?: (spot: HotspotCluster) => ReactNode;
-  /** Replaces the closing note, which otherwise describes the fixture route. */
+  /** Replaces the closing note, which otherwise describes the default route. */
   note?: ReactNode;
   /** Whether this role may open the pickup board; a viewer may not, so it is not linked. */
   canOpenBoard?: boolean;
@@ -112,8 +112,8 @@ export function VanRound({
           <>
             {route.length} clusters on the round carrying {totalDetections} detections
             between them, {unassigned} still with no van assigned. Stops are ordered by
-            detection count, not by driving distance — the fixtures carry no road
-            network, so this is a priority list rather than a routable sequence.
+            detection count, not by driving distance — this carries no road network, so it
+            is a priority list rather than a routable sequence.
           </>
         )}
       </p>

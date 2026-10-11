@@ -158,10 +158,9 @@ export default async function ValuationsPage({
         <Panel eyebrow="Not wired" title="This screen cannot count anything">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
             No records database is connected, so there is nowhere for a priced item to be
-            written and nothing to read back. Showing the sample rows here would be the one
-            thing this screen must not do — a number that looks counted and is not.
-            Configure the database and price a submission above; it appears in this queue
-            as a row.
+            written and nothing to read back. The queue stays absent rather than drawing a
+            number that looks counted and is not. Configure the database and price a
+            submission above; it appears in this queue as a row.
           </p>
         </Panel>
       ) : null}

@@ -4,7 +4,7 @@ import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
 import { locationWarning, recordLocation } from "@/lib/intake/location";
 import { recordPricedItem, pricedRecordWarning } from "@/lib/records/items";
 import { recordSubmission, submissionWarning } from "@/lib/s3/intakes";
-import { archiveAndRecord, recordWarning } from "@/lib/s3/media-assets";
+import { archiveAndRecord, recordTranscript, recordWarning } from "@/lib/s3/media-assets";
 
 /**
  * POST /api/ai/intake — a photo, a Hindi voice note, or both, in one round trip.
@@ -93,6 +93,25 @@ export async function POST(request: Request) {
   const warnings = [...analysed.value.warnings];
   for (const warning of [storage ? archiveWarning(storage) : null, records ? recordWarning(records) : null]) {
     if (warning) warnings.push(warning);
+  }
+
+  /**
+   * The transcript is written back onto the voice asset it came from.
+   *
+   * The archive runs beside the model call, so the recogniser's answer does not exist
+   * when the `media_assets` row is written — this is the write that fills the columns
+   * `language`, `duration_seconds`, `transcript`, `translation` and `word_count`, which
+   * is what lets a stored voice submission read back as words rather than a bare
+   * `fields` list. It is reported and never fails the request, like every other write on
+   * this path.
+   */
+  const voiceNote = analysed.value.voiceNote;
+  const voiceObject = storage?.objects.find((object) => object.kind === "voice") ?? null;
+  if (voiceNote && voiceObject) {
+    const recorded = await recordTranscript(voiceObject.key, voiceNote);
+    if (recorded.error) {
+      warnings.push(`The voice note was transcribed but the transcript was not recorded: ${recorded.error}`);
+    }
   }
 
   /**

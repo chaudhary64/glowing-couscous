@@ -1,23 +1,33 @@
 import { listLoads } from "@/lib/pickup/directory";
+import { readHandoffLoad, type HandoffLoad } from "@/lib/pickup/load";
 import type { PickupView } from "@/lib/pickup/types";
 
 /**
- * What the handoff screens need in order to say whose load is on the phone.
+ * What the handoff screens need: the load on the phone, and the loads the service holds.
  *
- * The phone has always been demonstrated on `DEMO_LOAD`, and the button has always routed
- * that load — `POST /api/pickup/handoff` builds its body from the same constant, never from
- * the browser. That is a coherent demo, but nothing on the screen said so: it read as
- * "today's load" and left the reader to believe the board held it.
+ * Two reads that are deliberately kept apart, because they answer two different
+ * questions. The load is the newest cleared item from the priced record — the thing the
+ * button will route. The board is what the smart-pickup service is already holding.
+ * Neither stands in for the other: the phone routes a load this app resolved, and the
+ * panel beside it names the newest open row the service has, and a screen never lets one
+ * read look like the other.
  *
- * So the page reads the board and states both facts side by side — the sample the button
- * routes, and the newest load the service is actually holding. Neither is inferred from the
- * other, and neither is presented as the other.
- *
- * Same rules as the other reads in `lib/pickup/directory.ts`: an unconfigured service is not
- * an error, a failed read is a sentence rather than a thrown page, and nothing is invented.
+ * Same rules as every other read in this codebase: an unconfigured integration is not an
+ * error, a failed read is a sentence rather than a thrown page, and nothing is invented.
  */
 export interface HandoffContext {
+  /** False when there is no `DATABASE_URL`: nothing can be resolved to hand over. */
+  loadConfigured: boolean;
+  /** Set when the records database was configured and the read failed. */
+  loadError: string | null;
+  /** Why there is no load, when there is none. */
+  loadReason: string | null;
+  /** The load the phone hands over, or null when nothing is cleared to route. */
+  load: HandoffLoad | null;
+
+  /** False when `PICKUP_API_URL` is unset: the board cannot be read. */
   configured: boolean;
+  /** Set when the pickup service was configured and the read failed. */
   error: string | null;
   /** Loads the service has routed and not yet settled. */
   openCount: number;
@@ -26,19 +36,27 @@ export interface HandoffContext {
 }
 
 export async function readHandoffContext(): Promise<HandoffContext> {
-  const board = await listLoads(25);
+  const [board, load] = await Promise.all([listLoads(25), readHandoffLoad()]);
+
+  const fromLoad = {
+    loadConfigured: load.configured,
+    loadError: load.error,
+    loadReason: load.reason,
+    load: load.load,
+  };
+
   if (!board.configured) {
-    return { configured: false, error: null, openCount: 0, newest: null };
+    return { ...fromLoad, configured: false, error: null, openCount: 0, newest: null };
   }
   if (board.error) {
-    return { configured: true, error: board.error, openCount: 0, newest: null };
+    return { ...fromLoad, configured: true, error: board.error, openCount: 0, newest: null };
   }
 
-  const open = board.rows.filter((load) => load.status !== "settled");
+  const open = board.rows.filter((entry) => entry.status !== "settled");
   const newest = open.reduce<PickupView | null>(
-    (latest, load) => (!latest || load.requestedAt > latest.requestedAt ? load : latest),
+    (latest, entry) => (!latest || entry.requestedAt > latest.requestedAt ? entry : latest),
     null,
   );
 
-  return { configured: true, error: null, openCount: open.length, newest };
+  return { ...fromLoad, configured: true, error: null, openCount: open.length, newest };
 }

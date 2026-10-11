@@ -26,14 +26,11 @@ export const instant = false;
  * writes — `intakes`, `items`, `valuations`, `gatekeeper_verdicts`, `validation_decisions`
  * — through `lib/records/queues.ts`.
  *
- * What is deliberately *not* counted, and is labelled as sample instead:
+ * The load board and the collector ranking are counted too, from the smart-pickup service
+ * the handoff screens route through (`lib/pickup/directory.ts`) — so nothing on this screen
+ * is authored.
  *
- * - **Pickups and credit notes.** Feature 04, Smart Pickup & Digital Credit, routes to a
- *   recycler and mints a credit note, and nothing writes `pickups`, `credit_notes` or
- *   `ledger_entries`. The "Loads in play" board is the sample board from `lib/data`.
- * - **Collector standing.** The roster has no writer yet; the panel says so.
- *
- * Ward pressure and open hotspots *are* counted: they come from the same
+ * Ward pressure and open hotspots are counted as well: they come from the same
  * `getHeatmap()` call `/map` makes, over geotagged intakes.
  *
  * Saying that plainly is the point. A dashboard that mixes counted rows with authored
