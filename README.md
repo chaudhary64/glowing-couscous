@@ -42,12 +42,12 @@ that shows it.
 | Area | State |
 | --- | --- |
 | AI pipeline (Azure AI Foundry + Azure Speech) | **Real**: three endpoints, closed-list validation, Hindi transcription |
-| Sign-in and roles (Cognito) | **Real**: JWKS-verified httpOnly session, four roles, one enforced access table |
+| Sign-in and roles (Cognito) | **Real**: JWKS-verified httpOnly session, five roles, one enforced access table, rows scoped per role |
 | Media archive (S3) | **Real**: every photo and voice note, keyed by SHA-256, read back through signed URLs |
 | Intake records (RDS) | **Real**: submission, item, assay, valuation, verdict and officer decisions |
 | Hotspot map | **Real**: geotagged intakes filed to India's districts and Mumbai's BMC wards |
 | Smart pickup and handoff | **Real**: API Gateway, two Lambdas, DynamoDB; routing, PIN handoff, settlement, payout |
-| Database schema | **Applied to RDS, partly wired**: 39 tables; media, intake, record and geo tables are used |
+| Database schema | **Applied to RDS, partly wired**: 40 tables; media, intake, record, rate-card, organisation and geo tables are used |
 | Money | **Simulated**: the UPI payout moves no money |
 
 ### The gatekeeper
@@ -64,7 +64,7 @@ a rejection names its rule:
 
 A verified outcome needs a photo; a voice note alone is held for review. Each
 submission's id is derived from its photo, so the same photo can never be paid twice.
-Held items wait on `/validation` for an officer, and every decision records who made it
+Held items wait on `/validation` for an admin, and every decision records who made it
 and when.
 
 ### Smart pickup
@@ -77,8 +77,8 @@ route needs the user's own Cognito ID token; there is no API key.
    site's daily capacity. A load with no licensed destination is refused, never stored.
 2. **Handoff:** the collector's phone shows a 4-digit PIN. It expires after 15 minutes and
    locks after 5 wrong tries.
-3. **Settle:** at the gate, staff weigh the load and type the PIN. The right PIN issues a
-   credit note; a weight far from the declared mass is flagged.
+3. **Settle:** at the gate, the recycler's officer weighs the load and types the PIN. The
+   right PIN issues a credit note; a weight far from the declared mass is flagged.
 4. **Pay:** the pickups table's DynamoDB Stream triggers `ecoepr-pickup-payout`, which
    sends the simulated UPI credit exactly once per settled load.
 
@@ -91,8 +91,9 @@ Intakes are filed by point-in-polygon to India's 735 districts and, inside Mumba
 rolling 21-day window, found by distance rather than grid cell so GPS jitter can't split a
 site. Gatekeeper-rejected items never count. The rule is one pure function,
 [`lib/heatmap/cluster.ts`](lib/heatmap/cluster.ts). Location is captured only with the
-visitor's consent, asked once up front. Operators can assign a van to a hotspot from the
-map.
+visitor's consent, asked once up front. An Operator or Admin can assign a van to a hotspot
+from the map, and a Collector can call a van to where they stand; for everyone else the
+map is read-only.
 
 ### Regions
 
@@ -105,26 +106,41 @@ request crosses regions to reach the pickup API, a deliberate trade-off.
 | Group | Screens |
 | --- | --- |
 | Operations | Dashboard · New intake · Valuations · Validation queue · Pickups · Collector handoff · Recycler gate · Handoff demo · Evidence |
+| Collection | My submissions |
 | Network | Hotspot map · Collectors · Recyclers |
 | Administration | Team · Rate card |
 
-Plus the public landing page (`/`) and the sign-in, sign-up and confirm screens.
+That is 15 product screens, plus the public landing page (`/`) and the sign-in, sign-up,
+confirm and no-access screens. A group only appears to a role that can open one of its
+screens.
 
 ## 5. Roles and access
 
-One table — [`lib/auth/roles.ts`](lib/auth/roles.ts) — drives the proxy, the data access
-layer and the navigation, so a screen a role cannot open is neither shown nor linked, and a
-direct visit answers with a page explaining what is required.
+One table — `GUARDS` in [`lib/auth/roles.ts`](lib/auth/roles.ts) — drives the proxy, the
+data access layer and the navigation, so a screen a role cannot open is neither shown nor
+linked, and a direct visit answers with a page explaining what is required. The pickup
+Lambda mirrors it in [`aws/pickup/security.mjs`](aws/pickup/security.mjs).
+
+Each screen names the exact roles that may open it. Authority is a set of screens per role,
+not a ladder: no role includes another's screens.
 
 | Role | Meant for | Opens |
 | --- | --- | --- |
-| **Admin** | Team and prices | Team (including changing roles), Rate card, and everything an Officer can |
-| **Officer** | Compliance decisions | Valuations, Validation queue, Recyclers, and everything an Operator can |
-| **Operator** | Field work | Intake, Pickups, Collector handoff, Recycler gate, Handoff demo, Evidence, Collectors, Dispatch, Dashboard, Map |
-| **Viewer** | A municipality or brand analyst | Dashboard and Hotspot map, read-only |
+| **Admin** (`eco-admin`) | Team, prices and decisions | All 15 screens; the only role that opens Valuations, Validation queue, Team and Rate card, and changes roles on Team |
+| **Officer** (`eco-officer`) | A recycler's staff at the gate | Dashboard, Recycler gate, Handoff demo, Hotspot map, Recyclers |
+| **Operator** (`eco-operator`) | Field work and routing | Dashboard, New intake, Pickups, Collector handoff, Handoff demo, Evidence, Hotspot map, Collectors |
+| **Collector** (`eco-collector`) | A collector's own submissions | Dashboard, My submissions, Hotspot map |
+| **Viewer** (`eco-viewer`) | A brand's compliance analyst | Dashboard, Evidence, Hotspot map, read-only |
 
-> Rank is authority: lower is more powerful. `eco-owner` was folded into `eco-admin`, so an
-> older Owner account keeps working and reads as Admin.
+Rows are scoped as well as screens ([`lib/auth/scope.ts`](lib/auth/scope.ts),
+[`lib/records/scope.ts`](lib/records/scope.ts)). Admin and Operator read every row. An
+Officer reads the loads and directory entry of their own recycler facility, a Viewer reads
+the items their brand has claimed an EPR credit for, and a Collector reads their own
+submissions. The links come from `organization_members` and `collectors`; an account with no
+link on file sees an explanation and no rows, never every row.
+
+> `eco-owner` was folded into `eco-admin`, so an older Owner account keeps working and
+> reads as Admin.
 
 ## 6. Demo accounts
 
@@ -133,15 +149,20 @@ account's role is a Cognito group.
 
 | # | Role | Email | Password | Access |
 | --- | --- | --- | --- | --- |
-| 1 | Admin | `demo.admin@example.com` | `Ecoepr1234` | All 14 screens |
-| 2 | Admin (legacy Owner) | `demo.owner@example.com` | `Ecoepr1234` | All 14 screens — the `eco-owner` group reads as Admin |
-| 3 | Officer | `demo.officer@example.com` | `Ecoepr1234` | 12 screens — hidden: Team, Rate card |
-| 4 | Operator | `demo.operator@example.com` | `Ecoepr1234` | 9 screens — hidden: Valuations, Validation queue, Recyclers, Team, Rate card |
-| 5 | Viewer | `demo.viewer@example.com` | `Ecoepr1234` | Dashboard and Hotspot map only — hidden: 12 screens |
+| 1 | Admin | `demo.admin@example.com` | `Ecoepr1234` | All 15 screens |
+| 2 | Admin (legacy Owner) | `demo.owner@example.com` | `Ecoepr1234` | All 15 screens — the `eco-owner` group reads as Admin |
+| 3 | Officer | `demo.officer@example.com` | `Ecoepr1234` | 5 screens: Dashboard, Recycler gate, Handoff demo, Hotspot map, Recyclers |
+| 4 | Operator | `demo.operator@example.com` | `Ecoepr1234` | 8 screens: Dashboard, New intake, Pickups, Collector handoff, Handoff demo, Evidence, Hotspot map, Collectors |
+| 5 | Collector | `demo.collector@example.com` | `Ecoepr1234` | 3 screens: Dashboard, My submissions, Hotspot map |
+| 6 | Viewer | `demo.viewer@example.com` | `Ecoepr1234` | 3 screens: Dashboard, Evidence, Hotspot map |
 
 These are **demo-only accounts** with a shared password. Do not reuse them for anything
 that holds real data. The enforced matrix is [`lib/auth/roles.ts`](lib/auth/roles.ts); the
 navigation simply hides what the matrix refuses.
+
+The demo Officer and Viewer are linked to a recycler facility (RX-03) and a brand by
+`npm run orgs:seed`, which writes a few rows marked `(seed)`; without those links their
+scoped screens show no rows.
 
 ## 7. Tech stack
 
@@ -162,8 +183,10 @@ navigation simply hides what the matrix refuses.
 
 ## 8. Getting started
 
-**Prerequisites:** Node.js 20.9 or newer, npm, and access to the demo Cognito pool,
-PostgreSQL database and S3 bucket.
+**Prerequisites:** Node.js 20.9 or newer for the app (22.18 or newer for the TypeScript
+scripts run with `node --import ./scripts/ts-paths.mjs`, which use `module.registerHooks`
+and built-in type stripping), npm, and access to the demo Cognito pool, PostgreSQL database
+and S3 bucket.
 
 ```bash
 npm ci                 # install (preserves package-lock.json)
@@ -178,8 +201,9 @@ Environment variables, grouped as they appear in [`.env.example`](.env.example):
 | --- | --- | --- |
 | Browser | `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_COGNITO_*` | Public; inlined into the bundle |
 | Cognito (server) | `COGNITO_REGION`, `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID`, `COGNITO_ISSUER` | Needed or sign-in reports the pool as unconfigured |
-| Team admin | `COGNITO_ADMIN_ACCESS_KEY_ID`, `COGNITO_ADMIN_SECRET_ACCESS_KEY` | Optional explicit credentials; otherwise the AWS SDK uses the local CLI profile or hosting IAM role |
-| AI | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_SPEECH_REGION` | Vision model for the photo, Speech for Hindi |
+| Team admin | `COGNITO_ADMIN_ACCESS_KEY_ID`, `COGNITO_ADMIN_SECRET_ACCESS_KEY` | Optional explicit credentials; otherwise the AWS SDK uses the local CLI profile or hosting IAM role. With none of these, `/team` is a read-only list |
+| AI | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_SPEECH_REGION`, `AZURE_SPEECH_KEY` | Vision model for the photo, Speech for Hindi; the Speech key defaults to the OpenAI key |
+| Rates | `METALPRICE_API_KEY` | Optional. Daily metal prices; without it the last stored card stays in force |
 | Database | `DATABASE_URL` | Secret. `sslmode=no-verify` against RDS |
 | Archive | `S3_BUCKET`, `S3_REGION`, `S3_PREFIX`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Leave the bucket empty and the archive is simply off |
 | Pickup | `PICKUP_API_URL` | The private API behind Cognito; the only pickup setting the app reads |
@@ -203,6 +227,9 @@ in the deployed tables — the loads, PINs and credit notes the pilot is actuall
 | `npm run s3:check` | Verify the media archive can read and write |
 | `npm run test:e2e` | Playwright end-to-end suite (needs a production build) |
 | `npm run test:heatmap` / `test:heatmap:db` | Hotspot clustering unit and integration tests |
+| `npm run test:rates` | Rate-card feed and card unit tests |
+| `npm run rates:seed` / `rates:refresh` | Write the rate card in code to the database / put today's daily card in force (`-- --dry-run` only asks the API) |
+| `npm run orgs:seed` | Link the demo Officer and Viewer to their organisations (prints its plan; `-- --apply` writes) |
 | `npm run pickup:setup` / `seed` / `check` | Provision, seed or exercise the deployed smart-pickup service |
 | `npm run geo:wards` / `geo:districts` | Regenerate boundary data |
 
@@ -210,9 +237,9 @@ in the deployed tables — the loads, PINs and credit notes the pilot is actuall
 
 ## 10. Testing
 
-The Playwright suite in [`tests/e2e`](tests/e2e) (83 tests in 10 files) runs against a production build with real
+The Playwright suite in [`tests/e2e`](tests/e2e) (89 tests in 10 files) runs against a production build with real
 Cognito sign-ins, live Azure calls, and real S3, RDS and smart-pickup writes. It covers
-auth and public pages, per-role access, the dashboard, intake,
+auth and public pages, per-role access for all five roles, the dashboard, intake,
 the gatekeeper verdicts, valuation, pickup and settlement, and the team screen.
 
 On Amplify, `amplify.yml` copies the server-side variables into `.env.production` before the
@@ -225,4 +252,4 @@ build, because Amplify's SSR compute does not inherit the app's environment sett
 - EcoEPR **routes** e-waste to CPCB-registered recyclers; it does not process waste itself.
 - The rate card is stored: the metals with a market price follow MetalpriceAPI once a
   day, and every other line is a manual rate seeded from the card in code.
-- WhatsApp is the next channel, not part of this build.
+- WhatsApp is not part of this build.
