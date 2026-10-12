@@ -32,8 +32,8 @@ export function NavFrame({ nav, children }: { nav: ReactNode; children: ReactNod
     <NavContext.Provider value={value}>
       <div
         className={cn(
-          "flex min-h-full flex-col lg:grid lg:transition-[grid-template-columns] lg:duration-200 motion-reduce:transition-none",
-          collapsed ? "lg:grid-cols-[64px_minmax(0,1fr)]" : "lg:grid-cols-[264px_minmax(0,1fr)]",
+          "flex min-h-full min-w-0 flex-col lg:grid lg:transition-[grid-template-columns] lg:duration-200 motion-reduce:transition-none",
+          collapsed ? "lg:grid-cols-[72px_minmax(0,1fr)]" : "lg:grid-cols-[280px_minmax(0,1fr)]",
         )}
       >
         {nav}
