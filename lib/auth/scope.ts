@@ -19,7 +19,7 @@ import type { AuthUser } from "./token";
  */
 
 export type Scope =
-  /** Admin: every row. */
+  /** Admin and Operator: every row. */
   | { kind: "all" }
   /** Collector: the submissions this person made. Keyed by the Cognito `sub`. */
   | { kind: "collector"; userId: string }
@@ -59,6 +59,10 @@ export type ScopeIdentity = {
 export function scopeFor(user: AuthUser, identity: ScopeIdentity = {}): Scope {
   switch (user.role) {
     case "eco-admin":
+    // The Operator works the platform-wide board — every load, every collector, every
+    // intake they capture — so the screens the matrix gives them are not cut by row.
+    // Without this case an Operator fell through to "holds no role".
+    case "eco-operator":
       return { kind: "all" };
     case "eco-collector":
       return { kind: "collector", userId: user.sub };

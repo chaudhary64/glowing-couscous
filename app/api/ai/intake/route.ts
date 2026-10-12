@@ -3,6 +3,7 @@ import { aiErrorResponse, authorizeUser, jsonResponse, readPayload } from "@/lib
 import { archiveRequests, archiveWarning } from "@/lib/s3/archive";
 import { locationWarning, recordLocation } from "@/lib/intake/location";
 import { recordPricedItem, pricedRecordWarning } from "@/lib/records/items";
+import { collectorExists } from "@/lib/records/users";
 import { recordSubmission, submissionWarning } from "@/lib/s3/intakes";
 import { archiveAndRecord, recordTranscript, recordWarning } from "@/lib/s3/media-assets";
 
@@ -45,6 +46,13 @@ export async function POST(request: Request) {
   const parsed = readPayload(body);
   if (!parsed.ok) return parsed.response;
 
+  // Whose material this is. An id the table does not hold is refused here rather than
+  // left for a foreign key to reject halfway through the writes below.
+  const collectorId = parsed.payload.collectorId ?? null;
+  if (collectorId && !(await collectorExists(collectorId))) {
+    return jsonResponse({ error: "bad_request", message: "That collector is not on file. Pick one from the list, or leave it unset." }, 400);
+  }
+
   const analyse = analyseIntake({
     media: [parsed.payload.photo, parsed.payload.audio].filter(
       (part): part is NonNullable<typeof part> => part !== undefined,
@@ -71,6 +79,7 @@ export async function POST(request: Request) {
     analyse,
     archiveAndRecord(archiveRequests(parsed.payload), {
       uploaderCognitoSub: access.user.sub,
+      collectorId,
     }),
   ]);
 
@@ -132,6 +141,7 @@ export async function POST(request: Request) {
           pricedCode: analysis.id,
           label: analysis.identified.itemLabel,
           massGrams: analysis.identified.massGrams,
+          collectorId,
           extraction: {
             model: analysis.source.model,
             confidence: analysis.gatekeeper.confidence,
@@ -153,6 +163,7 @@ export async function POST(request: Request) {
     records && analysis
       ? await recordPricedItem({
           intakeId: submission?.submission?.id ?? null,
+          collectorId,
           analysis,
           fields: analysed.value.fields,
         })

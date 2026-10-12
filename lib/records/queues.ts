@@ -1,7 +1,9 @@
-import { desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { desc, eq, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { database, databaseConfigured } from "@/db/client";
 import {
+  eprCreditNotes,
   gatekeeperVerdicts,
   intakeFields,
   intakes,
@@ -14,7 +16,9 @@ import {
   valuations,
   verdictSignals,
 } from "@/db/schema";
+import type { Scope } from "@/lib/auth/scope";
 import { readableClass } from "@/lib/data/rate-card";
+import { COLLECTOR_NOT_LINKED, collectorIdFor } from "@/lib/records/scope";
 
 import type {
   ExtractedField,
@@ -64,9 +68,95 @@ import type {
  *    64 bits. `sum(net_to_collector_paise)` therefore arrives as `"11300"`, and adding
  *    those with `+` concatenates. Drizzle converts a *column* on read (`mode: "number"`)
  *    but not an aggregate expression, so the rows are fetched and totalled here.
+ *
+ * And one rule from the role migration: **every reader a role-cut screen calls takes the
+ * caller's `Scope` first** (`lib/auth/scope.ts`, resolved by `scopeForUser`). A scope
+ * that cannot be honoured answers with its sentence in `error` and no rows — the same
+ * shape as a failed read — and never with a wider read than it was given.
  */
 
 /* ------------------------------------------------------------------- common */
+
+type Db = NonNullable<ReturnType<typeof database>>["db"];
+
+/**
+ * The rows a scope reaches, as the ids every reader can filter on.
+ *
+ * `all` filters nothing. A Collector reaches the submissions made in their name
+ * (`intakes.collector_id`, and an item's own `collector_id`); a Viewer reaches the items
+ * a credit note names their brand on (`epr_credit_notes`). An Officer's facility is not
+ * on the intake record at all — an item meets a facility as a load, on the pickup
+ * service — so that scope is refused here with a sentence saying where its rows are.
+ */
+type RowFilter =
+  | { kind: "all" }
+  | { kind: "some"; intakeIds: string[]; itemIds: string[] }
+  | { kind: "refused"; message: string };
+
+const FACILITY_NOT_ON_RECORD =
+  "The intake record is not tied to a recycler facility: an item reaches a facility as a load, so a facility's work is on the pickup board rather than here.";
+
+const NO_BRAND_CLAIM =
+  "No EPR credit is on file for this brand yet, so no item is claimed by it. An item appears here once a credit note names the brand.";
+
+async function rowFilter(db: Db, scope: Scope): Promise<RowFilter> {
+  switch (scope.kind) {
+    case "all":
+      return { kind: "all" };
+    case "unresolved":
+      return { kind: "refused", message: scope.reason };
+    case "facility":
+      return { kind: "refused", message: FACILITY_NOT_ON_RECORD };
+    case "collector": {
+      const collector = await collectorIdFor(scope.userId);
+      if (collector.error) return { kind: "refused", message: collector.error };
+      if (!collector.id) return { kind: "refused", message: COLLECTOR_NOT_LINKED };
+      const intakeRows = await db
+        .select({ id: intakes.id })
+        .from(intakes)
+        .where(eq(intakes.collectorId, collector.id));
+      const intakeIds = intakeRows.map((row) => row.id);
+      const itemRows = await db
+        .select({ id: items.id })
+        .from(items)
+        .where(
+          intakeIds.length
+            ? or(eq(items.collectorId, collector.id), inArray(items.intakeId, intakeIds))
+            : eq(items.collectorId, collector.id),
+        );
+      return { kind: "some", intakeIds, itemIds: itemRows.map((row) => row.id) };
+    }
+    case "brand": {
+      const notes = await db
+        .select({ itemId: eprCreditNotes.itemId })
+        .from(eprCreditNotes)
+        .where(eq(eprCreditNotes.brandOrganizationId, scope.organizationId));
+      if (notes.length === 0) return { kind: "refused", message: NO_BRAND_CLAIM };
+      const itemIds = notes.map((note) => note.itemId);
+      const itemRows = await db
+        .select({ intakeId: items.intakeId })
+        .from(items)
+        .where(inArray(items.id, itemIds));
+      const intakeIds = itemRows
+        .map((row) => row.intakeId)
+        .filter((id): id is string => id !== null);
+      return { kind: "some", intakeIds, itemIds };
+    }
+  }
+}
+
+/** Keeps `column` to `ids`; nothing for an unfiltered scope, and no rows for an empty one. */
+function within(column: PgColumn, ids: string[] | null): SQL | undefined {
+  if (ids === null) return undefined;
+  return ids.length ? inArray(column, ids) : sql`false`;
+}
+
+/** The two id lists a filter keeps, or null for each when it keeps everything. */
+function filterIds(filter: RowFilter): { intakeIds: string[] | null; itemIds: string[] | null } {
+  return filter.kind === "some"
+    ? { intakeIds: filter.intakeIds, itemIds: filter.itemIds }
+    : { intakeIds: null, itemIds: null };
+}
 
 /** The shape every read failure takes, so the four rules above are written once. */
 function failed<T>(kind: string, error: unknown): RecordsResult<T> {
@@ -332,15 +422,21 @@ async function assembleItems(rows: ItemRow[]): Promise<StoredItem[]> {
 }
 
 /** The newest items this database holds, as the valuation queue shows them. */
-export async function listPricedItems(limit = 12): Promise<RecordsResult<StoredItem>> {
+export async function listPricedItems(
+  scope: Scope,
+  limit = 12,
+): Promise<RecordsResult<StoredItem>> {
   if (!databaseConfigured()) return notConfigured<StoredItem>();
   const connection = database();
   if (!connection) return notConfigured<StoredItem>();
   try {
+    const filter = await rowFilter(connection.db, scope);
+    if (filter.kind === "refused") return { configured: true, error: filter.message, rows: [] };
     const rows = await connection.db
       .select(itemColumns)
       .from(items)
       .leftJoin(intakes, eq(items.intakeId, intakes.id))
+      .where(within(items.id, filterIds(filter).itemIds))
       .orderBy(desc(items.createdAt))
       .limit(limit);
     return { configured: true, error: null, rows: await assembleItems(rows) };
@@ -403,7 +499,7 @@ export async function getStoredItem(
  * over cleared items only, which is the same rule the valuation screen has always
  * stated: a rejected or held item keeps its assay and promises nothing.
  */
-export async function storedCounts(): Promise<RecordsResult<StoredCounts> & {
+export async function storedCounts(scope: Scope): Promise<RecordsResult<StoredCounts> & {
   counts: StoredCounts | null;
 }> {
   if (!databaseConfigured()) {
@@ -415,6 +511,11 @@ export async function storedCounts(): Promise<RecordsResult<StoredCounts> & {
   try {
     const { db } = connection;
     const since = startOfIstDay();
+    const filter = await rowFilter(db, scope);
+    if (filter.kind === "refused") {
+      return { configured: true, error: filter.message, rows: [], counts: null };
+    }
+    const { intakeIds, itemIds } = filterIds(filter);
 
     const [intakeRows, itemRows, hazardRows, verdictRows, valuationRows, decisionRows] =
       await Promise.all([
@@ -424,15 +525,20 @@ export async function storedCounts(): Promise<RecordsResult<StoredCounts> & {
             submittedAt: intakes.submittedAt,
             latencyMs: intakes.extractionLatencyMs,
           })
-          .from(intakes),
-        db.select({ id: items.id }).from(items),
-        db.select({ itemId: itemHazards.itemId }).from(itemHazards),
+          .from(intakes)
+          .where(within(intakes.id, intakeIds)),
+        db.select({ id: items.id }).from(items).where(within(items.id, itemIds)),
+        db
+          .select({ itemId: itemHazards.itemId })
+          .from(itemHazards)
+          .where(within(itemHazards.itemId, itemIds)),
         db
           .select({
             itemId: gatekeeperVerdicts.itemId,
             verdict: gatekeeperVerdicts.verdict,
           })
           .from(gatekeeperVerdicts)
+          .where(within(gatekeeperVerdicts.itemId, itemIds))
           .orderBy(desc(gatekeeperVerdicts.checkedAt)),
         db
           .select({
@@ -441,6 +547,7 @@ export async function storedCounts(): Promise<RecordsResult<StoredCounts> & {
             eprPaise: valuations.eprCreditPaise,
           })
           .from(valuations)
+          .where(within(valuations.itemId, itemIds))
           .orderBy(desc(valuations.computedAt)),
         db
           .select({
@@ -448,7 +555,8 @@ export async function storedCounts(): Promise<RecordsResult<StoredCounts> & {
             decidedAt: validationDecisions.decidedAt,
             undoneAt: validationDecisions.undoneAt,
           })
-          .from(validationDecisions),
+          .from(validationDecisions)
+          .where(within(validationDecisions.itemId, itemIds)),
       ]);
 
     const today = intakeRows.filter((row) => row.submittedAt >= since);
@@ -658,6 +766,7 @@ export async function listRecentIntakes(
  * undo is a new state on the record, never a deletion.
  */
 export async function listPendingHolds(
+  scope: Scope,
   limit = 12,
 ): Promise<RecordsResult<StoredItem>> {
   if (!databaseConfigured()) return notConfigured<StoredItem>();
@@ -666,6 +775,9 @@ export async function listPendingHolds(
 
   try {
     const { db } = connection;
+    const filter = await rowFilter(db, scope);
+    if (filter.kind === "refused") return { configured: true, error: filter.message, rows: [] };
+    const { itemIds } = filterIds(filter);
     const [verdictRows, decisionRows] = await Promise.all([
       db
         .select({
@@ -673,13 +785,15 @@ export async function listPendingHolds(
           verdict: gatekeeperVerdicts.verdict,
         })
         .from(gatekeeperVerdicts)
+        .where(within(gatekeeperVerdicts.itemId, itemIds))
         .orderBy(desc(gatekeeperVerdicts.checkedAt)),
       db
         .select({
           itemId: validationDecisions.itemId,
           undoneAt: validationDecisions.undoneAt,
         })
-        .from(validationDecisions),
+        .from(validationDecisions)
+        .where(within(validationDecisions.itemId, itemIds)),
     ]);
 
     const decided = new Set(
@@ -831,13 +945,19 @@ const VERDICT_WORDS: Record<Verdict, string> = {
  * the rows it is drawn from — the failure mode of a feed written beside the fact rather
  * than from it.
  */
-export async function listRecentEvents(limit = 10): Promise<RecordsResult<StoredEvent>> {
+export async function listRecentEvents(
+  scope: Scope,
+  limit = 10,
+): Promise<RecordsResult<StoredEvent>> {
   if (!databaseConfigured()) return notConfigured<StoredEvent>();
   const connection = database();
   if (!connection) return notConfigured<StoredEvent>();
 
   try {
     const { db } = connection;
+    const filter = await rowFilter(db, scope);
+    if (filter.kind === "refused") return { configured: true, error: filter.message, rows: [] };
+    const { intakeIds, itemIds } = filterIds(filter);
     const [intakeRows, verdictRows, decisionRows] = await Promise.all([
       db
         .select({
@@ -848,6 +968,7 @@ export async function listRecentEvents(limit = 10): Promise<RecordsResult<Stored
           model: intakes.extractionModel,
         })
         .from(intakes)
+        .where(within(intakes.id, intakeIds))
         .orderBy(desc(intakes.submittedAt))
         .limit(limit),
       db
@@ -861,6 +982,7 @@ export async function listRecentEvents(limit = 10): Promise<RecordsResult<Stored
         })
         .from(gatekeeperVerdicts)
         .innerJoin(items, eq(gatekeeperVerdicts.itemId, items.id))
+        .where(within(gatekeeperVerdicts.itemId, itemIds))
         .orderBy(desc(gatekeeperVerdicts.checkedAt))
         .limit(limit),
       db
@@ -875,6 +997,7 @@ export async function listRecentEvents(limit = 10): Promise<RecordsResult<Stored
         .from(validationDecisions)
         .innerJoin(items, eq(validationDecisions.itemId, items.id))
         .leftJoin(users, eq(validationDecisions.decidedByUserId, users.id))
+        .where(within(validationDecisions.itemId, itemIds))
         .orderBy(desc(validationDecisions.decidedAt))
         .limit(limit),
     ]);

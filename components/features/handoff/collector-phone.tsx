@@ -34,10 +34,13 @@ const POLL_MS = 1500;
 export function CollectorPhone({
   load,
   onRouted,
+  canRoute = true,
 }: {
   load: HandoffLoad;
   /** Tells a split-screen parent which load the gate should open. */
   onRouted?: (pickupId: string) => void;
+  /** False for a seat that may watch the phone but not route (an Officer on `/demo`). */
+  canRoute?: boolean;
 }) {
   const [stage, setStage] = useState<Stage>("idle");
   const [pickup, setPickup] = useState<PickupView | null>(null);
@@ -126,7 +129,14 @@ export function CollectorPhone({
           </dl>
         </div>
 
-        {stage === "idle" || stage === "routing" ? (
+        {!canRoute && stage === "idle" ? (
+          <div className="mt-auto pt-6">
+            <p className="text-sm leading-relaxed text-ink-soft">
+              Routing a load is the Operator&rsquo;s step: an Operator taps Hand over on the
+              collector&rsquo;s phone. Open the load at the gate once it is routed.
+            </p>
+          </div>
+        ) : stage === "idle" || stage === "routing" ? (
           <div className="mt-auto pt-6">
             <p className="mb-3 text-sm leading-relaxed text-ink-soft">
               Tap once at the recycler&rsquo;s gate. You&rsquo;ll get a 4-digit PIN to show them.

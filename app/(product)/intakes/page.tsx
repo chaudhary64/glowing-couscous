@@ -3,10 +3,10 @@ import { Surface } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader } from "@/components/ui/page-header";
 import { requireAccess } from "@/lib/auth/dal";
-import { scopeFor, scopeRefusal } from "@/lib/auth/scope";
 import { SIMULATED_CLAIM } from "@/lib/disclaimer";
 import { formatInr, formatMass, formatTimestamp } from "@/lib/format";
 import { listPricedItems } from "@/lib/records/queues";
+import { scopeForUser } from "@/lib/records/scope";
 import { verdictLabel, verdictTone } from "@/lib/tone";
 
 export const instant = false;
@@ -18,27 +18,21 @@ export const instant = false;
  * Operator's console (`/intake`) and pricing is the Admin's (`/valuation`), so nothing on
  * this screen writes.
  *
- * The rows are cut by `scopeFor`, and only one scope can be honoured today. An Admin's
- * scope is `all`, which the existing reader serves as it stands. A Collector's scope is
- * `{ kind: "collector", userId }`, and nothing yet links a submission to the collector who
- * made it (`items.collector_id` is null in the normal case — see the migration hand-over,
- * §4.3), so the page says that instead of drawing everyone's items under "yours" or an
- * empty table that reads as "you have submitted nothing". The scoped reader lands with the
- * read layer's step 20; this page then passes it the same `scope`.
+ * The rows are cut by the caller's scope inside the reader. An Admin's scope is `all`. A
+ * Collector's reaches the submissions made in their name — through their collector record
+ * — and until that record exists (the migration hand-over, §4.3) the reader answers with
+ * a sentence saying so, which the page shows instead of an empty table that would read as
+ * "you have submitted nothing".
  */
-
-const NOT_LINKED =
-  "Your submissions are not linked to your account yet. Nothing records which collector made a submission, so this list cannot be cut to yours, and showing everyone's would be wrong. It fills in once each submission carries the collector who made it.";
 
 export default async function IntakesPage() {
   const user = await requireAccess("/intakes");
-  const scope = scopeFor(user);
-
-  // Only `all` can be served by today's unscoped reader; every other scope waits for it.
-  const read = scope.kind === "all" ? await listPricedItems(50) : null;
-  const unavailable = read ? null : (scopeRefusal(scope) ?? NOT_LINKED);
-  const rows = read?.rows ?? [];
+  const scope = await scopeForUser(user);
+  const read = await listPricedItems(scope, 50);
+  const rows = read.rows;
   const everyone = scope.kind === "all";
+  // For a narrower scope the reader's sentence is the scope's answer, not a failure.
+  const unavailable = !everyone && read.error ? read.error : null;
 
   return (
     <div className="flex flex-col gap-10">
@@ -52,15 +46,15 @@ export default async function IntakesPage() {
         }
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            {read ? (
+            {unavailable ? (
+              <Badge tone="review">Not linked yet</Badge>
+            ) : (
               <Badge tone={read.configured ? "verified" : "hazard"}>
                 {read.configured ? "Counted from the database" : "No database"}
               </Badge>
-            ) : (
-              <Badge tone="review">Not linked yet</Badge>
             )}
             <Badge tone="ink">Read-only</Badge>
-            {read?.error ? (
+            {read.error && !unavailable ? (
               <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-hazard-ink">
                 {read.error}
               </span>
@@ -72,7 +66,7 @@ export default async function IntakesPage() {
       <Surface>
         {unavailable ? (
           <p className="max-w-3xl p-4 text-sm leading-relaxed text-ink-soft">{unavailable}</p>
-        ) : !read?.configured ? (
+        ) : !read.configured ? (
           <p className="max-w-3xl p-4 text-sm leading-relaxed text-ink-soft">
             No records database is connected, so no submission can be read back. The list is
             absent rather than empty: an empty table would say nothing was ever submitted.

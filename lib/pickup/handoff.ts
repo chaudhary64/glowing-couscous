@@ -1,3 +1,4 @@
+import type { Scope } from "@/lib/auth/scope";
 import { listLoads } from "@/lib/pickup/directory";
 import { readHandoffLoad, type HandoffLoad } from "@/lib/pickup/load";
 import type { PickupView } from "@/lib/pickup/types";
@@ -35,8 +36,8 @@ export interface HandoffContext {
   newest: PickupView | null;
 }
 
-export async function readHandoffContext(): Promise<HandoffContext> {
-  const [board, load] = await Promise.all([listLoads(25), readHandoffLoad()]);
+export async function readHandoffContext(scope: Scope): Promise<HandoffContext> {
+  const [board, load] = await Promise.all([listLoads(scope, 25), readHandoffLoad()]);
 
   const fromLoad = {
     loadConfigured: load.configured,

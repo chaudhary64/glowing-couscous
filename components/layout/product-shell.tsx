@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { NavFrame } from "@/components/layout/nav-frame";
 import { ProductNav } from "@/components/layout/product-nav";
 import { getCurrentUser } from "@/lib/auth/dal";
+import { scopeForUser } from "@/lib/records/scope";
 import { canOpen, roleLabel } from "@/lib/auth/roles";
 import { listLoads } from "@/lib/pickup/directory";
 import { listPendingHolds } from "@/lib/records/queues";
@@ -60,9 +61,10 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
   const role = user?.role ?? null;
   const mayCountHolds = canOpen("/validation", role).ok;
   const mayCountLoads = canOpen("/pickups", role).ok;
+  const scope = user && (mayCountHolds || mayCountLoads) ? await scopeForUser(user) : null;
   const [holds, loads] = await Promise.all([
-    mayCountHolds ? listPendingHolds(100) : null,
-    mayCountLoads ? listLoads(100) : null,
+    scope && mayCountHolds ? listPendingHolds(scope, 100) : null,
+    scope && mayCountLoads ? listLoads(scope, 100) : null,
   ]);
   const counts: Partial<Record<ProductHref, number>> = {};
   if (holds?.configured && holds.rows.length > 0) {

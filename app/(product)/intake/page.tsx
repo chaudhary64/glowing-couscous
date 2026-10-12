@@ -8,6 +8,8 @@ import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
+import { scopeForUser } from "@/lib/records/scope";
+import { listCollectorOptions } from "@/lib/records/users";
 import { formatConfidence, formatInr, formatMass, formatPct, formatTimestamp } from "@/lib/format";
 import { listRecentIntakes, storedCounts } from "@/lib/records/queues";
 import { conditionTone, verdictLabel, verdictTone } from "@/lib/tone";
@@ -24,9 +26,11 @@ export const instant = false;
  */
 export default async function IntakePage() {
   const user = await requireAccess("/intake");
+  const scope = await scopeForUser(user);
   const canValue = mayOpen(user.role, "/valuation");
 
-  const [tallies, log] = await Promise.all([storedCounts(), listRecentIntakes(8)]);
+  const [tallies, log] = await Promise.all([storedCounts(scope), listRecentIntakes(8)]);
+  const collectors = await listCollectorOptions();
   const counts = tallies.counts;
   const readError = tallies.error ?? log.error;
 
@@ -60,7 +64,7 @@ export default async function IntakePage() {
         }
       />
 
-      <LiveAnalysis mode="intake" />
+      <LiveAnalysis mode="intake" collectors={collectors} />
 
       <StatGrid columns={4}>
         <Stat

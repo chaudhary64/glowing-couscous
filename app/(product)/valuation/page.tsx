@@ -11,6 +11,7 @@ import { Receipt, type ReceiptLine } from "@/components/ui/receipt";
 import { Stamp, VerdictMark } from "@/components/ui/stamp";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
+import { scopeForUser } from "@/lib/records/scope";
 import { SIMULATED_CLAIM } from "@/lib/disclaimer";
 import { formatInr, formatIstStamp, formatMass, formatRate, lineValue } from "@/lib/format";
 import { getStoredItem, listPricedItems } from "@/lib/records/queues";
@@ -64,12 +65,12 @@ export default async function ValuationsPage({
 }: {
   searchParams: Promise<Search>;
 }) {
-  await requireAccess("/valuation");
+  const scope = await scopeForUser(await requireAccess("/valuation"));
 
   const params = await searchParams;
   const requested = pick(params.item)?.trim() ?? "";
 
-  const queue = await listPricedItems(12);
+  const queue = await listPricedItems(scope, 12);
   const rows = queue.rows;
 
   /*

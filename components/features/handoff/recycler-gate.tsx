@@ -34,7 +34,14 @@ type Outcome =
   | { kind: "success"; note: CreditNoteView }
   | { kind: "error"; code: string; message: string; attemptsRemaining?: number | null };
 
-export function RecyclerGate({ pickupId: suggested }: { pickupId?: string | null }) {
+export function RecyclerGate({
+  pickupId: suggested,
+  canSettle = true,
+}: {
+  pickupId?: string | null;
+  /** False for a seat that may watch the gate but not settle (an Operator on `/demo`). */
+  canSettle?: boolean;
+}) {
   const [idInput, setIdInput] = useState(suggested ?? "");
   const [pickup, setPickup] = useState<PickupView | null>(null);
   const [note, setNote] = useState<CreditNoteView | null>(null);
@@ -288,9 +295,17 @@ export function RecyclerGate({ pickupId: suggested }: { pickupId?: string | null
                   ) : null}
                 </fieldset>
 
-                <Button type="button" onClick={verify} disabled={!canSubmit} className="w-full justify-center py-3 sm:w-auto">
-                  {busy ? "Verifying…" : "Verify & issue credit"}
-                </Button>
+                {canSettle ? (
+                  <Button type="button" onClick={verify} disabled={!canSubmit} className="w-full justify-center py-3 sm:w-auto">
+                    {busy ? "Verifying…" : "Verify & issue credit"}
+                  </Button>
+                ) : (
+                  <p className="border-l-[5px] border-review bg-sunken px-3 py-2 text-sm leading-relaxed text-ink-soft">
+                    Settling is the Officer&rsquo;s step: an Officer signs in at the recycler gate, weighs
+                    this load and types the collector&rsquo;s PIN. You can watch it settle here — the phone
+                    turns green when the payout lands.
+                  </p>
+                )}
               </div>
             )}
 

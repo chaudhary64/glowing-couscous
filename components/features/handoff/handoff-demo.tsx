@@ -16,7 +16,16 @@ import type { HandoffLoad } from "@/lib/pickup/load";
  * compliance trail and the API has no delete — so each take starts from a fresh load
  * and the previous one stays in the table, settled and paid.
  */
-export function HandoffDemo({ load }: { load: HandoffLoad }) {
+export function HandoffDemo({
+  load,
+  canRoute = true,
+  canSettle = true,
+}: {
+  load: HandoffLoad;
+  /** Whether this seat holds the phone's step (`/handoff`) and the gate's (`/gate`). */
+  canRoute?: boolean;
+  canSettle?: boolean;
+}) {
   const [run, setRun] = useState(0);
   const [pickupId, setPickupId] = useState<string | null>(null);
 
@@ -47,12 +56,12 @@ export function HandoffDemo({ load }: { load: HandoffLoad }) {
         <section aria-label="Collector's phone" className="xl:sticky xl:top-6">
           <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-ink-muted">Kabadiwala · mobile</p>
           <PhoneFrame>
-            <CollectorPhone key={run} load={load} onRouted={setPickupId} />
+            <CollectorPhone key={run} load={load} onRouted={setPickupId} canRoute={canRoute} />
           </PhoneFrame>
         </section>
         <section aria-label="Recycler's gate terminal">
           <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-muted">Authorised recycler · desktop</p>
-          <RecyclerGate key={`${run}:${pickupId ?? ""}`} pickupId={pickupId} />
+          <RecyclerGate key={`${run}:${pickupId ?? ""}`} pickupId={pickupId} canSettle={canSettle} />
         </section>
       </div>
     </div>

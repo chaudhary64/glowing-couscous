@@ -50,7 +50,13 @@ const problem = (code: string, message: string, status: number) =>
  * may open `pathname`. The Lambda checks the role again — this check is what keeps a
  * refused request from leaving the server at all.
  */
-export async function authorizePickup(request: Request, pathname: "/handoff" | "/gate") {
+/**
+ * `/handoff` for the phone's writes (Operator, Admin), `/gate` for settling (Officer,
+ * Admin), and `/demo` for the reads both ends make — a load's row, its trail and the
+ * stream prices. `/demo`'s seats are exactly the union of the two (handover §4.2), so the
+ * phone and the gate can each read what the other wrote without either seat widening.
+ */
+export async function authorizePickup(request: Request, pathname: "/handoff" | "/gate" | "/demo") {
   return authorizeUser(request, pathname, {
     subject: "Working a handoff",
     signIn: "work a handoff",

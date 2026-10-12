@@ -7,6 +7,7 @@ import { Field, FieldList } from "@/components/ui/field-list";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
+import { scopeForUser } from "@/lib/records/scope";
 import { simulatedNote } from "@/lib/disclaimer";
 import { formatInr, formatMass, formatPct, formatTimestamp } from "@/lib/format";
 import { listLoadEvents, listLoads } from "@/lib/pickup/directory";
@@ -53,8 +54,9 @@ function isOpen(load: PickupView): boolean {
 
 export default async function PickupsPage() {
   const user = await requireAccess("/pickups");
+  const scope = await scopeForUser(user);
 
-  const board = await listLoads(50);
+  const board = await listLoads(scope, 50);
   const loads = board.rows;
   const openLoads = loads.filter(isOpen);
   // The load the panel opens on: the newest one still moving, because that is the row an

@@ -281,7 +281,12 @@ type RecordedIntake = AiIntakeResult & {
   location?: LocationOutcome | null;
 };
 
-export function LiveAnalysis({ mode }: { mode: LiveMode }) {
+/** A collector the Operator can capture on behalf of; see `listCollectorOptions`. */
+export type CollectorChoice = { id: string; code: string; fullName: string };
+
+export function LiveAnalysis({ mode, collectors = [] }: { mode: LiveMode; collectors?: CollectorChoice[] }) {
+  /** Whose material this is; empty means "not recorded", never a guessed collector. */
+  const [collectorId, setCollectorId] = useState("");
   const [photo, setPhoto] = useState<Media | null>(null);
   const [audio, setAudio] = useState<Media | null>(null);
   const [audioSeconds, setAudioSeconds] = useState(0);
@@ -578,6 +583,7 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
       body.durationSeconds = Math.round(audioSeconds);
     }
     if (mode === "intake" && fix) body.location = fix;
+    if (mode === "intake" && collectorId) body.collectorId = collectorId;
 
     // Refused here rather than upstream. The server checks the same total, but past
     // roughly 6 MiB the hosting layer answers 413 itself, so the request never
@@ -802,6 +808,31 @@ export function LiveAnalysis({ mode }: { mode: LiveMode }) {
               className="w-full border border-rule bg-paper-raised px-3 py-2 text-sm leading-relaxed text-ink outline-none placeholder:text-ink-muted focus:border-ink"
             />
           </label>
+
+          {mode === "intake" ? (
+            <label className="flex flex-col gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
+                4 · Collector
+              </span>
+              <select
+                value={collectorId}
+                onChange={(event) => setCollectorId(event.target.value)}
+                className="w-full border border-rule bg-paper-raised px-3 py-2 text-sm text-ink outline-none focus:border-ink"
+              >
+                <option value="">Not recorded</option>
+                {collectors.map((collector) => (
+                  <option key={collector.id} value={collector.id}>
+                    {collector.fullName} · {collector.code}
+                  </option>
+                ))}
+              </select>
+              <span className="text-[12px] leading-snug text-ink-muted">
+                {collectors.length
+                  ? "Whose material this is. The collector then sees it on their own dashboard and in My submissions."
+                  : "No collector has an account yet. A collector appears here after their first sign-in."}
+              </span>
+            </label>
+          ) : null}
 
           {mode === "valuation" ? (
             <label className="flex flex-col gap-2">

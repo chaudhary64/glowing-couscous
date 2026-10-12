@@ -75,6 +75,8 @@ export interface PricedRecordInput {
    * when the submission was not recorded — in which case the item is not either.
    */
   intakeId: string | null;
+  /** The `collectors.id` the item was captured for, when the Operator picked one. */
+  collectorId?: string | null;
   /** The priced result: its id is the item's code, and its figures are the rows. */
   analysis: AiAnalysis;
   /** The fields the intake pass extracted, on the route that produces them. */
@@ -179,9 +181,9 @@ export async function recordPricedItem(input: PricedRecordInput): Promise<Priced
         .values({
           code: analysis.id,
           intakeId: input.intakeId as string,
-          // Null is the honest answer: the request carries an operator's session and
-          // says nothing about whose material this is.
-          collectorId: null,
+          // The collector the Operator captured this for, or null when none was picked:
+          // an operator's session alone says nothing about whose material this is.
+          collectorId: input.collectorId ?? null,
           deviceLabel: identified.itemLabel,
           deviceCategory: identified.className,
           brand: storedBrand(identified.brand),

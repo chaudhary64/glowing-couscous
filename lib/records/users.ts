@@ -1,7 +1,7 @@
 import { desc, eq, sql } from "drizzle-orm";
 
 import { database, databaseConfigured } from "@/db/client";
-import { users } from "@/db/schema";
+import { collectors, users } from "@/db/schema";
 
 import type { AuthUser } from "@/lib/auth/token";
 import type { RecordsResult } from "@/lib/types";
@@ -83,7 +83,10 @@ export async function provisionUser(user: AuthUser): Promise<ProvisionedUser | n
       .returning({ id: users.id });
 
     const created = inserted[0]?.id ?? null;
-    if (created) return { id: created, created: true };
+    if (created) {
+      if (user.role === "eco-collector") await ensureCollectorRecord(created, user.sub, fullName);
+      return { id: created, created: true };
+    }
 
     // `DO NOTHING` returns nothing when the row was already there, so the id comes back
     // from a read of the same unique index. That read is also what keeps this a mirror:
@@ -100,6 +103,9 @@ export async function provisionUser(user: AuthUser): Promise<ProvisionedUser | n
       .where(eq(users.cognitoSub, user.sub))
       .limit(1);
 
+    if (existing && user.role === "eco-collector") {
+      await ensureCollectorRecord(existing.id, user.sub, fullName);
+    }
     return existing ? { id: existing.id, created: false } : null;
   } catch (error) {
     const cause =
@@ -186,5 +192,73 @@ export async function listMembers(limit = 200): Promise<RecordsResult<Member>> {
       .trim();
     console.error("[db] listing members failed", message);
     return { configured: true, error: message.slice(0, 200), rows: [] };
+  }
+}
+
+/**
+ * The collector record behind a Collector's account, created at their first sign-in.
+ *
+ * `collectors` is the person an Operator captures on behalf of; `collectors.user_id` is
+ * what lets that person sign in and see their own submissions. The code is derived from
+ * the Cognito subject, so it is stable across sign-ins and needs no counter. Idempotent on
+ * `collectors_user_uq`, and never throws: a failed write leaves the account signed in and
+ * unlinked, which the Collector's screens already explain.
+ */
+async function ensureCollectorRecord(userId: string, sub: string, fullName: string): Promise<void> {
+  const connection = database();
+  if (!connection) return;
+  try {
+    await connection.db
+      .insert(collectors)
+      .values({
+        code: `KAB-${sub.replace(/[^0-9a-f]/gi, "").slice(0, 6).toUpperCase()}`,
+        userId,
+        fullName,
+      })
+      .onConflictDoNothing();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[db] creating the collector record failed", message.replace(/\s+/g, " ").slice(0, 200));
+  }
+}
+
+/** A collector an Operator can capture on behalf of. */
+export interface CollectorOption {
+  id: string;
+  code: string;
+  fullName: string;
+}
+
+/** Every collector on file, for the intake screen's picker. Empty, not thrown, on failure. */
+export async function listCollectorOptions(): Promise<CollectorOption[]> {
+  if (!databaseConfigured()) return [];
+  const connection = database();
+  if (!connection) return [];
+  try {
+    return await connection.db
+      .select({ id: collectors.id, code: collectors.code, fullName: collectors.fullName })
+      .from(collectors)
+      .orderBy(collectors.fullName)
+      .limit(500);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[db] listing the collectors failed", message.replace(/\s+/g, " ").slice(0, 200));
+    return [];
+  }
+}
+
+/** Whether a `collectors.id` exists, so a submission is never tied to an invented one. */
+export async function collectorExists(id: string): Promise<boolean> {
+  const connection = databaseConfigured() ? database() : null;
+  if (!connection) return false;
+  try {
+    const [row] = await connection.db
+      .select({ id: collectors.id })
+      .from(collectors)
+      .where(eq(collectors.id, id))
+      .limit(1);
+    return Boolean(row);
+  } catch {
+    return false;
   }
 }

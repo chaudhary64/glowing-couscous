@@ -1,7 +1,8 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 
 import { database, databaseConfigured } from "@/db/client";
-import { intakes, mediaAssets, users } from "@/db/schema";
+import { eprCreditNotes, intakes, items, mediaAssets, users } from "@/db/schema";
+import type { Scope } from "@/lib/auth/scope";
 import type { EvidenceAsset, VoiceNote } from "@/lib/types";
 
 import {
@@ -361,7 +362,88 @@ function toAsset(row: AssetRow): EvidenceAsset {
   };
 }
 
-export async function listRecentMediaAssets(
+/**
+ * The evidence a scope reaches.
+ *
+ * The archive is the Operator's and the Admin's working record, so `all` reads it whole.
+ * A Viewer reads only the evidence behind the credits their brand claimed: the media of
+ * the submissions whose items an `epr_credit_notes` row names the brand on. Nothing writes
+ * that table yet, so today a Viewer's archive says so in a sentence instead of listing
+ * nothing. The other scopes cannot open `/evidence`, and are refused here as well, so
+ * this read cannot be the hole a page guard forgot.
+ */
+type EvidenceFilter =
+  | { kind: "all" }
+  | { kind: "some"; mediaIds: string[] }
+  | { kind: "refused"; message: string };
+
+export const NO_CLAIM_ON_FILE =
+  "No claim on file: this brand has no EPR credit note yet, so no evidence is claimed by it. The evidence behind an item appears here once a credit note names the brand.";
+
+async function evidenceFilter(
+  db: NonNullable<ReturnType<typeof database>>["db"],
+  scope: Scope,
+): Promise<EvidenceFilter> {
+  switch (scope.kind) {
+    case "all":
+      return { kind: "all" };
+    case "unresolved":
+      return { kind: "refused", message: scope.reason };
+    case "collector":
+    case "facility":
+      return {
+        kind: "refused",
+        message: "The evidence archive is read by an Operator, an Admin or a brand's Viewer; this account's scope reaches none of it.",
+      };
+    case "brand": {
+      const rows = await db
+        .select({ mediaId: intakes.mediaId })
+        .from(eprCreditNotes)
+        .innerJoin(items, eq(items.id, eprCreditNotes.itemId))
+        .innerJoin(intakes, eq(intakes.id, items.intakeId))
+        .where(eq(eprCreditNotes.brandOrganizationId, scope.organizationId));
+      if (rows.length === 0) return { kind: "refused", message: NO_CLAIM_ON_FILE };
+      return { kind: "some", mediaIds: rows.map((row) => row.mediaId) };
+    }
+  }
+}
+
+function withinMedia(filter: EvidenceFilter): SQL | undefined {
+  if (filter.kind !== "some") return undefined;
+  return filter.mediaIds.length ? inArray(mediaAssets.id, filter.mediaIds) : sql`false`;
+}
+
+/**
+ * Whether a scope may read the object behind `storageKey`. `all` is answered without a
+ * query, so the Operator's read keeps working when a row write failed beside a good object
+ * (`app/api/media/read/route.ts`, decision 2); a narrower scope has to find the key among
+ * the rows it reaches, because for it the row *is* the permission.
+ */
+export async function mayReadMediaKey(
+  scope: Scope,
+  storageKey: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (scope.kind === "all") return { ok: true };
+  const connection = databaseConfigured() ? database() : null;
+  if (!connection) return { ok: false, message: "There is no database to check this evidence against, so it cannot be read." };
+  try {
+    const filter = await evidenceFilter(connection.db, scope);
+    if (filter.kind === "refused") return { ok: false, message: filter.message };
+    const [row] = await connection.db
+      .select({ id: mediaAssets.id })
+      .from(mediaAssets)
+      .where(and(eq(mediaAssets.storageKey, storageKey), withinMedia(filter)))
+      .limit(1);
+    return row ? { ok: true } : { ok: false, message: "This evidence is not among the credits this brand has claimed." };
+  } catch (error) {
+    const message = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, " ").trim();
+    console.error("[db] checking an evidence read against its scope failed", message);
+    return { ok: false, message: "The evidence could not be checked against this account's scope, so it was not read." };
+  }
+}
+
+export async function listEvidence(
+  scope: Scope,
   limit: number = LIST_LIMIT_DEFAULT,
 ): Promise<MediaAssetListing> {
   if (!databaseConfigured()) return { configured: false, assets: [], error: null };
@@ -371,6 +453,8 @@ export async function listRecentMediaAssets(
   const bounded = Math.min(Math.max(Math.round(limit), 1), LIST_LIMIT_MAX);
 
   try {
+    const filter = await evidenceFilter(connection.db, scope);
+    if (filter.kind === "refused") return { configured: true, assets: [], error: filter.message };
     const rows = await connection.db
       .select(assetColumns)
       .from(mediaAssets)
@@ -382,6 +466,7 @@ export async function listRecentMediaAssets(
       // went missing. The join cannot fan out — `intakes_media_uq` makes `media_id`
       // unique — so a row here is still one asset.
       .leftJoin(intakes, eq(intakes.mediaId, mediaAssets.id))
+      .where(withinMedia(filter))
       // `media_assets_uploaded_idx` covers this ordering, so the screen walks an index
       // rather than sorting the table.
       .orderBy(desc(mediaAssets.uploadedAt))
@@ -408,7 +493,7 @@ export async function listRecentMediaAssets(
 /**
  * The archive read from the other end: the object behind the id a valuation carries.
  *
- * `listRecentMediaAssets` answers "what was archived lately", which is the wrong
+ * `listEvidence` answers "what was archived lately", which is the wrong
  * question for the operator holding an id off a priced result and asking what is behind
  * it. That id is `intakes.code` — the string every screen shows for the valuation — and
  * `intakes_code_uq` is what makes this one indexed read rather than a scan of the
@@ -443,7 +528,10 @@ export interface MediaAssetLookup {
  */
 const LOOKUP_CODE_MAX = 120;
 
-export async function findMediaAssetBySubmissionCode(code: string): Promise<MediaAssetLookup> {
+export async function findMediaAssetBySubmissionCode(
+  scope: Scope,
+  code: string,
+): Promise<MediaAssetLookup> {
   if (!databaseConfigured()) return { configured: false, asset: null, summary: null, error: null };
   const connection = database();
   if (!connection) return { configured: false, asset: null, summary: null, error: null };
@@ -454,12 +542,15 @@ export async function findMediaAssetBySubmissionCode(code: string): Promise<Medi
   if (!wanted) return { configured: true, asset: null, summary: null, error: null };
 
   try {
+    const filter = await evidenceFilter(connection.db, scope);
+    if (filter.kind === "refused") return { configured: true, asset: null, summary: null, error: filter.message };
+    // Out of scope reads as not found, so a pasted id cannot reveal that a submission exists.
     const [row] = await connection.db
       .select({ ...assetColumns, summary: intakes.summary })
       .from(intakes)
       .innerJoin(mediaAssets, eq(mediaAssets.id, intakes.mediaId))
       .leftJoin(users, eq(users.id, mediaAssets.uploaderUserId))
-      .where(eq(intakes.code, wanted))
+      .where(and(eq(intakes.code, wanted), withinMedia(filter)))
       .limit(1);
 
     if (!row) return { configured: true, asset: null, summary: null, error: null };
