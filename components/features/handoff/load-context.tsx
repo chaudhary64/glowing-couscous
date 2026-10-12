@@ -21,7 +21,7 @@ export function HandoffLoadContext({ context }: { context: HandoffContext }) {
   return (
     <Surface tone="inset" className="divide-y divide-rule-soft">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2 p-4">
-        <Badge tone={load ? "review" : "hazard"}>{load ? "Load on the phone" : "No load to route"}</Badge>
+        <Badge tone={load ? "review" : "hazard"}>{load ? "Ready to hand over" : "No load to route"}</Badge>
         <span className="font-mono text-[12px] text-ink">
           {load ? (
             <>
@@ -36,12 +36,7 @@ export function HandoffLoadContext({ context }: { context: HandoffContext }) {
         </span>
         <p className="w-full max-w-3xl text-[12px] leading-snug text-ink-soft">
           {load ? (
-            <>
-              The handover button routes this load, and only this one — the server builds the
-              request from the newest cleared item the gatekeeper has recorded, so no button
-              press can route anything else and nothing here is a constant. Its stream, mass
-              and hazards are the priced record&rsquo;s own.
-            </>
+            "This is the newest cleared item ready for handover."
           ) : context.loadError ? (
             `The load could not be read from the record: ${context.loadError}`
           ) : (
@@ -52,7 +47,7 @@ export function HandoffLoadContext({ context }: { context: HandoffContext }) {
       </div>
 
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2 p-4">
-        <Badge tone="neutral">On the service</Badge>
+        <Badge tone="neutral">Service status</Badge>
         <span className="font-mono text-[12px] text-ink">
           {!context.configured ? (
             "not configured"
@@ -76,7 +71,7 @@ export function HandoffLoadContext({ context }: { context: HandoffContext }) {
             : context.error
               ? `The load board could not be read: ${context.error}`
               : context.newest
-                ? `Read from the load board. Its PIN and gate are not on this screen, and the phone does not hand this row over — it is what the service holds, not what the button routes.`
+                ? "Live status from the load board. PIN and gate details are kept off this screen."
                 : "Every load the service holds has settled, so nothing is open."}
         </p>
       </div>

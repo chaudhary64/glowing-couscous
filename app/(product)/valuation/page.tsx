@@ -123,7 +123,7 @@ export default async function ValuationsPage({
         title="Valuations"
         lede={
           rows.length > 0
-            ? `Every item the pipeline has assayed and priced, newest first. ${formatInr(payableTotal)} is promised to collectors and ${formatInr(eprTotal)} of brand EPR credit is created across the ${cleared.length} items the gatekeeper cleared; the rest keep their assay and promise nothing.`
+            ? `Assayed and priced items, newest first. Cleared items have ${formatInr(eprTotal)} in brand EPR credit; collector payments are ${formatInr(payableTotal)}. Other items have no promise.`
             : "No items have been priced yet."
         }
         actions={
