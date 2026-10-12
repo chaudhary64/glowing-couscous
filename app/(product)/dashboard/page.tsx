@@ -270,7 +270,7 @@ export default async function DashboardPage() {
             <Stat
               label="Your items priced"
               value={own ? String(own.itemsPriced) : "—"}
-              unit={own ? "in the record" : undefined}
+              unit={own ? "items" : undefined}
               note={own ? `${own.verified} cleared, ${own.held} held, ${own.rejected} refused.` : "Each one priced on the server from the rate card."}
             />
             <Stat
@@ -455,7 +455,7 @@ export default async function DashboardPage() {
                     {board?.error
                       ? board.error
                       : boardConfigured
-                      ? "No load has been routed yet. A route on the collector handoff screen appears here as soon as the service records it."
+                      ? "No loads routed yet. A handoff appears here when recorded."
                       : "This board needs the pickup service. Without it there is no load to list."}
                   </p>
                 ) : (

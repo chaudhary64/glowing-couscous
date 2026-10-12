@@ -24,7 +24,7 @@ test.describe("an admin", () => {
     const main = page.getByRole("main");
     await expect(main.getByRole("heading", { level: 1, name: "Team" })).toBeVisible();
     await expect(
-      main.getByText(rolesReadable ? "Roles read from the user pool" : "Roles not readable here"),
+      main.getByText(rolesReadable ? "Roles available" : "Roles unavailable"),
     ).toBeVisible();
     // Global setup signed every demo account in, so each has a row.
     await expect(main.getByText("demo.viewer@example.com")).toBeVisible();

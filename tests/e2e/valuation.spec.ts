@@ -29,7 +29,7 @@ test("UI: a photo of a motherboard is valued, priced and gatekept", async ({ pag
   await expect(page.getByText("Attached").first()).toBeVisible();
   await page.getByPlaceholder(/पुराना लैपटॉप/).fill("Old laptop motherboard, does not power on.");
   await page.getByPlaceholder("412").fill("600");
-  await page.getByRole("button", { name: "Value this item" }).click();
+  await page.getByRole("button", { name: "Price this item" }).click();
 
   await expect(page.getByRole("heading", { name: "What the collector is offered" })).toBeVisible({ timeout: 90_000 });
   await expect(page.getByRole("heading", { name: "What produced this" })).toBeVisible();

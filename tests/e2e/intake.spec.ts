@@ -34,7 +34,7 @@ test("UI: photo + Hindi voice note → transcript, extracted fields and a price"
   await page.locator('input[type="file"][accept^="image"]').setInputFiles(uploadable(FILES.motherboard, "motherboard.jpg"));
   await page.locator('input[type="file"][accept^="audio"]').setInputFiles(FILES.hindiNote);
   await expect(page.getByText("Attached")).toHaveCount(2);
-  await page.getByRole("button", { name: "Read this intake" }).click();
+  await page.getByRole("button", { name: "Process intake" }).click();
   await page.getByRole("button", { name: "Submit without" }).click();
 
   await expect(page.getByRole("heading", { name: "What was pulled out" })).toBeVisible({ timeout: 110_000 });

@@ -38,7 +38,7 @@ export function CreditNote({
       value: formatInr(item.valuation.grossValue),
     },
     {
-      label: "Handling & licensed line fee",
+      label: "Handling & line fee",
       detail: "deducted before payout",
       value: `−${formatInr(item.valuation.handlingFee)}`,
       muted: true,

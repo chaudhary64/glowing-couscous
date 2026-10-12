@@ -30,10 +30,10 @@ export default async function DemoPage() {
       {context.load ? (
         <HandoffDemo load={context.load} canRoute={canRoute} canSettle={canSettle} />
       ) : (
-        <Panel eyebrow="Nothing to route" title="No load can be handed over yet">
+        <Panel eyebrow="Nothing to route" title="No cleared load available">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
             {context.loadError
-              ? `The priced record could not be read: ${context.loadError}`
+              ? `Could not read the priced item: ${context.loadError}`
               : (context.loadReason ??
                 "No cleared item is on file, so there is no load to record a handoff for.")}
           </p>

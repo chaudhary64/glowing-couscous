@@ -50,7 +50,7 @@ export default async function IntakesPage() {
               <Badge tone="review">Not linked yet</Badge>
             ) : (
               <Badge tone={read.configured ? "verified" : "hazard"}>
-                {read.configured ? "Counted from the database" : "No database"}
+                {read.configured ? "Live records" : "No records source"}
               </Badge>
             )}
             <Badge tone="ink">Read-only</Badge>
