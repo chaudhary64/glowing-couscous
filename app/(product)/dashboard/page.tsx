@@ -4,13 +4,14 @@ import { ButtonLink } from "@/components/ui/button";
 import { Panel, Surface } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
-import { MeterRow } from "@/components/ui/meter";
+import { Meter, MeterRow } from "@/components/ui/meter";
 import { mayOpen, RoleLink } from "@/components/ui/role-link";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
+import { scopeFor, scopeRefusal, type Scope } from "@/lib/auth/scope";
 import { SIMULATED_CLAIM } from "@/lib/disclaimer";
 import { getHeatmap } from "@/lib/heatmap/store";
-import { formatInr, formatPct, formatTimestamp } from "@/lib/format";
+import { formatInr, formatPct, formatTimestamp, formatTonnes } from "@/lib/format";
 import { listCollectorActivity, listLoads } from "@/lib/pickup/directory";
 import { listRecentEvents, storedCounts } from "@/lib/records/queues";
 import { activityLabel, activityTone, pickupLabel, pickupTone } from "@/lib/tone";
@@ -35,10 +36,102 @@ export const instant = false;
  *
  * Saying that plainly is the point. A dashboard that mixes counted rows with authored
  * ones and calls them all "today" is a dashboard nobody can trust twice.
+ *
+ * One screen, cut by role. Cards whose screen a role cannot open drop out (`mayOpen`), and
+ * two roles get panels of their own: the **Collector** reads their own day — intakes,
+ * items priced, net promised — and nobody else's feed, load board or ranking; the
+ * **Viewer** reads the brand's Compliance Gauge against its annual tonnage. Both are cut
+ * by `scopeFor` (`lib/auth/scope.ts`), and both say so when the scope cannot be honoured
+ * yet rather than drawing the platform's numbers under "yours".
  */
+
+/**
+ * Whether the readers on this page cut their rows to a scope. Not yet: the read layer's
+ * step 19 gives `storedCounts`, `listRecentEvents`, `listLoads` and `listCollectorActivity`
+ * `scope` as their first parameter. When it does, pass `scope` to each call below and
+ * set this to true — the Collector's tiles then read `snapshot.counts`, which will be theirs.
+ */
+const READERS_TAKE_SCOPE = false;
+
+const NOT_LINKED =
+  "Your submissions are not linked to your account yet: nothing records which collector made a submission, so these figures cannot be cut to yours, and the platform's totals would be wrong here. They fill in once each submission carries the collector who made it.";
+
+/** The Indian financial year a date falls in — the period an EPR target is set for. */
+function financialYear(at: Date): string {
+  const start = at.getMonth() >= 3 ? at.getFullYear() : at.getFullYear() - 1;
+  return `FY ${start}–${String(start + 1).slice(-2)}`;
+}
+
+/**
+ * How far a brand's collected tonnage has carried its annual EPR target.
+ *
+ * The target is `epr_obligations`, per brand per period, and the brand is the Viewer's
+ * `{ kind: "brand" }` scope. Neither exists for a viewer yet — the brand binding is not on
+ * file and nothing reads the obligations — so `progress` is null and the gauge draws an
+ * empty track with the reason, never a 0% that reads as a brand failing its filing.
+ */
+function ComplianceGauge({
+  scope,
+  progress,
+}: {
+  scope: Scope;
+  progress: { collectedTonnes: number; targetTonnes: number } | null;
+}) {
+  const reason =
+    scopeRefusal(scope) ??
+    "No EPR obligation is on file for this brand, so there is no annual target to measure collection against.";
+  const share = progress && progress.targetTonnes > 0 ? progress.collectedTonnes / progress.targetTonnes : null;
+
+  return (
+    <Panel
+      eyebrow={`EPR compliance · ${financialYear(new Date())}`}
+      title="Compliance gauge"
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-ink">
+          Collected against the annual target
+        </span>
+        <span className="font-display text-3xl leading-none tracking-tight text-copper">
+          {share !== null ? formatPct(Math.min(share, 1)) : "—"}
+        </span>
+      </div>
+      {progress && share !== null ? (
+        <>
+          <Meter
+            value={Math.min(share, 1)}
+            target={1}
+            tone={share >= 1 ? "verified" : share >= 0.6 ? "copper" : "hazard"}
+            label={`Collected ${formatPct(Math.min(share, 1))} of the annual EPR target`}
+            className="mt-2"
+          />
+          <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">
+            {formatTonnes(progress.collectedTonnes)} of {formatTonnes(progress.targetTonnes)}
+          </p>
+        </>
+      ) : (
+        <>
+          <div
+            aria-hidden
+            className="mt-2 h-3 w-full border-2 border-dashed border-ink-muted bg-paper"
+          />
+          <p className="mt-3 text-[13px] leading-relaxed text-ink-soft">{reason}</p>
+        </>
+      )}
+      <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
+        Read-only. Only credits this brand has claimed count toward it, and the tonnage is the
+        weighed mass at a licensed recycler&rsquo;s gate, not the mass a photo was estimated at.
+      </p>
+    </Panel>
+  );
+}
 
 export default async function DashboardPage() {
   const user = await requireAccess("/dashboard");
+  const scope = scopeFor(user);
+  const role = user.role;
+  // A Collector's home is their own day. Until the readers honour a scope, none of the
+  // platform-wide feeds below is shown to them: they are other collectors' records.
+  const personal = scope.kind === "collector";
 
   const [snapshot, events, heat, board, activity] = await Promise.all([
     storedCounts(),
@@ -63,7 +156,7 @@ export default async function DashboardPage() {
   const tooFew = heat.districts.length - rankable.length;
   const counts = snapshot.counts;
   const configured = snapshot.configured;
-  const role = user.role;
+  const own = personal && READERS_TAKE_SCOPE ? counts : null;
 
   /*
     One dashboard, cut to the role reading it. A card, button or link whose screen this
@@ -120,12 +213,21 @@ export default async function DashboardPage() {
         eyebrow="Operations"
         title="Today"
         lede={
-          counts
+          personal
+            ? "Your day: what you submitted, what it was valued at, and where the next van is going. Need a van at a pile? Call one from the map."
+            : counts
             ? `${counts.intakesToday} intakes today, ${counts.itemsPriced} items priced, and ${counts.awaitingDecision} waiting on a human decision. Every panel here is counted: the tiles, the work queue and the activity feed from the pipeline's own rows, and the load board and collector ranking from the pickup service.`
             : "The pipeline records its submissions, prices, verdicts and decisions, and this screen counts them. With no database configured there is nothing to count, and the panels below say what they could not read."
         }
         actions={
-          mayOpen(role, "/intake") || mayOpen(role, "/validation") ? (
+          personal ? (
+            <>
+              <ButtonLink href="/intakes">My submissions</ButtonLink>
+              <ButtonLink href="/map" variant="secondary">
+                Call a van
+              </ButtonLink>
+            </>
+          ) : mayOpen(role, "/intake") || mayOpen(role, "/validation") ? (
             <>
               {mayOpen(role, "/intake") ? <ButtonLink href="/intake">New intake</ButtonLink> : null}
               {mayOpen(role, "/validation") ? (
@@ -138,10 +240,14 @@ export default async function DashboardPage() {
         }
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <Badge tone={configured ? "verified" : "hazard"}>
-              {configured ? "Counted from the database" : "No database"}
-            </Badge>
-            {counts ? (
+            {personal && !own ? (
+              <Badge tone="review">Not linked to your account yet</Badge>
+            ) : (
+              <Badge tone={configured ? "verified" : "hazard"}>
+                {configured ? "Counted from the database" : "No database"}
+              </Badge>
+            )}
+            {counts && !personal ? (
               <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
                 {counts.intakesTotal} submissions · {counts.itemsPriced} items priced ·{" "}
                 {counts.hazardousItems} hazard-flagged
@@ -156,7 +262,35 @@ export default async function DashboardPage() {
         }
       />
 
-      {counts ? (
+      {personal ? (
+        <section>
+          <StatGrid columns={3}>
+            <Stat
+              label="Your intakes today"
+              value={own ? String(own.intakesToday) : "—"}
+              unit={own ? "items" : undefined}
+              note="Submissions made today in your name."
+            />
+            <Stat
+              label="Your items priced"
+              value={own ? String(own.itemsPriced) : "—"}
+              unit={own ? "in the record" : undefined}
+              note={own ? `${own.verified} cleared, ${own.held} held, ${own.rejected} refused.` : "Each one priced on the server from the rate card."}
+            />
+            <Stat
+              label="Net promised to you"
+              value={own ? formatInr(own.netPayableInr) : "—"}
+              emphasis
+              note={`Cleared items only. ${SIMULATED_CLAIM}`}
+            />
+          </StatGrid>
+          {own ? null : (
+            <Surface tone="inset" className="mt-5 p-4">
+              <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">{NOT_LINKED}</p>
+            </Surface>
+          )}
+        </section>
+      ) : counts ? (
         <StatGrid columns={4}>
           <Stat
             label="Intakes today"
@@ -203,6 +337,10 @@ export default async function DashboardPage() {
         </Surface>
       )}
 
+      {role === "eco-viewer" ? (
+        <ComplianceGauge scope={scope} progress={null} />
+      ) : null}
+
       {cards.length > 0 ? (
         <section>
           <SectionHeader
@@ -243,117 +381,57 @@ export default async function DashboardPage() {
         </section>
       ) : null}
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <section>
-          <SectionHeader
-            eyebrow={configured ? "From the record" : "Unavailable"}
-            title="Activity"
-            note="Each entry is a submission, verdict or decision, shown with the time it was recorded."
-          />
-          <Surface className="mt-4">
-            {events.rows.length === 0 ? (
-              <p className="p-4 text-sm leading-relaxed text-ink-soft">
-                {configured
-                  ? "Nothing has been recorded yet. A capture on the intake screen appears here as soon as the model has priced it and the record is written."
-                  : "The feed needs a database. Without one there is no submission, verdict or decision to list."}
-              </p>
-            ) : (
-              <Table>
-                <THead>
-                  <TR>
-                    <TH className="w-36">Time</TH>
-                    <TH>Event</TH>
-                    <TH>Kind</TH>
-                    <TH className="hidden lg:table-cell">Actor</TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {events.rows.map((event) => (
-                    <TR key={event.id}>
-                      <TD mono className="text-[11px] text-ink-muted">
-                        {formatTimestamp(event.at)}
-                      </TD>
-                      <TD>
-                        <RoleLink
-                          role={role}
-                          href={event.href}
-                          className="font-medium underline decoration-rule decoration-1 underline-offset-2 hover:decoration-copper"
-                          plainClassName="font-medium"
-                        >
-                          {event.subject}
-                        </RoleLink>
-                        <p className="mt-1 text-[12px] leading-snug text-ink-muted">
-                          {event.detail}
-                        </p>
-                      </TD>
-                      <TD>
-                        <Badge tone={activityTone(event.kind)}>
-                          {activityLabel(event.kind)}
-                        </Badge>
-                      </TD>
-                      <TD className="hidden text-[12px] text-ink-soft lg:table-cell">
-                        {event.actor}
-                      </TD>
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
-            )}
-          </Surface>
-        </section>
-
-        <aside className="flex flex-col gap-6">
+      <div className={personal ? "grid gap-8 lg:grid-cols-2" : "grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"}>
+        {personal ? null : (
           <section>
             <SectionHeader
-              eyebrow={board.configured ? "From the pickup service" : "Unavailable"}
-              title="Loads in play"
-              note={`Every load the smart-pickup service has routed. ${notesIssued.length} note${
-                notesIssued.length === 1 ? "" : "s"
-              } issued so far, ${formatInr(notesInr)} settled. A load leaves this board when the gate settles it against the weighed mass.`}
+              eyebrow={configured ? "From the record" : "Unavailable"}
+              title="Activity"
+              note="Each entry is a submission, verdict or decision, shown with the time it was recorded."
             />
             <Surface className="mt-4">
-              {loads.length === 0 ? (
+              {events.rows.length === 0 ? (
                 <p className="p-4 text-sm leading-relaxed text-ink-soft">
-                  {board.configured
-                    ? "No load has been routed yet. A route on the collector handoff screen appears here as soon as the service records it."
-                    : "This board needs the pickup service. Without it there is no load to list."}
+                  {configured
+                    ? "Nothing has been recorded yet. A capture on the intake screen appears here as soon as the model has priced it and the record is written."
+                    : "The feed needs a database. Without one there is no submission, verdict or decision to list."}
                 </p>
               ) : (
                 <Table>
                   <THead>
                     <TR>
-                      <TH>Pickup</TH>
-                      <TH>Status</TH>
-                      <TH numeric>Settled</TH>
+                      <TH className="w-36">Time</TH>
+                      <TH>Event</TH>
+                      <TH>Kind</TH>
+                      <TH className="hidden lg:table-cell">Actor</TH>
                     </TR>
                   </THead>
                   <TBody>
-                    {loads.slice(0, 6).map((load) => (
-                      <TR
-                        key={load.pickupId}
-                        className={load.hazardous ? "border-l-[5px] border-l-hazard" : undefined}
-                      >
-                        <TD mono>
+                    {events.rows.map((event) => (
+                      <TR key={event.id}>
+                        <TD mono className="text-[11px] text-ink-muted">
+                          {formatTimestamp(event.at)}
+                        </TD>
+                        <TD>
                           <RoleLink
                             role={role}
-                            href="/pickups"
-                            className="underline decoration-rule underline-offset-2 hover:decoration-copper"
+                            href={event.href}
+                            className="font-medium underline decoration-rule decoration-1 underline-offset-2 hover:decoration-copper"
+                            plainClassName="font-medium"
                           >
-                            {load.pickupId}
+                            {event.subject}
                           </RoleLink>
-                          <p className="mt-1 text-[11px] text-ink-muted">
-                            {load.streamLabel} · {load.facilityName}
+                          <p className="mt-1 text-[12px] leading-snug text-ink-muted">
+                            {event.detail}
                           </p>
                         </TD>
                         <TD>
-                          <Badge tone={pickupTone(load.status)}>
-                            {pickupLabel(load.status)}
+                          <Badge tone={activityTone(event.kind)}>
+                            {activityLabel(event.kind)}
                           </Badge>
                         </TD>
-                        <TD numeric mono>
-                          {load.creditNoteAmountPaise
-                            ? formatInr(load.creditNoteAmountPaise / 100)
-                            : "—"}
+                        <TD className="hidden text-[12px] text-ink-soft lg:table-cell">
+                          {event.actor}
                         </TD>
                       </TR>
                     ))}
@@ -362,6 +440,70 @@ export default async function DashboardPage() {
               )}
             </Surface>
           </section>
+        )}
+
+        <aside className="flex flex-col gap-6">
+          {personal ? null : (
+            <section>
+              <SectionHeader
+                eyebrow={board.configured ? "From the pickup service" : "Unavailable"}
+                title="Loads in play"
+                note={`Every load the smart-pickup service has routed. ${notesIssued.length} note${
+                  notesIssued.length === 1 ? "" : "s"
+                } issued so far, ${formatInr(notesInr)} settled. A load leaves this board when the gate settles it against the weighed mass.`}
+              />
+              <Surface className="mt-4">
+                {loads.length === 0 ? (
+                  <p className="p-4 text-sm leading-relaxed text-ink-soft">
+                    {board.configured
+                      ? "No load has been routed yet. A route on the collector handoff screen appears here as soon as the service records it."
+                      : "This board needs the pickup service. Without it there is no load to list."}
+                  </p>
+                ) : (
+                  <Table>
+                    <THead>
+                      <TR>
+                        <TH>Pickup</TH>
+                        <TH>Status</TH>
+                        <TH numeric>Settled</TH>
+                      </TR>
+                    </THead>
+                    <TBody>
+                      {loads.slice(0, 6).map((load) => (
+                        <TR
+                          key={load.pickupId}
+                          className={load.hazardous ? "border-l-[5px] border-l-hazard" : undefined}
+                        >
+                          <TD mono>
+                            <RoleLink
+                              role={role}
+                              href="/pickups"
+                              className="underline decoration-rule underline-offset-2 hover:decoration-copper"
+                            >
+                              {load.pickupId}
+                            </RoleLink>
+                            <p className="mt-1 text-[11px] text-ink-muted">
+                              {load.streamLabel} · {load.facilityName}
+                            </p>
+                          </TD>
+                          <TD>
+                            <Badge tone={pickupTone(load.status)}>
+                              {pickupLabel(load.status)}
+                            </Badge>
+                          </TD>
+                          <TD numeric mono>
+                            {load.creditNoteAmountPaise
+                              ? formatInr(load.creditNoteAmountPaise / 100)
+                              : "—"}
+                          </TD>
+                        </TR>
+                      ))}
+                    </TBody>
+                  </Table>
+                )}
+              </Surface>
+            </section>
+          )}
 
           <Panel
             eyebrow="District pressure · India"
@@ -400,53 +542,55 @@ export default async function DashboardPage() {
             </p>
           </Panel>
 
-          <Panel
-            eyebrow="From the load board · Collectors"
-            title="Leading by settled credits"
-            actions={
-              <RoleLink
-                role={role}
-                href="/collectors"
-                hide
-                className="font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
-              >
-                All collectors →
-              </RoleLink>
-            }
-          >
-            {topCollectors.length === 0 ? (
-              <p className="text-[13px] leading-relaxed text-ink-soft">
-                No credit note has settled against a collector yet, so there is no standing
-                to rank. A list drawn now would be an invented one.
+          {personal ? null : (
+            <Panel
+              eyebrow="From the load board · Collectors"
+              title="Leading by settled credits"
+              actions={
+                <RoleLink
+                  role={role}
+                  href="/collectors"
+                  hide
+                  className="font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
+                >
+                  All collectors →
+                </RoleLink>
+              }
+            >
+              {topCollectors.length === 0 ? (
+                <p className="text-[13px] leading-relaxed text-ink-soft">
+                  No credit note has settled against a collector yet, so there is no standing
+                  to rank. A list drawn now would be an invented one.
+                </p>
+              ) : (
+                <ul className="flex flex-col">
+                  {topCollectors.map((collector) => (
+                    <li
+                      key={collector.collectorId}
+                      className="flex items-baseline justify-between gap-3 border-b border-rule-soft py-2 last:border-b-0"
+                    >
+                      <span>
+                        <span className="text-sm font-medium">
+                          {collector.collectorId}
+                        </span>
+                        <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">
+                          {collector.notes} note{collector.notes === 1 ? "" : "s"}
+                        </span>
+                      </span>
+                      <span className="font-mono text-[13px] tabular-nums">
+                        {formatInr(collector.settledInr)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
+                Settled credits, counted from the loads the pickup service holds. A collector
+                id is all the platform stores — no name and no standing — so this ranks the
+                work rather than the worker.
               </p>
-            ) : (
-              <ul className="flex flex-col">
-                {topCollectors.map((collector) => (
-                  <li
-                    key={collector.collectorId}
-                    className="flex items-baseline justify-between gap-3 border-b border-rule-soft py-2 last:border-b-0"
-                  >
-                    <span>
-                      <span className="text-sm font-medium">
-                        {collector.collectorId}
-                      </span>
-                      <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">
-                        {collector.notes} note{collector.notes === 1 ? "" : "s"}
-                      </span>
-                    </span>
-                    <span className="font-mono text-[13px] tabular-nums">
-                      {formatInr(collector.settledInr)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-              Settled credits, counted from the loads the pickup service holds. A collector
-              id is all the platform stores — no name and no standing — so this ranks the
-              work rather than the worker.
-            </p>
-          </Panel>
+            </Panel>
+          )}
         </aside>
       </div>
     </div>

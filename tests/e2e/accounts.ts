@@ -43,6 +43,7 @@ export const SCREENS: readonly Screen[] = [
     title: "Hotspot map",
   },
   { path: "/intake", roles: ["admin", "operator"], nav: "New intake", title: "New intake" },
+  { path: "/intakes", roles: ["admin", "collector"], nav: "My submissions", title: "Submissions" },
   { path: "/pickups", roles: ["admin", "operator"], nav: "Pickups", title: "Pickups" },
   {
     path: "/handoff",
