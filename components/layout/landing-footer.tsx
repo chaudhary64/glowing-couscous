@@ -121,10 +121,10 @@ export function LandingFooter({ user }: { user: AuthUser | null }) {
       </div>
 
       {/* ------------------------------------------------------------- the slab */}
-      <div className="pb-16 lg:pb-20">
+      <div className="pb-8 pt-2 lg:pb-10">
         <div
           data-motion="rows"
-          className="mx-auto grid w-full max-w-6xl grid-cols-2 gap-x-8 gap-y-12 px-5 sm:px-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_minmax(0,1fr)]"
+          className="mx-auto grid w-full max-w-6xl grid-cols-2 gap-x-8 gap-y-8 px-5 sm:px-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_minmax(0,1fr)]"
         >
           <div className="col-span-2 lg:col-span-1">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper/60">
@@ -139,13 +139,6 @@ export function LandingFooter({ user }: { user: AuthUser | null }) {
               pool when configured, while the working screens can combine fixture data with
               records written by the pipeline. Sample and simulated values are labelled on their
               panels.
-            </p>
-            {/* The sign-off: an outline that fills with copper as it scrolls into view. */}
-            <p
-              aria-hidden
-              className="wordmark mt-8 select-none font-display text-[clamp(3.5rem,10.5vw,8rem)] uppercase leading-[0.85] tracking-tight"
-            >
-              EcoEPR
             </p>
           </div>
 
