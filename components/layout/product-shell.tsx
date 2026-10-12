@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { NavFrame } from "@/components/layout/nav-frame";
 import { ProductNav } from "@/components/layout/product-nav";
 import { getCurrentUser } from "@/lib/auth/dal";
-import { roleLabel } from "@/lib/auth/roles";
+import { canOpen, roleLabel } from "@/lib/auth/roles";
 import { listLoads } from "@/lib/pickup/directory";
 import { listPendingHolds } from "@/lib/records/queues";
 import type { ProductHref } from "@/lib/types";
@@ -38,7 +38,8 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
   const user = await getCurrentUser();
 
   /*
-    The rail's badges, read rather than imported.
+    The rail's badges, read rather than imported — and only for the roles that can act
+    on them.
 
     A badge is a claim that work is waiting, so it has to be counted from the rows that
     hold that work: the undecided holds from Postgres, and the loads the smart-pickup
@@ -47,10 +48,21 @@ export async function ProductShell({ children }: { children: React.ReactNode }) 
     "nobody can tell" are different claims and the rail should not make the first when it
     means the second. Neither read throws, so a broken badge cannot take down the shell
     that every product page renders through.
+
+    A count is taken only for a role that can open the screen it belongs to: /validation
+    is the admin's screen now and /pickups the operator's, and the rail already removes
+    the link from anyone else. Asking `canOpen` — the same membership test the rail, the
+    proxy and the data access layer use — is what keeps this to the roles that can spend
+    the number, rather than a second list of roles written here that could drift from the
+    matrix. It is not only tidiness: without it every viewer's page load queried Postgres
+    and the pickup service for a figure it had nowhere to show.
   */
+  const role = user?.role ?? null;
+  const mayCountHolds = canOpen("/validation", role).ok;
+  const mayCountLoads = canOpen("/pickups", role).ok;
   const [holds, loads] = await Promise.all([
-    user ? listPendingHolds(100) : null,
-    user ? listLoads(100) : null,
+    mayCountHolds ? listPendingHolds(100) : null,
+    mayCountLoads ? listLoads(100) : null,
   ]);
   const counts: Partial<Record<ProductHref, number>> = {};
   if (holds?.configured && holds.rows.length > 0) {

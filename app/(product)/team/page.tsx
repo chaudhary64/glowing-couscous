@@ -128,7 +128,7 @@ export default async function TeamPage() {
         <SectionHeader
           eyebrow="Roles"
           title="What each role opens"
-          note="Highest authority first. A person in several groups gets the strongest one."
+          note="The five roles the platform knows, listed in display order. Someone in several groups is named by the first of these they hold, and their access is whatever the screens they hold open."
         />
         <Surface className="mt-4">
           <ol>
