@@ -2,10 +2,10 @@ import { RolePicker } from "@/components/features/product/team/role-picker";
 import { Badge } from "@/components/ui/badge";
 import { Surface } from "@/components/ui/card";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
-import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
+import { ScreenHeader } from "@/components/ui/page-header";
 import { requireAccess } from "@/lib/auth/dal";
 import { readPoolRoles, type PoolAccount } from "@/lib/auth/pool";
-import { ROLES, roleLabel, type Role } from "@/lib/auth/roles";
+import { roleLabel } from "@/lib/auth/roles";
 import { formatTimestamp } from "@/lib/format";
 import { listMembers } from "@/lib/records/users";
 
@@ -124,28 +124,6 @@ export default async function TeamPage() {
         )}
       </Surface>
 
-      <section>
-        <SectionHeader
-          eyebrow="Roles"
-          title="What each role opens"
-          note="Higher roles include more access."
-        />
-        <Surface className="mt-4">
-          <ol>
-            {(Object.entries(ROLES) as [Role, (typeof ROLES)[Role]][]).map(([role, spec]) => (
-              <li
-                key={role}
-                className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-rule-soft px-4 py-3 last:border-b-0"
-              >
-                <span className="w-24 font-mono text-[11px] uppercase tracking-[0.14em] text-copper">
-                  {spec.label}
-                </span>
-                <span className="text-[13px] leading-snug text-ink-soft">{spec.summary}</span>
-              </li>
-            ))}
-          </ol>
-        </Surface>
-      </section>
     </div>
   );
 }
