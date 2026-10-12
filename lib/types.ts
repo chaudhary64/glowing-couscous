@@ -25,6 +25,7 @@ export type FeatureSlug =
 export type ProductHref =
   | "/dashboard"
   | "/intake"
+  | "/intakes"
   | "/valuation"
   | "/validation"
   | "/pickups"

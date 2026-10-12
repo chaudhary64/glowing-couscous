@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, like } from "drizzle-orm";
 
 import { database } from "@/db/client";
 import { publicDbError } from "@/lib/db-error";
@@ -11,7 +11,8 @@ import {
   materialLines,
   wards as wardsTable,
 } from "@/db/schema";
-import { encodeGeohash, geohashCenter } from "@/lib/geo/geohash";
+import type { Role } from "@/lib/auth/roles";
+import { CELL_PRECISION, encodeGeohash, geohashCenter } from "@/lib/geo/geohash";
 import { areaByCode, fileLocation } from "@/lib/geo/areas";
 import { INDIA_BOUNDS, districtByCode } from "@/lib/geo/districts";
 import { WARDS } from "@/lib/geo/wards";
@@ -37,9 +38,31 @@ import { HOTSPOT_RULE, detectHotspots, wardPressure, withinWindow, type ClusterR
  * Privacy: points leave the server snapped to their ~38 m geohash cell (precision 8).
  * A geopoint is where a collector stood with their phone; the map needs the street,
  * not the doorway.
+ *
+ * One kind of site is not computed: a **van call**. A collector standing at a pile taps
+ * [Call Van] and the position becomes an open site, stored in `hotspot_clusters` under a
+ * `CV-` code so it can never collide with a detected `HS-` site. It is a request, not a
+ * detection — it adds no point, no heat and no ward pressure, so nobody can draw a
+ * hotspot by tapping a button; it only puts a stop on the van round for an operator to
+ * assign or clear like any other site.
  */
 
 export type ClusterStatus = "open" | "van_assigned" | "cleared";
+
+/** Codes of called sites. Detected sites are `HS-` + their lowest geohash cell. */
+export const VAN_CALL_PREFIX = "CV-";
+
+/** How large a called site is drawn: the ~150 m cell the call was filed to, as a radius. */
+const VAN_CALL_RADIUS_M = 75;
+
+/**
+ * Who may call a van to where they stand. The Collector is the seat this exists for — the
+ * person at the pile — and the Admin holds every seat. An Operator or Officer dispatches
+ * or receives vans rather than calling one, and a Viewer's map is read-only.
+ */
+export const VAN_CALLERS: readonly Role[] = ["eco-admin", "eco-collector"];
+
+export const mayCallVan = (role: Role | null): boolean => role !== null && VAN_CALLERS.includes(role);
 
 export interface HeatmapFilter {
   category?: MaterialCategory;
@@ -70,6 +93,8 @@ export interface HeatmapCluster {
   firstSeenAt: string;
   lastSeenAt: string;
   status: ClusterStatus;
+  /** Found by the hotspot rule, or called to by someone standing there. */
+  origin: "detected" | "called";
 }
 
 export interface HeatmapWard {
@@ -248,7 +273,52 @@ function toCluster(c: ClusterResult, status: ClusterStatus): HeatmapCluster {
     firstSeenAt: c.firstSeenAt.toISOString(),
     lastSeenAt: c.lastSeenAt.toISOString(),
     status,
+    origin: "detected",
   };
+}
+
+/**
+ * The van calls still in the window, as sites. The position is the centre of the cell the
+ * code names, so a call leaves the server at ~150 m precision — coarser than a point.
+ */
+async function loadVanCalls(now: Date): Promise<HeatmapCluster[]> {
+  const connection = database();
+  if (!connection) return [];
+  const since = new Date(now.getTime() - HOTSPOT_RULE.windowDays * 86_400_000);
+  const rows = await connection.db
+    .select({
+      code: hotspotClusters.code,
+      label: hotspotClusters.label,
+      status: hotspotClusters.status,
+      radiusM: hotspotClusters.radiusM,
+      firstSeenAt: hotspotClusters.firstSeenAt,
+      lastSeenAt: hotspotClusters.lastSeenAt,
+      wardCode: wardsTable.code,
+    })
+    .from(hotspotClusters)
+    .leftJoin(wardsTable, eq(wardsTable.id, hotspotClusters.wardId))
+    .where(and(like(hotspotClusters.code, `${VAN_CALL_PREFIX}%`), gt(hotspotClusters.lastSeenAt, since)));
+  return rows.map((r) => {
+    const centre = geohashCenter(r.code.slice(VAN_CALL_PREFIX.length));
+    const calledAt = (r.lastSeenAt ?? now).toISOString();
+    return {
+      code: r.code,
+      label: r.label,
+      wardCode: r.wardCode,
+      wardName: areaByCode(r.wardCode)?.name ?? null,
+      latitude: Math.round(centre.latitude * 1e5) / 1e5,
+      longitude: Math.round(centre.longitude * 1e5) / 1e5,
+      radiusM: r.radiusM ?? VAN_CALL_RADIUS_M,
+      detections: 0,
+      topCategory: null,
+      hazardSharePct: 0,
+      totalMassKg: 0,
+      firstSeenAt: (r.firstSeenAt ?? now).toISOString(),
+      lastSeenAt: calledAt,
+      status: r.status,
+      origin: "called",
+    } satisfies HeatmapCluster;
+  });
 }
 
 /**
@@ -273,14 +343,22 @@ export async function getHeatmap(options: { filter?: HeatmapFilter; now?: Date }
   const shownSites = filtered ? found.filter((c) => c.detections.some((p) => matchesFilter(p, filter))) : found;
 
   let statuses = new Map<string, StoredDecision>();
+  // A call carries no material, so a material filter has nothing to match it on.
+  let calls: HeatmapCluster[] = [];
   let error = live.error;
   try {
-    statuses = await loadStatuses(shownSites.map((c) => c.code));
+    [statuses, calls] = await Promise.all([
+      loadStatuses(shownSites.map((c) => c.code)),
+      filtered ? Promise.resolve([]) : loadVanCalls(now),
+    ]);
   } catch (e) {
     error = publicDbError("heatmap statuses", e);
   }
 
-  const clusters = shownSites.map((c) => toCluster(c, effectiveStatus(c, statuses.get(c.code))));
+  const clusters = [
+    ...shownSites.map((c) => toCluster(c, effectiveStatus(c, statuses.get(c.code)))),
+    ...calls,
+  ];
   const pressure = wardPressure(shownPoints, shownSites, WARDS);
 
   // District pressure across India: the same arithmetic, keyed by district, over the
@@ -413,6 +491,22 @@ export async function recomputeClusters(now = new Date()): Promise<{ configured:
 export async function setClusterStatus(code: string, status: ClusterStatus, now = new Date()): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
   const connection = database();
   if (!connection) return { ok: false, status: 503, message: "No database is configured, so there is no site to act on." };
+
+  // A called site is not recomputed from points, so it is acted on where it is stored.
+  if (code.startsWith(VAN_CALL_PREFIX)) {
+    const updated = await connection.db
+      .update(hotspotClusters)
+      .set({
+        status,
+        vanAssignedAt: status === "van_assigned" ? now : status === "open" ? null : undefined,
+        clearedAt: status === "cleared" ? now : status === "open" ? null : undefined,
+      })
+      .where(eq(hotspotClusters.code, code))
+      .returning({ id: hotspotClusters.id });
+    if (!updated.length) return { ok: false, status: 404, message: "That van call is not on file. Refresh the map." };
+    return { ok: true };
+  }
+
   const live = await loadLivePoints(now);
   const cluster = detectHotspots(live.points, now).find((c) => c.code === code);
   if (!cluster) return { ok: false, status: 404, message: "That site is not a hotspot in the current window. Refresh the map." };
@@ -439,4 +533,62 @@ export async function setClusterStatus(code: string, status: ClusterStatus, now 
     })
     .onConflictDoUpdate({ target: hotspotClusters.code, set: { status, ...stamps } });
   return { ok: true };
+}
+
+export type VanCallOutcome =
+  | { ok: true; code: string; status: ClusterStatus; areaName: string; repeated: boolean }
+  | { ok: false; status: number; message: string };
+
+/**
+ * Call a van to a position: the site is the ~150 m cell the position falls in, filed to
+ * its ward or district. Calling twice from the same cell is one site, not two — the call
+ * is refreshed, and a site that was cleared reopens, because the pile came back. A site a
+ * van is already assigned to stays assigned.
+ */
+export async function callVan(latitude: number, longitude: number, now = new Date()): Promise<VanCallOutcome> {
+  const connection = database();
+  if (!connection) return { ok: false, status: 503, message: "No database is configured, so the call cannot be recorded." };
+  const { area } = fileLocation(latitude, longitude);
+  if (!area) {
+    return { ok: false, status: 409, message: "This position is outside India's districts, so there is no area to send a van to." };
+  }
+  const areaName = area.name.replace(/ \(.*\)$/, "");
+  try {
+    const { db } = connection;
+    const wardId = await ensureArea(db, area.code);
+    if (!wardId) return { ok: false, status: 409, message: "This area could not be filed, so there is no area to send a van to." };
+
+    const cell = encodeGeohash(latitude, longitude, CELL_PRECISION);
+    const code = `${VAN_CALL_PREFIX}${cell}`;
+    const created = await db
+      .insert(hotspotClusters)
+      .values({
+        code,
+        wardId,
+        label: `${areaName} · van called · cell ${cell}`,
+        radiusM: VAN_CALL_RADIUS_M,
+        status: "open",
+        firstSeenAt: now,
+        lastSeenAt: now,
+        notes: "Called from the hotspot map.",
+      })
+      .onConflictDoNothing({ target: hotspotClusters.code })
+      .returning({ id: hotspotClusters.id });
+    if (created.length) return { ok: true, code, status: "open", areaName, repeated: false };
+
+    const [existing] = await db
+      .select({ status: hotspotClusters.status })
+      .from(hotspotClusters)
+      .where(eq(hotspotClusters.code, code))
+      .limit(1);
+    const reopen = existing?.status === "cleared";
+    const status: ClusterStatus = reopen ? "open" : (existing?.status ?? "open");
+    await db
+      .update(hotspotClusters)
+      .set(reopen ? { lastSeenAt: now, status, clearedAt: null, vanAssignedAt: null } : { lastSeenAt: now })
+      .where(eq(hotspotClusters.code, code));
+    return { ok: true, code, status, areaName, repeated: true };
+  } catch (error) {
+    return { ok: false, status: 500, message: publicDbError("van call", error) };
+  }
 }

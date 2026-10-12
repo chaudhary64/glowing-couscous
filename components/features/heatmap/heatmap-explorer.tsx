@@ -46,7 +46,7 @@ export function DispatchButtons({ cluster, canDispatch }: { cluster: HeatmapClus
   const [error, setError] = useState<string | null>(null);
 
   if (!canDispatch) {
-    return <span className="text-[12px] text-ink-muted">Dispatching is limited to operator or above.</span>;
+    return <span className="text-[12px] text-ink-muted">Read-only: an Operator or Admin assigns vans to a site.</span>;
   }
 
   async function set(status: ClusterStatus) {

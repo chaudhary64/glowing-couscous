@@ -3,17 +3,19 @@ import Link from "next/link";
 import { DispatchButtons, HeatmapExplorer } from "@/components/features/heatmap/heatmap-explorer";
 import { HotspotTable } from "@/components/features/heatmap/hotspot-table";
 import { WardDensity } from "@/components/features/heatmap/ward-density";
+import { CallVanButton } from "@/components/features/collector/call-van-button";
 import { VanRound } from "@/components/features/product/map/van-round";
 import { Badge } from "@/components/ui/badge";
 import { Panel, Surface } from "@/components/ui/card";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
+import { RoleLink } from "@/components/ui/role-link";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
 import { canOpen } from "@/lib/auth/roles";
 import { cn } from "@/lib/cn";
 import { DISTRICTS, DISTRICT_SOURCE } from "@/lib/geo/districts";
 import { WARD_SOURCE } from "@/lib/geo/wards";
-import { getHeatmap } from "@/lib/heatmap/store";
+import { getHeatmap, mayCallVan } from "@/lib/heatmap/store";
 import { toDistricts, toHotspot, toWards } from "@/lib/heatmap/view";
 
 export const instant = false;
@@ -30,11 +32,21 @@ type Search = { hazardous?: string };
  *
  * Every number is computed from real geotagged intakes. There is no sample and no fixture:
  * with no data the map is empty, and the page says what would fill it.
+ *
+ * Every role opens this screen, but only the board's seats act on it. An Operator or Admin
+ * dispatches (`/map/dispatch`); for everyone else — Collector, Officer, Viewer — the same
+ * map renders read-only, with no dispatch control and no link to a screen they cannot
+ * open. A Collector (and an Admin) also gets [Call Van], which drops an open site where
+ * they stand without counting as a detection (`callVan` in `lib/heatmap/store.ts`).
  */
 export default async function HotspotMapPage({ searchParams }: { searchParams: Promise<Search> }) {
   const user = await requireAccess("/map");
   const params = await searchParams;
+  // An Officer loses this under the role-set matrix, by design: the gate is their seat,
+  // the van board is not.
   const canDispatch = canOpen("/map/dispatch", user.role).ok;
+  const canCallVan = mayCallVan(user.role);
+  const readOnly = !canDispatch;
 
   const hazardousOnly = params.hazardous === "1";
   const data = await getHeatmap({ filter: { hazardousOnly } });
@@ -71,12 +83,17 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
       <ScreenHeader
         eyebrow="Network · Municipal"
         title="Hotspot map"
-        lede="Every geotagged intake anywhere in India is filed to its district (and, in Mumbai, to its BMC ward). Where four or more land within 150 m of each other within three weeks, that spot is a site, and an operator can see where the next collection van should stand."
+        lede={
+          readOnly
+            ? "Every geotagged intake anywhere in India is filed to its district (and, in Mumbai, to its BMC ward). Where four or more land within 150 m of each other within three weeks, that spot is a site. This view is read-only: an operator decides where the next collection van goes."
+            : "Every geotagged intake anywhere in India is filed to its district (and, in Mumbai, to its BMC ward). Where four or more land within 150 m of each other within three weeks, that spot is a site, and an operator can see where the next collection van should stand."
+        }
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={data.configured ? "verified" : "hazard"}>
               {data.configured ? "Live intakes" : "No database"}
             </Badge>
+            {readOnly ? <Badge tone="ink">Read-only</Badge> : null}
             <Badge tone="ink">4 within {data.rule.radiusM} m · {data.rule.windowDays}-day window</Badge>
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
               {DISTRICTS.length} districts · {data.livePointCount} geotagged intake{data.livePointCount === 1 ? "" : "s"} in window
@@ -84,6 +101,16 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
           </div>
         }
       />
+
+      {canCallVan ? (
+        <Panel eyebrow="At a pile?" title="Call a van to where you stand">
+          <p className="mb-4 max-w-3xl text-sm leading-relaxed text-ink-soft">
+            The spot goes on the map as an open site, and onto the van round for an operator to
+            assign. A call is a request, not a detection: it adds no point and no ward pressure.
+          </p>
+          <CallVanButton />
+        </Panel>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="flex items-center gap-2">
@@ -131,10 +158,15 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
               ? "No intake with a location has been recorded in the last three weeks, so there is nothing to cluster. "
               : "There is no database connection, so no intakes can be read. "}
             Submit an item from{" "}
-            <Link href="/intake" className="underline decoration-rule underline-offset-2 hover:decoration-copper">
+            <RoleLink
+              role={user.role}
+              href="/intake"
+              className="underline decoration-rule underline-offset-2 hover:decoration-copper"
+              plainClassName="font-medium"
+            >
               Intake
-            </Link>{" "}
-            and tap <span className="font-medium">Use this device\u2019s location</span>: the point is filed to its district
+            </RoleLink>{" "}
+            with <span className="font-medium">Use this device\u2019s location</span> on: the point is filed to its district
             (its BMC ward in Mumbai) and appears here. A site is drawn once four intakes land within ~150 m of each other inside{" "}
             {data.rule.windowDays} days.
           </p>
@@ -177,16 +209,28 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
           ) : null}
         </div>
         <div>
-          <SectionHeader eyebrow="Action" title="Turn sites into a round" note="Cleared sites drop off; the rest are ordered by detection count." />
+          <SectionHeader
+            eyebrow={readOnly ? "Routing · read-only" : "Action"}
+            title={readOnly ? "The round an operator works through" : "Turn sites into a round"}
+            note={
+              readOnly
+                ? "Cleared sites drop off; the rest are ordered by detection count. An Operator or Admin assigns the vans."
+                : "Cleared sites drop off; the rest are ordered by detection count."
+            }
+          />
           <div className="mt-4">
             <VanRound
               hotspots={hotspots}
               wards={wards}
               canOpenBoard={canOpen("/pickups", user.role).ok}
-              actions={(spot) => {
-                const cluster = byCode.get(spot.id);
-                return cluster ? <DispatchButtons cluster={cluster} canDispatch={canDispatch} /> : null;
-              }}
+              actions={
+                readOnly
+                  ? undefined
+                  : (spot) => {
+                      const cluster = byCode.get(spot.id);
+                      return cluster ? <DispatchButtons cluster={cluster} canDispatch={canDispatch} /> : null;
+                    }
+              }
               note={
                 <>
                   {hotspots.filter((h) => h.status !== "cleared").length} sites on the round, ordered by detection count — a
