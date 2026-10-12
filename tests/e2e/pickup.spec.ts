@@ -8,10 +8,25 @@ import { sameOrigin } from "./fixtures";
  * video shows it: the collector's phone routes the load and shows a PIN, the recycler's
  * gate weighs it and types the PIN, the DynamoDB Stream pays the collector and the phone
  * turns green. Runs against the deployed API, like every other test in this suite.
+ *
+ * Admin, and only Admin can be the session here. `/demo` puts the phone and the gate on
+ * one page, and after the split they are two different seats: the phone's calls are
+ * guarded against `/handoff` (Operator) and the gate's against `/gate` (Officer). A
+ * session that holds both is an Admin, so an Operator driving this page reaches the
+ * weighbridge and then has no price to quote — the gate's own pricing is refused to
+ * them. That is the migration working as intended, not a fault in the flow: what the
+ * page demonstrates is the handoff, and the seats themselves are checked where they
+ * belong, by `access.spec.ts` for the screens and by the viewer case below for the API.
+ *
+ * The faithful version of this test is two sessions — an Operator on the phone and an
+ * Officer at the gate — which is the runbook's §4.2 option (a) and needs the three
+ * pickup *reads* opened to the union of the seats that read them (a load's row, its
+ * events and the stream catalogue are each read by both ends of a handoff). That is
+ * Track C's step 20/22, and this file is the one it rewrites.
  */
 
 test.describe.configure({ mode: "serial" });
-test.use({ storageState: stateFile("operator") });
+test.use({ storageState: stateFile("admin") });
 
 // The cookie and location notice is answered up front (intake.spec.ts walks through it
 // from a fresh browser); left open, it sits over the phone's "Hand over e-waste" button.

@@ -7,10 +7,17 @@ import { BANANA, FILES, MOTHERBOARD, sameOrigin , uploadable } from "./fixtures"
  * Feature 3 — the fraud-prevention vision gatekeeper — LIVE. A motherboard must not be
  * rejected; a bunch of bananas must be rejected as not e-waste (rule R-01), and the
  * credit withheld.
+ *
+ * Admin, not Officer. The gatekeeper is the `/validation` capability — the screen and the
+ * API are both guarded against it — and the migration put that queue in Admin's hands
+ * rather than the officer's, so every positive case here has to hold the seat that can
+ * actually open it. The officer's own seat is not left unchecked: `access.spec.ts` walks
+ * all five roles against every screen, and the operator case below still asserts the
+ * refusal.
  */
 
 test.describe.configure({ mode: "serial" });
-test.use({ storageState: stateFile("officer") });
+test.use({ storageState: stateFile("admin") });
 
 test("UI: a photo that is not e-waste is rejected under R-01", async ({ page }) => {
   await page.goto("/validation");
@@ -50,7 +57,7 @@ test("API: bananas are refused as not e-waste, with the credit withheld", async 
 
 test.describe("an operator", () => {
   test.use({ storageState: stateFile("operator") });
-  test("cannot run the gatekeeper (officer or above)", async ({ request, baseURL }) => {
+  test("cannot run the gatekeeper (Admin only)", async ({ request, baseURL }) => {
     const response = await request.post("/api/ai/gatekeeper", { headers: sameOrigin(baseURL), data: { note: "x" } });
     expect(response.status()).toBe(403);
   });

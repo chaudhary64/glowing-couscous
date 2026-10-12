@@ -8,10 +8,17 @@ import { FILES, MOTHERBOARD, sameOrigin, uploadable } from "./fixtures";
  * a real Azure Foundry call, the photo archived to S3, and the priced item written to
  * RDS. The item this creates is then used for the validation-decision and evidence
  * tests below, so the file runs in order.
+ *
+ * Admin, not Officer. Pricing and the validation decision are one capability in the
+ * matrix, and it is Admin's: `/valuation`, `/validation` and `/api/validation/decision`
+ * all name that seat, so an officer is refused at the screen and at the API alike. The
+ * roles that must *not* reach it keep their own cases below — an operator on the
+ * valuation and decision APIs, a viewer on evidence — and `access.spec.ts` walks every
+ * role against every screen.
  */
 
 test.describe.configure({ mode: "serial" });
-test.use({ storageState: stateFile("officer") });
+test.use({ storageState: stateFile("admin") });
 
 let itemCode = "";
 let archivedKey = "";
@@ -106,7 +113,7 @@ test("API: bad requests are refused before the model is called", async ({ reques
 
 test.describe("an operator", () => {
   test.use({ storageState: stateFile("operator") });
-  test("cannot run a valuation (officer or above)", async ({ request, baseURL }) => {
+  test("cannot run a valuation (Admin only)", async ({ request, baseURL }) => {
     const response = await request.post("/api/ai/valuation", { headers: sameOrigin(baseURL), data: { note: "x" } });
     expect(response.status()).toBe(403);
   });
@@ -149,7 +156,7 @@ test("decision input is checked", async ({ request, baseURL }) => {
 
 test.describe("an operator on the validation API", () => {
   test.use({ storageState: stateFile("operator") });
-  test("cannot record a decision (officer or above)", async ({ request, baseURL }) => {
+  test("cannot record a decision (Admin only)", async ({ request, baseURL }) => {
     const response = await request.post("/api/validation/decision", {
       headers: sameOrigin(baseURL),
       data: { item: itemCode || "x", decision: "reject" },
