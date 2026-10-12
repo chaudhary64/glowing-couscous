@@ -3,9 +3,10 @@ import { authorizePickup, callPickupApi, pickupIdFrom, pickupJson } from "@/lib/
 /**
  * GET /api/pickup/[pickupId] — one load, its PIN state and its note. The phone polls this
  * for the flip to `payoutStatus: "paid"`; the gate reads it to show what it is settling.
+ * Read by both ends, so it is held to the union of their seats (`/demo`).
  */
 export async function GET(request: Request, { params }: RouteContext<"/api/pickup/[pickupId]">) {
-  const access = await authorizePickup(request, "/handoff");
+  const access = await authorizePickup(request, "/demo");
   if (!access.ok) return access.denied;
 
   const pickupId = pickupIdFrom((await params).pickupId);

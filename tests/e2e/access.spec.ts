@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { ACCOUNTS, ROLE_RANK, SCREENS, stateFile, type RoleName } from "./accounts";
+import { ACCOUNTS, SCREENS, stateFile, type RoleName } from "./accounts";
 
 /**
  * The access matrix in lib/auth/roles.ts, checked from the outside: for each of the five
@@ -12,10 +12,10 @@ for (const role of Object.keys(ACCOUNTS) as RoleName[]) {
   test.describe(`${role}`, () => {
     test.use({ storageState: stateFile(role) });
 
-    test("opens exactly the screens its rank allows", async ({ page }) => {
+    test("opens exactly the screens its roles allow", async ({ page }) => {
       for (const screen of SCREENS) {
         await page.goto(screen.path);
-        const allowed = ROLE_RANK[role] <= screen.minRank;
+        const allowed = screen.roles.includes(role);
         if (allowed) {
           await expect(page, `${role} should open ${screen.path}`).toHaveURL(screen.path);
           await expect(page.getByRole("heading", { level: 1, name: screen.title })).toBeVisible();
@@ -32,7 +32,7 @@ for (const role of Object.keys(ACCOUNTS) as RoleName[]) {
       for (const screen of SCREENS) {
         const link = nav.locator(`a[href="${screen.path}"]`);
         // `>= 1`, not `1`: the logo links to /dashboard as well as the nav item.
-        if (ROLE_RANK[role] <= screen.minRank) await expect(link.first(), `${screen.nav} for ${role}`).toBeVisible();
+        if (screen.roles.includes(role)) await expect(link.first(), `${screen.nav} for ${role}`).toBeVisible();
         else await expect(link, `${screen.nav} hidden for ${role}`).toHaveCount(0);
       }
     });
@@ -45,6 +45,6 @@ test.describe("no-access page", () => {
   test("names the requirement instead of pretending the page is missing", async ({ page }) => {
     await page.goto("/valuation");
     await expect(page).toHaveURL(/\/no-access\?/);
-    await expect(page.getByText(/officer or above/i).first()).toBeVisible();
+    await expect(page.getByText(/Admin only/i).first()).toBeVisible();
   });
 });

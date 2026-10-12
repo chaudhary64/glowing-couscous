@@ -10,6 +10,7 @@ import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
+import { scopeForUser } from "@/lib/records/scope";
 import { SIMULATED_CLAIM, simulatedNote } from "@/lib/disclaimer";
 import { formatInr, formatMass, formatTimestamp } from "@/lib/format";
 import { listCollectorActivity, listLoads } from "@/lib/pickup/directory";
@@ -33,11 +34,11 @@ export const instant = false;
  * make a table look complete.
  */
 export default async function CollectorsPage() {
-  await requireAccess("/collectors");
+  const scope = await scopeForUser(await requireAccess("/collectors"));
 
   const [activity, board] = await Promise.all([
-    listCollectorActivity(25),
-    listLoads(50),
+    listCollectorActivity(scope, 25),
+    listLoads(scope, 50),
   ]);
   const collectors = activity.rows;
   const loads = board.rows;

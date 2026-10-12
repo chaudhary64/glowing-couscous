@@ -3,6 +3,9 @@ import type { ProductHref } from "@/lib/types";
 /**
  * Navigation for the working product, grouped by the job it serves rather than
  * by the capability behind it. The doc section has its own rail.
+ *
+ * Every entry is listed for every role; `ProductNav` drops the ones the role cannot
+ * open (`canOpen`), so a group only appears to a role that holds one of its screens.
  */
 export interface ProductNavItem {
   label: string;
@@ -29,6 +32,13 @@ export const productNav: ProductNavGroup[] = [
       { label: "Recycler gate", href: "/gate", hint: "Weigh the load, enter the PIN, issue the credit" },
       { label: "Handoff demo", href: "/demo", hint: "Phone and gate side by side" },
       { label: "Evidence", href: "/evidence", hint: "The archived photo or voice note behind a submission" },
+    ],
+  },
+  {
+    // The Collector's own work. Admin sees it too, since Admin holds every seat.
+    label: "Collection",
+    items: [
+      { label: "My submissions", href: "/intakes", hint: "What you submitted, and what it was valued at" },
     ],
   },
   {

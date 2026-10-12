@@ -8,6 +8,7 @@ import { Field, FieldList } from "@/components/ui/field-list";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
+import { scopeForUser } from "@/lib/records/scope";
 import { formatTonnes } from "@/lib/format";
 import { listDestinations, listLoads } from "@/lib/pickup/directory";
 
@@ -28,11 +29,11 @@ export const instant = false;
  * rows this table does.
  */
 export default async function RecyclersPage() {
-  await requireAccess("/recyclers");
+  const scope = await scopeForUser(await requireAccess("/recyclers"));
 
   const [directory, board] = await Promise.all([
-    listDestinations(),
-    listLoads(50),
+    listDestinations(scope),
+    listLoads(scope, 50),
   ]);
   const destinations = directory.rows;
   const loads = board.rows;

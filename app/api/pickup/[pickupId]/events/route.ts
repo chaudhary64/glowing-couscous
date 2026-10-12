@@ -1,8 +1,8 @@
 import { authorizePickup, callPickupApi, pickupIdFrom, pickupJson } from "@/lib/pickup/api";
 
-/** GET /api/pickup/[pickupId]/events — the load's audit trail, oldest first. */
+/** GET /api/pickup/[pickupId]/events — the load's audit trail, oldest first; read by both ends (`/demo`). */
 export async function GET(request: Request, { params }: RouteContext<"/api/pickup/[pickupId]/events">) {
-  const access = await authorizePickup(request, "/gate");
+  const access = await authorizePickup(request, "/demo");
   if (!access.ok) return access.denied;
 
   const pickupId = pickupIdFrom((await params).pickupId);

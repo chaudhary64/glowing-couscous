@@ -73,7 +73,7 @@ import {
   view,
 } from "./repository.mjs";
 import { routeLoad } from "./routing.mjs";
-import { ANY_ROLE, OPERATOR, requireRole } from "./security.mjs";
+import { ALL_ROLES, OPERATOR_ROLES, requireRole } from "./security.mjs";
 
 const SERVICE = "ecoepr-smart-pickup";
 
@@ -109,7 +109,7 @@ async function route(event) {
   // Every route needs a signed-in member of the tenant, including `/health`: this API
   // fronts a collector's identity and a brand's compliance trail, and there is nothing
   // on it worth publishing to an anonymous caller.
-  const access = requireRole(event, ANY_ROLE);
+  const access = requireRole(event, ALL_ROLES);
   if (!access.ok) return access.response;
 
   // Keep the API root useful for probes and operators who open the base URL directly.
@@ -128,7 +128,7 @@ async function route(event) {
   }
   if (segments.length === 1 && segments[0] === "pickups") {
     if (method === "POST") {
-      const write = requireRole(event, OPERATOR);
+      const write = requireRole(event, OPERATOR_ROLES);
       if (!write.ok) return write.response;
       return await createPickup(event, write.caller);
     }
@@ -142,12 +142,12 @@ async function route(event) {
     return await pickupEvents(segments[1]);
   }
   if (segments.length === 3 && segments[0] === "pickups" && segments[2] === "pin" && method === "POST") {
-    const write = requireRole(event, OPERATOR);
+    const write = requireRole(event, OPERATOR_ROLES);
     if (!write.ok) return write.response;
     return await newPin(segments[1], write.caller);
   }
   if (segments.length === 3 && segments[0] === "pickups" && segments[2] === "settle" && method === "POST") {
-    const write = requireRole(event, OPERATOR);
+    const write = requireRole(event, OPERATOR_ROLES);
     if (!write.ok) return write.response;
     return await settlePickup(event, segments[1], write.caller);
   }
@@ -564,8 +564,8 @@ function handoffResponse(handoff) {
 
 /**
  * A fresh PIN for a load still waiting at the gate — after the first one expired, or
- * after five wrong guesses locked it. Operator-only, like routing, because whoever can
- * call this can put a new PIN on a phone.
+ * after five wrong guesses locked it. Transport work, like routing: whoever can call
+ * this can put a new PIN on a phone.
  */
 async function newPin(pickupId, who) {
   const pickup = await getPickup(pickupId);

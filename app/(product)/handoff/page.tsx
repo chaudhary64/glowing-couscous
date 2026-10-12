@@ -3,6 +3,7 @@ import { HandoffLoadContext } from "@/components/features/handoff/load-context";
 import { Panel } from "@/components/ui/card";
 import { ScreenHeader } from "@/components/ui/page-header";
 import { requireAccess } from "@/lib/auth/dal";
+import { scopeForUser } from "@/lib/records/scope";
 import { readHandoffContext } from "@/lib/pickup/handoff";
 
 export const instant = false;
@@ -15,8 +16,8 @@ export const instant = false;
  * instead of showing a load nothing produced.
  */
 export default async function HandoffPage() {
-  await requireAccess("/handoff");
-  const context = await readHandoffContext();
+  const scope = await scopeForUser(await requireAccess("/handoff"));
+  const context = await readHandoffContext(scope);
 
   return (
     <div className="space-y-6">

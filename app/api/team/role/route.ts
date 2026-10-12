@@ -6,9 +6,9 @@ import { ROLES, type Role } from "@/lib/auth/roles";
  * POST /api/team/role — put a person in one role group.
  *
  * Guarded as `/team` is, so only an admin reaches the pool. The new role must be one
- * of the four the matrix knows; the legacy `eco-owner` group can be cleared by this
- * route but never granted. The change takes effect at the person's next sign-in,
- * because the role travels in their token.
+ * of the five the matrix knows — the Collector is as grantable as the rest; the legacy
+ * `eco-owner` group can be cleared by this route but never granted. The change takes
+ * effect at the person's next sign-in, because the role travels in their token.
  */
 
 const CHANGING_ROLES = {

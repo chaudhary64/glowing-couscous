@@ -3,14 +3,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Panel, Surface } from "@/components/ui/card";
 import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
+import { mayOpen } from "@/components/ui/role-link";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
+import { scopeForUser } from "@/lib/records/scope";
 import { formatBytes } from "@/lib/format";
 import { archiveConfigured } from "@/lib/s3/archive";
-import {
-  findMediaAssetBySubmissionCode,
-  listRecentMediaAssets,
-} from "@/lib/s3/media-assets";
+import { findMediaAssetBySubmissionCode, listEvidence } from "@/lib/s3/media-assets";
 
 export const instant = false;
 
@@ -46,6 +45,11 @@ export const instant = false;
  * it and gets the object behind it: `intakes_code_uq` is the index,
  * `findMediaAssetBySubmissionCode` is the read, and what comes back is the same shape the
  * listing renders — so an object reads identically however the operator reached it.
+ *
+ * Both reads are cut by the caller's scope. An Operator or Admin reads the whole archive;
+ * a brand's Viewer reads only the evidence behind credits the brand claimed, and until a
+ * credit note names the brand the screen says "no claim on file" rather than listing
+ * nothing. That sentence is a scope answer, not a failure, so it is not shown as one.
  */
 
 type Search = Record<string, string | string[] | undefined>;
@@ -59,15 +63,18 @@ export default async function EvidencePage({
 }: {
   searchParams: Promise<Search>;
 }) {
-  await requireAccess("/evidence");
+  const user = await requireAccess("/evidence");
+  const scope = await scopeForUser(user);
+  // A refusal from a scoped read is the scope's answer, not a broken database.
+  const scoped = scope.kind !== "all";
 
   const params = await searchParams;
   const code = pick(params.code)?.trim() ?? "";
 
   const [listing, lookup] = await Promise.all([
-    listRecentMediaAssets(LIST_LIMIT),
+    listEvidence(scope, LIST_LIMIT),
     // An empty box is not a query, so it is not a read: no id, no lookup to report on.
-    code ? findMediaAssetBySubmissionCode(code) : Promise.resolve(null),
+    code ? findMediaAssetBySubmissionCode(scope, code) : Promise.resolve(null),
   ]);
   const assets = listing.assets;
   const photos = assets.filter((asset) => asset.kind === "photo").length;
@@ -87,9 +94,11 @@ export default async function EvidencePage({
         title="Evidence archive"
         lede="Review the photos and voice notes linked to valuations."
         actions={
-          <ButtonLink href="/intake" variant="secondary">
-            Submit something new
-          </ButtonLink>
+          mayOpen(user.role, "/intake") ? (
+            <ButtonLink href="/intake" variant="secondary">
+              Submit something new
+            </ButtonLink>
+          ) : undefined
         }
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -150,8 +159,8 @@ export default async function EvidencePage({
                   No database is connected, so valuation IDs cannot be resolved.
                 </p>
               ) : lookup.error ? (
-                <p className="max-w-3xl text-sm leading-relaxed text-hazard-ink">
-                  The lookup failed: {lookup.error}
+                <p className={`max-w-3xl text-sm leading-relaxed ${scoped ? "text-ink-soft" : "text-hazard-ink"}`}>
+                  {scoped ? lookup.error : `The lookup failed: ${lookup.error}`}
                 </p>
               ) : lookup.asset === null ? (
                 <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
@@ -226,8 +235,8 @@ export default async function EvidencePage({
             </div>
           ) : listing.error ? (
             <div className="p-4">
-              <p className="max-w-3xl text-sm leading-relaxed text-hazard-ink">
-                The archive could not be listed: {listing.error}
+              <p className={`max-w-3xl text-sm leading-relaxed ${scoped ? "text-ink-soft" : "text-hazard-ink"}`}>
+                {scoped ? listing.error : `The archive could not be listed: ${listing.error}`}
               </p>
             </div>
           ) : assets.length === 0 ? (

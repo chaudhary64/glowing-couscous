@@ -11,6 +11,7 @@ import { ScreenHeader, SectionHeader } from "@/components/ui/page-header";
 import { Stamp, VerdictMark } from "@/components/ui/stamp";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
+import { scopeForUser } from "@/lib/records/scope";
 import { metricHoldout } from "@/lib/data/model";
 import { formatConfidence, formatInr, formatIstStamp, formatMass } from "@/lib/format";
 import {
@@ -47,11 +48,11 @@ export const instant = false;
  */
 
 export default async function ValidationQueuePage() {
-  await requireAccess("/validation");
+  const scope = await scopeForUser(await requireAccess("/validation"));
 
   const [snapshot, holds, refusals, decisions] = await Promise.all([
-    storedCounts(),
-    listPendingHolds(12),
+    storedCounts(scope),
+    listPendingHolds(scope, 12),
     listRefusedItems(6),
     listRecentDecisions(8),
   ]);

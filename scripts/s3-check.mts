@@ -70,9 +70,12 @@ import {
   archiveAndRecord,
   findMediaAssetBySubmissionCode,
   forgetMediaRecords,
-  listRecentMediaAssets,
+  listEvidence,
   recordArchivedObjects,
 } from "../lib/s3/media-assets.ts";
+
+/** The archive is checked as the operator reads it: every row, no scope cut. */
+const ALL = { kind: "all" } as const;
 
 let failures = 0;
 function check(label: string, ok: boolean, detail = "") {
@@ -560,7 +563,7 @@ if (db) {
 
   // The reader's path, exactly as the evidence screen takes it: the listing carries the
   // submission per object. Without it the archive is a bucket of digests.
-  const listing = await listRecentMediaAssets(60);
+  const listing = await listEvidence(ALL, 60);
   const listed = listing.assets.find((asset) => asset.storageKey === submissionKey);
   check(
     "the evidence listing joins the submission onto its object",
@@ -576,7 +579,7 @@ if (db) {
   // The lookup the evidence screen offers from here on: an operator holding an id off a
   // priced result pastes it and gets the object behind it. The same read the page takes,
   // entered from the other end of the join — one indexed read on `intakes_code_uq`.
-  const found = await findMediaAssetBySubmissionCode(probeCode);
+  const found = await findMediaAssetBySubmissionCode(ALL, probeCode);
   check(
     "the id a valuation carries resolves to the object behind it",
     found.asset?.storageKey === submissionKey,
@@ -595,7 +598,7 @@ if (db) {
   // An id nothing holds is an answer, not an error: the screen says "nothing is archived
   // under that id" and the operator retypes it. Six digits, where every id this app mints
   // ends in four, so the probe cannot collide with a real one.
-  const unknownId = await findMediaAssetBySubmissionCode(`LIVE-2026-${String(Date.now()).slice(-6)}`);
+  const unknownId = await findMediaAssetBySubmissionCode(ALL, `LIVE-2026-${String(Date.now()).slice(-6)}`);
   check(
     "an id nothing holds resolves to nothing rather than an error",
     unknownId.configured && unknownId.asset === null && unknownId.error === null,
@@ -656,7 +659,7 @@ if (db) {
     "...and records nothing without calling it an error",
     noDatabase.error === null && noDatabase.submission === null,
   );
-  const noDatabaseLookup = await findMediaAssetBySubmissionCode(probeCode);
+  const noDatabaseLookup = await findMediaAssetBySubmissionCode(ALL, probeCode);
   check(
     "with no DATABASE_URL the id lookup reports configured: false",
     noDatabaseLookup.configured === false && noDatabaseLookup.asset === null && noDatabaseLookup.error === null,

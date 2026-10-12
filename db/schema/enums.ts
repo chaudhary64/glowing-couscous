@@ -19,12 +19,25 @@ export const organizationKind = pgEnum("organization_kind", [
   "platform", // us
 ]);
 
-/** Matches the Cognito group names a user is placed in. */
+/**
+ * Matches the Cognito group names a user is placed in.
+ *
+ * Five values, and the fifth is the one the migration added: `operator` was split into
+ * `operator` (transport) and `collector` (informal intake). `owner` stays for the rows
+ * written before `eco-owner` was folded into `admin` — the app reads it as `admin`
+ * (`lib/auth/roles.ts`, `LEGACY_GROUPS`), so no data migration is needed to keep those
+ * members working.
+ *
+ * `ALTER TYPE … ADD VALUE` is what the generated migration holds, and Postgres cannot
+ * run it inside a transaction before 12; on this instance it is applied as its own
+ * statement.
+ */
 export const membershipRole = pgEnum("membership_role", [
   "owner",
   "admin",
   "officer",
   "operator",
+  "collector",
   "viewer",
 ]);
 

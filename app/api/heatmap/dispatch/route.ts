@@ -4,10 +4,10 @@ import { recomputeClusters, setClusterStatus, type ClusterStatus } from "@/lib/h
 /**
  * POST /api/heatmap/dispatch — act on a live hotspot.
  *
- *   { "code": "HS-te7ud2h", "status": "van_assigned" | "cleared" | "open" }
+ *   { "code": "HS-te7ud2h" | "CV-te7ud2h", "status": "van_assigned" | "cleared" | "open" }
  *   { "action": "recompute" }      rewrite clusters + detections from the current points
  *
- * Gated at `/map/dispatch` (operator and above, the pickup board's rank): looking at the
+ * Gated at `/map/dispatch` (Operator or Admin, the pickup board's seats): looking at the
  * map is for everyone, sending a van is not.
  */
 
@@ -39,7 +39,8 @@ export async function POST(request: Request) {
     return jsonResponse(outcome);
   }
 
-  const code = typeof body.code === "string" && /^HS-[0-9b-hjkmnp-z]{7}$/.test(body.code) ? body.code : null;
+  // `HS-` is a detected site, `CV-` a site someone called a van to (`callVan`).
+  const code = typeof body.code === "string" && /^(HS|CV)-[0-9b-hjkmnp-z]{7}$/.test(body.code) ? body.code : null;
   const status = STATUSES.find((s) => s === body.status);
   if (!code || !status) {
     return jsonResponse({ error: "bad_request", message: "Send a hotspot code and a status of open, van_assigned or cleared." }, 400);

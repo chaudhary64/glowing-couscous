@@ -40,7 +40,7 @@ export type PoolRoles =
 /** Every group a role can come from, legacy `eco-owner` included, so a change clears it. */
 const ROLE_GROUPS: readonly string[] = [...Object.keys(ROLES), "eco-owner"];
 
-function adminClient(): { client: CognitoIdentityProviderClient; poolId: string } | null {
+function adminClient(): { client: CognitoIdentityProviderClient; poolId: string; explicit: boolean } | null {
   const accessKeyId = process.env.COGNITO_ADMIN_ACCESS_KEY_ID?.trim();
   const secretAccessKey = process.env.COGNITO_ADMIN_SECRET_ACCESS_KEY?.trim();
   const poolId = process.env.COGNITO_USER_POOL_ID?.trim();
@@ -51,8 +51,28 @@ function adminClient(): { client: CognitoIdentityProviderClient; poolId: string 
   return {
     client: new CognitoIdentityProviderClient({ region, credentials }),
     poolId,
+    explicit: Boolean(credentials),
   };
 }
+
+/**
+ * True when the SDK's default chain found no credentials at all: no AWS CLI profile and
+ * no role on the runtime. With no `COGNITO_ADMIN_*` keys either, that is a server that
+ * was never given pool access, not a pool that failed, so it reads as unconfigured — the
+ * read-only list and the 503 that names the keys — exactly as before the chain was tried.
+ * A server with explicit keys that fail still reports the failure.
+ */
+const noCredentials = (admin: { explicit: boolean }, error: unknown): boolean =>
+  !admin.explicit &&
+  error instanceof Error &&
+  (error.name === "CredentialsProviderError" || /Could not load credentials/i.test(error.message));
+
+const NOT_CONFIGURED: RoleChange = {
+  ok: false,
+  status: 503,
+  message:
+    "Roles cannot be changed from the app: COGNITO_ADMIN_ACCESS_KEY_ID and COGNITO_ADMIN_SECRET_ACCESS_KEY are not set. Change it in the Cognito console.",
+};
 
 const attribute = (attributes: AttributeType[] | undefined, name: string): string | null =>
   attributes?.find((entry) => entry.Name === name)?.Value ?? null;
@@ -95,6 +115,7 @@ export async function readPoolRoles(): Promise<PoolRoles> {
 
     return { readable: true, byEmail, error: null };
   } catch (error) {
+    if (noCredentials(admin, error)) return { readable: false, byEmail: null, error: null };
     return { readable: false, byEmail: null, error: `The user pool could not be read: ${describe(error)}` };
   }
 }
@@ -113,14 +134,7 @@ export type RoleChange =
  */
 export async function setPoolRole(username: string, role: Role, actingSub: string): Promise<RoleChange> {
   const admin = adminClient();
-  if (!admin) {
-    return {
-      ok: false,
-      status: 503,
-      message:
-        "Roles cannot be changed from the app: COGNITO_ADMIN_ACCESS_KEY_ID and COGNITO_ADMIN_SECRET_ACCESS_KEY are not set. Change it in the Cognito console.",
-    };
-  }
+  if (!admin) return NOT_CONFIGURED;
   const { client, poolId } = admin;
 
   try {
@@ -132,6 +146,7 @@ export async function setPoolRole(username: string, role: Role, actingSub: strin
     if (error instanceof Error && error.name === "UserNotFoundException") {
       return { ok: false, status: 404, message: "No account with that username is in the pool." };
     }
+    if (noCredentials(admin, error)) return NOT_CONFIGURED;
     return { ok: false, status: 503, message: `The user pool could not be read: ${describe(error)}` };
   }
 
