@@ -239,6 +239,9 @@ try {
     health.body?.tables?.pickups === process.env.PICKUP_TABLE_PICKUPS,
     `api says ${health.body?.tables?.pickups}`,
   );
+  const root = await call("GET", "/", { token });
+  check("an operator reaches the API root", root.status === 200, `got ${root.status}`);
+  check("the API root returns the same service health", root.body?.service === health.body?.service);
 
   /* --- 3. the catalogue --------------------------------------------------- */
 
