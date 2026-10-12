@@ -24,8 +24,7 @@ export function HandoffDemo({ load }: { load: HandoffLoad }) {
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b-[3px] border-ink pb-4">
         <div>
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-copper">Feature 04 · live demo</p>
-          <h1 className="mt-1 font-display text-3xl uppercase leading-[0.95] tracking-tight sm:text-4xl">
+          <h1 className="font-display text-3xl uppercase leading-[0.95] tracking-tight sm:text-4xl">
             Smart pickup &amp; digital credit
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-ink-soft">

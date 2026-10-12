@@ -96,7 +96,7 @@ export default async function DashboardPage() {
       title: "Hotspots with no van assigned",
       note: openSites.length
         ? `${openSites.slice(0, 2).map((site) => site.label).join(" and ")}${openSites.length > 2 ? ` and ${openSites.length - 2} more` : ""}.`
-        : `No site has four geotagged intakes within ~150 m in the last ${heat.rule.windowDays} days.`,
+        : "No hotspot has enough recent reports to appear here.",
       counted: true,
     },
     {
@@ -106,7 +106,7 @@ export default async function DashboardPage() {
       title: "Loads waiting at the gate",
       note: board.configured
         ? `${openLoads.length} of ${loads.length} loads still need settlement.`
-        : "The pickup service is unavailable.",
+        : "Pickup data is unavailable.",
       counted: board.configured,
     },
   ] as const;
@@ -121,7 +121,7 @@ export default async function DashboardPage() {
         lede={
           counts
             ? `${counts.intakesToday} intakes today, ${counts.itemsPriced} items priced, and ${counts.awaitingDecision} waiting on a human decision.`
-            : "No database is connected, so dashboard counts are unavailable."
+            : "No records are available, so dashboard counts are unavailable."
         }
         actions={
           mayOpen(role, "/intake") || mayOpen(role, "/validation") ? (
@@ -138,7 +138,7 @@ export default async function DashboardPage() {
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={configured ? "verified" : "hazard"}>
-              {configured ? "Live records" : "No records source"}
+              {configured ? "Records connected" : "Records unavailable"}
             </Badge>
             {counts ? (
               <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
@@ -187,17 +187,13 @@ export default async function DashboardPage() {
           <Stat
             label="Net promised to collectors"
             value={formatInr(counts.netPayableInr)}
-            note={`Cleared items: ${formatInr(counts.eprCreditInr)} in simulated brand EPR credit. No money moves.`}
+            note={`${formatInr(counts.eprCreditInr)} in simulated brand credit. No payment is made here.`}
           />
         </StatGrid>
       ) : (
         <Surface tone="inset" className="p-4">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-            No records database is connected, so no count can be taken: submissions,
-            prices, verdicts and decisions are all written by the pipeline but not read
-            back here. The tiles are therefore absent rather than showing zeroes, and each
-            panel below says what it could not read instead of drawing a plausible number
-            in its place.
+            No records are available yet, so the dashboard cannot show counts.
           </p>
         </Surface>
       )}
@@ -227,7 +223,7 @@ export default async function DashboardPage() {
                 <p className="mt-1.5 text-[12px] leading-snug text-ink-muted">{card.note}</p>
                 <p className="mt-3 flex items-center gap-2">
                   <Badge tone={card.counted ? "verified" : "hazard"}>
-                    {card.counted ? "Live" : "Unavailable"}
+                    {card.counted ? "Available" : "Unavailable"}
                   </Badge>
                 </p>
                 <Link
@@ -245,7 +241,7 @@ export default async function DashboardPage() {
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <section>
           <SectionHeader
-            eyebrow={configured ? "From the record" : "Unavailable"}
+            eyebrow={configured ? "Recent activity" : "Unavailable"}
             title="Activity"
             note="Recent submissions, verdicts and decisions."
           />
@@ -253,8 +249,8 @@ export default async function DashboardPage() {
             {events.rows.length === 0 ? (
               <p className="p-4 text-sm leading-relaxed text-ink-soft">
                 {configured
-                  ? "Nothing has been recorded yet. A capture on the intake screen appears here as soon as the model has priced it and the record is written."
-                  : "The feed needs a database. Without one there is no submission, verdict or decision to list."}
+                  ? "No activity yet."
+                  : "Activity is unavailable right now."}
               </p>
             ) : (
               <Table>
@@ -304,7 +300,7 @@ export default async function DashboardPage() {
         <aside className="flex flex-col gap-6">
           <section>
             <SectionHeader
-              eyebrow={board.configured ? "From the pickup service" : "Unavailable"}
+              eyebrow={board.configured ? "Pickup status" : "Unavailable"}
               title="Loads in play"
               note={`${notesIssued.length} note${
                 notesIssued.length === 1 ? "" : "s"
@@ -314,8 +310,8 @@ export default async function DashboardPage() {
               {loads.length === 0 ? (
                 <p className="p-4 text-sm leading-relaxed text-ink-soft">
                   {board.configured
-                    ? "No load has been routed yet. A route on the collector handoff screen appears here as soon as the service records it."
-                    : "This board needs the pickup service. Without it there is no load to list."}
+                    ? "No loads have been routed yet."
+                    : "Pickup status is unavailable right now."}
                 </p>
               ) : (
                 <Table>
@@ -363,7 +359,7 @@ export default async function DashboardPage() {
           </section>
 
           <Panel
-            eyebrow="District pressure · India"
+            eyebrow="Hotspots"
             title="Where to send the next van"
             actions={
               <Link
@@ -378,14 +374,14 @@ export default async function DashboardPage() {
               {pressureWards.length === 0 ? (
                 <p className="text-[13px] leading-relaxed text-ink-soft">
                   {tooFew > 0
-                    ? `No district has ${heat.rule.minDetections} detections in the last ${heat.rule.windowDays} days yet, so none is ranked. ${tooFew} district${tooFew === 1 ? " has" : "s have"} fewer.`
-                    : `No geotagged intakes in the last ${heat.rule.windowDays} days yet.`}
+                    ? "Not enough reports to rank a district yet."
+                    : "No hotspot reports yet."}
                 </p>
               ) : null}
               {pressureWards.map((ward) => (
                 <MeterRow
                   key={ward.code}
-                  label={`${ward.name}${ward.state ? `, ${ward.state}` : ""} · ${ward.detections} detection${ward.detections === 1 ? "" : "s"}`}
+                  label={`${ward.name}${ward.state ? `, ${ward.state}` : ""} · ${ward.detections} report${ward.detections === 1 ? "" : "s"}`}
                   value={ward.pressure / 100}
                   tone={ward.pressure >= 80 ? "hazard" : ward.pressure >= 60 ? "copper" : "lead"}
                   display={`${ward.pressure}/100`}
@@ -393,14 +389,13 @@ export default async function DashboardPage() {
               ))}
             </div>
             <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-              Based on geotagged intakes across India. {openSites.length} site{openSites.length === 1 ? " is" : "s are"} open
-              with no van assigned.
+              {openSites.length} site{openSites.length === 1 ? " is" : "s are"} open with no van assigned.
             </p>
           </Panel>
 
           <Panel
-            eyebrow="From the load board · Collectors"
-            title="Leading by settled credits"
+            eyebrow="Collector ranking"
+            title="Top collectors"
             actions={
               <RoleLink
                 role={role}
@@ -439,7 +434,7 @@ export default async function DashboardPage() {
               </ul>
             )}
             <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-              Ranked by settled credits. Collector IDs are shown instead of names.
+              Ranked by settled credits. IDs are shown instead of names.
             </p>
           </Panel>
         </aside>
