@@ -16,10 +16,10 @@ import { ROLES, roleFromGroups, type Role } from "./roles";
  *
  * A role is a Cognito group carried on the person's token, so the database never holds a
  * copy. Reading the groups of other people, and changing them, needs AWS credentials
- * allowed to administer the pool, which the app does not otherwise hold. They are
- * `COGNITO_ADMIN_*` and not `AWS_*` for the reason the S3 keys are `S3_*`: Amplify Hosting
- * refuses any variable with the reserved AWS prefix. Without them the Team screen stays
- * read-only, as it was, and says so.
+ * allowed to administer the pool. Explicit `COGNITO_ADMIN_*` credentials are supported
+ * for environments where the app cannot use an execution role. When they are absent,
+ * the AWS SDK's default credential chain covers the local AWS CLI profile and an IAM
+ * role attached to the hosting runtime.
  *
  * The IAM policy needs, on this one user pool: `cognito-idp:ListUsers`,
  * `ListUsersInGroup`, `AdminGetUser`, `AdminListGroupsForUser`, `AdminAddUserToGroup` and
@@ -45,9 +45,11 @@ function adminClient(): { client: CognitoIdentityProviderClient; poolId: string 
   const secretAccessKey = process.env.COGNITO_ADMIN_SECRET_ACCESS_KEY?.trim();
   const poolId = process.env.COGNITO_USER_POOL_ID?.trim();
   const region = process.env.COGNITO_REGION?.trim();
-  if (!accessKeyId || !secretAccessKey || !poolId || !region) return null;
+  if (!poolId || !region) return null;
+  const credentials =
+    accessKeyId && secretAccessKey ? { accessKeyId, secretAccessKey } : undefined;
   return {
-    client: new CognitoIdentityProviderClient({ region, credentials: { accessKeyId, secretAccessKey } }),
+    client: new CognitoIdentityProviderClient({ region, credentials }),
     poolId,
   };
 }

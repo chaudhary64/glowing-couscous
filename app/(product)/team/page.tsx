@@ -65,12 +65,14 @@ export default async function TeamPage() {
       {pool.readable ? null : (
         <Surface tone="inset" className="p-4">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-            To change roles from this screen, set{" "}
+            Role changes need AWS credentials allowed to administer this user pool. The app
+            first uses the standard AWS credential chain (your local AWS CLI profile or the
+            hosting runtime&apos;s IAM role); set{" "}
             <span className="font-mono">COGNITO_ADMIN_ACCESS_KEY_ID</span> and{" "}
-            <span className="font-mono">COGNITO_ADMIN_SECRET_ACCESS_KEY</span> for an IAM user
-            allowed to administer this user pool (the actions are listed in{" "}
-            <span className="font-mono">.env.example</span>). Until then, roles are changed in
-            the Cognito console.
+            <span className="font-mono">COGNITO_ADMIN_SECRET_ACCESS_KEY</span> only when
+            explicit credentials are required. The required actions are listed in{" "}
+            <span className="font-mono">.env.example</span>. Until usable credentials are
+            available, roles must be changed in the Cognito console.
           </p>
         </Surface>
       )}
