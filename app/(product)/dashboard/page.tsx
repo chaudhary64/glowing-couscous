@@ -8,7 +8,6 @@ import { MeterRow } from "@/components/ui/meter";
 import { mayOpen, RoleLink } from "@/components/ui/role-link";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
-import { SIMULATED_CLAIM } from "@/lib/disclaimer";
 import { getHeatmap } from "@/lib/heatmap/store";
 import { formatInr, formatPct, formatTimestamp } from "@/lib/format";
 import { listCollectorActivity, listLoads } from "@/lib/pickup/directory";
@@ -78,8 +77,8 @@ export default async function DashboardPage() {
       value: counts ? counts.awaitingDecision : "—",
       title: "Items awaiting a human decision",
       note: counts
-        ? `${counts.awaitingDecision} of the ${counts.held} items the gatekeeper held have no live decision on them yet.`
-        : "The validation queue counts these itself.",
+        ? `${counts.awaitingDecision} held item${counts.awaitingDecision === 1 ? "" : "s"} still need a decision.`
+        : "No validation count is available.",
       counted: true,
     },
     {
@@ -87,7 +86,7 @@ export default async function DashboardPage() {
       dot: "hazard",
       value: counts ? counts.rejected : "—",
       title: "Uploads refused before a credit",
-      note: "Verdicts recorded as rejected, which no human has to look at again unless the collector re-uploads.",
+      note: "Rejected before any credit was issued.",
       counted: true,
     },
     {
@@ -106,8 +105,8 @@ export default async function DashboardPage() {
       value: board.configured ? openLoads.length : "—",
       title: "Loads waiting at the gate",
       note: board.configured
-        ? `${openLoads.length} of ${loads.length} loads have not settled. A load settles when the recycler types the collector's PIN at the gate.`
-        : "The pickup service is not configured, so no load can be read.",
+        ? `${openLoads.length} of ${loads.length} loads still need settlement.`
+        : "The pickup service is unavailable.",
       counted: board.configured,
     },
   ] as const;
@@ -121,8 +120,8 @@ export default async function DashboardPage() {
         title="Today"
         lede={
           counts
-            ? `${counts.intakesToday} intakes today, ${counts.itemsPriced} items priced, and ${counts.awaitingDecision} waiting on a human decision. Every panel here is counted: the tiles, the work queue and the activity feed from the pipeline's own rows, and the load board and collector ranking from the pickup service.`
-            : "The pipeline records its submissions, prices, verdicts and decisions, and this screen counts them. With no database configured there is nothing to count, and the panels below say what they could not read."
+            ? `${counts.intakesToday} intakes today, ${counts.itemsPriced} items priced, and ${counts.awaitingDecision} waiting on a human decision.`
+            : "No database is connected, so dashboard counts are unavailable."
         }
         actions={
           mayOpen(role, "/intake") || mayOpen(role, "/validation") ? (
@@ -139,12 +138,12 @@ export default async function DashboardPage() {
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={configured ? "verified" : "hazard"}>
-              {configured ? "Counted from the database" : "No database"}
+              {configured ? "Live records" : "No records source"}
             </Badge>
             {counts ? (
               <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
-                {counts.intakesTotal} submissions · {counts.itemsPriced} items priced ·{" "}
-                {counts.hazardousItems} hazard-flagged
+                {counts.intakesTotal} submissions · {counts.itemsPriced} priced ·{" "}
+                {counts.hazardousItems} flagged for hazards
               </span>
             ) : null}
             {snapshot.error ? (
@@ -175,20 +174,20 @@ export default async function DashboardPage() {
           <Stat
             label="Items priced"
             value={String(counts.itemsPriced)}
-            unit="in the record"
-            note={`${counts.verified} cleared by the gatekeeper, ${counts.held} held, ${counts.rejected} refused.`}
+            unit="items"
+            note={`${counts.verified} cleared · ${counts.held} held · ${counts.rejected} refused.`}
           />
           <Stat
             label="Awaiting a decision"
             value={String(counts.awaitingDecision)}
             unit="items"
             emphasis
-            note={`${counts.decidedToday} decided today. A held item has no price until an officer answers it.`}
+            note={`${counts.decidedToday} decided today. Held items wait for review.`}
           />
           <Stat
             label="Net promised to collectors"
             value={formatInr(counts.netPayableInr)}
-            note={`Cleared items only. ${formatInr(counts.eprCreditInr)} of brand EPR credit beside it. ${SIMULATED_CLAIM}`}
+            note={`Cleared items: ${formatInr(counts.eprCreditInr)} in simulated brand EPR credit. No money moves.`}
           />
         </StatGrid>
       ) : (
@@ -208,7 +207,7 @@ export default async function DashboardPage() {
           <SectionHeader
             eyebrow="Work queue"
             title="Needs attention"
-            note="Every card here is counted: the decisions and hotspots from the pipeline's own rows, the loads from the smart-pickup service's pickups table."
+          note="Items, hotspots and loads that need attention."
           />
 
           <ul className={`mt-5 grid gap-px border border-rule bg-rule ${cardGrid}`}>
@@ -228,7 +227,7 @@ export default async function DashboardPage() {
                 <p className="mt-1.5 text-[12px] leading-snug text-ink-muted">{card.note}</p>
                 <p className="mt-3 flex items-center gap-2">
                   <Badge tone={card.counted ? "verified" : "hazard"}>
-                    {card.counted ? "Counted" : "No service"}
+                    {card.counted ? "Live" : "Unavailable"}
                   </Badge>
                 </p>
                 <Link
@@ -248,7 +247,7 @@ export default async function DashboardPage() {
           <SectionHeader
             eyebrow={configured ? "From the record" : "Unavailable"}
             title="Activity"
-            note="Each entry is a submission, verdict or decision, shown with the time it was recorded."
+            note="Recent submissions, verdicts and decisions."
           />
           <Surface className="mt-4">
             {events.rows.length === 0 ? (
@@ -307,9 +306,9 @@ export default async function DashboardPage() {
             <SectionHeader
               eyebrow={board.configured ? "From the pickup service" : "Unavailable"}
               title="Loads in play"
-              note={`Every load the smart-pickup service has routed. ${notesIssued.length} note${
+              note={`${notesIssued.length} note${
                 notesIssued.length === 1 ? "" : "s"
-              } issued so far, ${formatInr(notesInr)} settled. A load leaves this board when the gate settles it against the weighed mass.`}
+              } issued · ${formatInr(notesInr)} settled.`}
             />
             <Surface className="mt-4">
               {loads.length === 0 ? (
@@ -394,8 +393,7 @@ export default async function DashboardPage() {
               ))}
             </div>
             <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-              Counted from geotagged intakes across India. Pressure is detections per km²,
-              relative to the busiest district. {openSites.length} site{openSites.length === 1 ? " is" : "s are"} open
+              Based on geotagged intakes across India. {openSites.length} site{openSites.length === 1 ? " is" : "s are"} open
               with no van assigned.
             </p>
           </Panel>
@@ -416,8 +414,7 @@ export default async function DashboardPage() {
           >
             {topCollectors.length === 0 ? (
               <p className="text-[13px] leading-relaxed text-ink-soft">
-                No credit note has settled against a collector yet, so there is no standing
-                to rank. A list drawn now would be an invented one.
+                No settled credits yet. Collector rankings will appear here after the first settlement.
               </p>
             ) : (
               <ul className="flex flex-col">
@@ -442,9 +439,7 @@ export default async function DashboardPage() {
               </ul>
             )}
             <p className="mt-3 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-              Settled credits, counted from the loads the pickup service holds. A collector
-              id is all the platform stores — no name and no standing — so this ranks the
-              work rather than the worker.
+              Ranked by settled credits. Collector IDs are shown instead of names.
             </p>
           </Panel>
         </aside>

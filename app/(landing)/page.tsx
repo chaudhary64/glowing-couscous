@@ -8,8 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { TBody, TD, TH, THead, TR, Table } from "@/components/ui/data-table";
 import { Field, FieldList } from "@/components/ui/field-list";
-import { Receipt, type ReceiptLine } from "@/components/ui/receipt";
-import { Stamp, VerdictMark } from "@/components/ui/stamp";
+import { VerdictMark } from "@/components/ui/stamp";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { cn } from "@/lib/cn";
@@ -20,7 +19,7 @@ import { intakeStats } from "@/lib/data/intake";
 import { logisticsStats } from "@/lib/data/operations";
 import { RATE_CARD, type MaterialId } from "@/lib/data/rate-card";
 import { SIMULATED_CLAIM } from "@/lib/disclaimer";
-import { formatInr, formatMass, formatPct, formatRate, lineValue } from "@/lib/format";
+import { formatInr, formatMass, formatPct, formatRate } from "@/lib/format";
 import { materialLabel, materialTone, verdictLabel } from "@/lib/tone";
 import type { FeatureSlug } from "@/lib/types";
 
@@ -35,9 +34,7 @@ export const metadata: Metadata = {
 
   It is the brand surface, so it wears the warmer bone ground (app/(landing)/landing.css)
   and nothing else: no cards, no shadows, no panels, no decorative motion. A band is a
-  mono eyebrow, a display line, a paragraph, and a hairline where the band ends. The one
-  framed object on the page is the receipt, because the receipt is the thing the product
-  exists to produce.
+  mono eyebrow, a display line, a paragraph, and a hairline where the band ends.
 
   The composition of the bands is borrowed whole from the Stivio landing page captured in
   site-reaper/downloaded-site. Four moves, each kept in this brand's hand:
@@ -45,8 +42,8 @@ export const metadata: Metadata = {
   - **An argument is a rail and a body.** The eyebrow, the display line and the lede sit
     in a sticky left rail; everything the band has to show sits to their right. As the
     reader scrolls a body, its opening claim stays on screen — the reader never has to
-    remember which section they are in. The receipt above and the stack below are the two
-    deliberate exceptions, because they are the two objects, not two claims.
+    remember which section they are in. The stack below is the deliberate exception,
+    because it is an object rather than a claim.
   - **An instrument is a readout.** Each of the three steps on the bench is a framed
     panel holding the artefact that step actually produces — the mass ledger, the
     arithmetic, the verdict — with the words that explain it underneath.
@@ -57,28 +54,14 @@ export const metadata: Metadata = {
     limit in the summary, and the detail expands beneath it.
 
   Numbering is kept because the page genuinely is an argument in order: the problem first,
-  because a receipt means nothing until the reader knows why it is worth having. Nothing is
-  explained twice — the valuation rule is stated once, in the second band, with the rate
+  because a valuation means nothing until the reader knows why it is worth having. Nothing
+  is explained twice — the valuation rule is stated once, in the second band, with the rate
   card collapsed behind a toggle rather than dumped on the page.
 */
 
 const item = getItem(focusItemId);
 const coreLoop = coreLoopSlugs.map(getFeature);
 const { valuation, gatekeeper } = item;
-
-/** The same receipt the valuation screen renders, built from the real rate card. */
-const receiptLines: ReceiptLine[] = item.materials.map((line) => {
-  const value = lineValue(line.massGrams, line.ratePerKg);
-  return {
-    label: `${line.name} (${line.symbol})`,
-    detail:
-      value > 0
-        ? `${formatMass(line.massGrams)} @ ${formatRate(line.ratePerKg)}`
-        : line.handling,
-    value: value > 0 ? formatInr(value) : "—",
-    muted: value === 0,
-  };
-});
 
 /** The three failures, rendered inside band 01 rather than as a band of their own. */
 const gaps = [
@@ -247,8 +230,8 @@ function Band({
 
 /**
  * One instrument on the bench: the readout it produces, framed, then the words that explain
- * it. The frame is a hairline, not a slab — the receipt is the page's one heavy edge, and a
- * wall of 3px cards would spend the page's only loud object three times over.
+ * it. The frame is a hairline, not a slab, so the page stays measured rather than becoming
+ * a wall of heavy cards.
  */
 function Instrument({
   index,
@@ -409,46 +392,6 @@ export default async function LandingPage() {
         </ul>
       </Band>
 
-      {/* -------------------------------------------------------- the artefact */}
-      {/* The one framed object on the page, because it is the one object the product
-          produces. It follows the problem for that reason: the numbers above are what give
-          it a job — an incomplete paper trail leaves evidence gaps — and every band below it is
-          either the assay and the rate card it is derived from, or why it can be trusted.
-          Proof needs a question before it means anything. Centred, and the only band with a
-          centred heading, because it is an object rather than a claim. */}
-      <section id="artefact" className="scroll-mt-24 border-b border-rule">
-        <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-20">
-          <div className="mx-auto max-w-3xl">
-            <Eyebrow label="The artefact" center />
-            <div className="mt-8">
-              <Receipt
-                title="Scrap rate receipt"
-                reference={item.id}
-                issuedAt="Issued 09 Oct 2026, 14:25 IST"
-                lines={receiptLines}
-                adjustments={[
-                  {
-                    label: "Handling & routing fee",
-                    value: `−${formatInr(valuation.handlingFee)}`,
-                  },
-                ]}
-                total={{
-                  label: "Net to collector",
-                  value: formatInr(valuation.netToCollector),
-                  sub: `Valid until ${valuation.validUntil}`,
-                }}
-                note="Every figure is derived from the assay and the rate card below. Nothing is issued until the gatekeeper reads Verified."
-                stamp={<Stamp verdict={gatekeeper.verdict} />}
-              />
-            </div>
-            <p className="mt-6 text-center text-[13px] leading-relaxed text-ink-muted">
-              An illustrative artefact: a note that names the item, the rate and the
-              proposed recycler. It is not a compliance certificate or proof of treatment.
-            </p>
-          </div>
-        </div>
-      </section>
-
       {/* ----------------------------------------------------- how it works */}
       {/* The bench and the rule were two bands making one point twice: what the three
           instruments measure, and the single constraint that makes the money they produce
@@ -462,14 +405,14 @@ export default async function LandingPage() {
         index="02"
         name="How it works"
         title="One item, three instruments."
-        lede={`Assay, rate, gate — the path one submission takes. The example below belongs to ${item.id}, the same fixture item the receipt above prices; it is not a live customer record.`}
+        lede={`Assay, rate, gate — the path one submission takes. The example below belongs to ${item.id}, a fixture item used to show the workflow; it is not a live customer record.`}
       >
         <ul data-motion="rows" className="grid gap-x-6 gap-y-10 sm:grid-cols-2 xl:grid-cols-3">
           <Instrument
             index="01"
             name="Assay"
             title="Assay by mass"
-            body="Six fractions, weighed line by line. The item's mass is the exact sum of its lines, so the total on the receipt can never drift from the parts above it."
+            body="Six fractions, weighed line by line. The item's mass is the exact sum of its lines, so the valuation can be checked against the parts above it."
             figure={formatMass(item.massGrams)}
             note={`${item.materials.length} fractions · ${item.hazards.length ? "hazard line present" : "no hazard line"}`}
             footer="Line-by-line weights · nothing estimated"

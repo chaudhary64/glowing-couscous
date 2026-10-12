@@ -11,7 +11,6 @@ import { Receipt, type ReceiptLine } from "@/components/ui/receipt";
 import { Stamp, VerdictMark } from "@/components/ui/stamp";
 import { Stat, StatGrid } from "@/components/ui/stat";
 import { requireAccess } from "@/lib/auth/dal";
-import { SIMULATED_CLAIM } from "@/lib/disclaimer";
 import { formatInr, formatIstStamp, formatMass, formatRate, lineValue } from "@/lib/format";
 import { getStoredItem, listPricedItems } from "@/lib/records/queues";
 import {
@@ -124,7 +123,7 @@ export default async function ValuationsPage({
         lede={
           rows.length > 0
             ? `Every item the pipeline has assayed and priced, newest first. ${formatInr(payableTotal)} is promised to collectors and ${formatInr(eprTotal)} of brand EPR credit is created across the ${cleared.length} items the gatekeeper cleared; the rest keep their assay and promise nothing.`
-            : "Every item the pipeline has assayed and priced. Nothing has been priced on this database yet."
+            : "No items have been priced yet."
         }
         actions={
           <>
@@ -137,7 +136,7 @@ export default async function ValuationsPage({
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={queue.configured ? "verified" : "hazard"}>
-              {queue.configured ? "Reading stored rows" : "No database"}
+              {queue.configured ? "Live records" : "Unavailable"}
             </Badge>
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
               {rows.length} priced {rows.length === 1 ? "item" : "items"} · {cleared.length}{" "}
@@ -145,7 +144,7 @@ export default async function ValuationsPage({
             </span>
             {queue.error ? (
               <span className="text-[12px] leading-snug text-hazard-ink">
-                The queue could not be read: {queue.error}
+                Could not load valuations: {queue.error}
               </span>
             ) : null}
           </div>
@@ -155,12 +154,9 @@ export default async function ValuationsPage({
       <LiveAnalysis mode="valuation" />
 
       {!queue.configured ? (
-        <Panel eyebrow="Not wired" title="This screen cannot count anything">
+        <Panel eyebrow="Unavailable" title="Valuations are unavailable">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-            No records database is connected, so there is nowhere for a priced item to be
-            written and nothing to read back. The queue stays absent rather than drawing a
-            number that looks counted and is not. Configure the database and price a
-            submission above; it appears in this queue as a row.
+            No database is connected, so priced items cannot be saved or listed here.
           </p>
         </Panel>
       ) : null}
@@ -171,24 +167,24 @@ export default async function ValuationsPage({
             <Stat
               label="Items priced"
               value={String(rows.length)}
-              unit={rows.length === 1 ? "row in the queue" : "rows in the queue"}
-              note={`${cleared.length} cleared by the gatekeeper, ${held.length + refused.length} held or refused.`}
+              unit="items"
+              note={`${cleared.length} cleared · ${held.length + refused.length} held or refused.`}
             />
             <Stat
               label="Gross material value"
               value={formatInr(grossTotal)}
-              note="Sum of every assay line across the queue, at the rates stored with it."
+              note="Total value from all material lines."
             />
             <Stat
               label="Net promised to collectors"
               value={formatInr(payableTotal)}
               emphasis
-              note="Cleared items only, after handling and licensed-line fees. Rejected and held items are excluded."
+              note="Cleared items after fees. Held and refused items are excluded."
             />
             <Stat
               label="Brand EPR credit"
               value={formatInr(eprTotal)}
-              note="Cleared items only. A compliance asset for brands, never paid to the collector."
+              note="Cleared items only. Brand credit, not collector payment."
             />
           </StatGrid>
 
@@ -196,15 +192,13 @@ export default async function ValuationsPage({
             <SectionHeader
               eyebrow="Queue"
               title="Priced items"
-              note="Ordered as the pipeline produced them. The open row is the one priced in the workspace below."
+              note="Select an item to review its valuation."
             />
 
             {rows.length === 0 ? (
               <Surface className="mt-4 p-4">
                 <p className="text-sm leading-relaxed text-ink-soft">
-                  Nothing is priced yet. Run a valuation above and the item lands here with
-                  its assay, its price and its gatekeeper verdict — the same rows the
-                  validation queue and the dashboard read afterwards.
+                  Nothing is priced yet. Run a valuation above to add the first item.
                 </p>
               </Surface>
             ) : (
@@ -275,16 +269,15 @@ export default async function ValuationsPage({
                   </TBody>
                 </Table>
                 <p className="border-t border-rule px-3 py-3 text-[12px] leading-relaxed text-ink-muted">
-                  A refused item stays in the queue for the audit trail but shows no payable
-                  figure, because no credit was issued for it. Held items show a dash until a
-                  human decides them in the{" "}
+                  Refused items show no payable amount. Held items show a dash until a
+                  decision is made in the{" "}
                   <Link
                     href="/validation"
                     className="underline decoration-rule underline-offset-2 hover:decoration-copper"
                   >
                     validation queue
                   </Link>
-                  . The EPR note column stays a dash until the item is routed to a recycler.
+                  . EPR notes appear after routing.
                 </p>
               </Surface>
             )}
@@ -293,8 +286,7 @@ export default async function ValuationsPage({
           {missingSelection ? (
             <Panel eyebrow="Not found" title={`No item holds the id ${requested}`}>
               <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-                Nothing is on file under that id, so the workspace below shows the newest
-                priced item instead.
+                No item matches that ID. Showing the newest priced item instead.
               </p>
             </Panel>
           ) : null}
@@ -310,7 +302,7 @@ export default async function ValuationsPage({
                   <SectionHeader
                     eyebrow={`Open item · ${openItem.id}`}
                     title={openItem.label}
-                    note={`Priced from the submission ${openItem.intakeCode ?? "whose submission row is not joined"}, stored ${formatIstStamp(openItem.storedAt)}. The assay sets the money, and the gatekeeper decides whether any of it is promised.`}
+                    note={`Priced ${formatIstStamp(openItem.storedAt)}. The assay sets the value; the gatekeeper decides whether it can be promised.`}
                   />
                   <Surface className="mt-4 p-4">
                     <FieldList columns={3}>
@@ -320,19 +312,19 @@ export default async function ValuationsPage({
                       <Field label="Mass" value={formatMass(openItem.massGrams)} mono />
                       <Field
                         label="Assayed by"
-                        value="Automated analysis"
+                        value="Automatic"
                         tone="muted"
                       />
                       <Field
                         label="Rate basis"
-                        value={openValuation.rateBasis || "not recorded"}
+                        value={openValuation.rateBasis || "Not recorded"}
                         tone="muted"
                       />
                     </FieldList>
 
                     <div className="mt-5 border-t border-rule pt-4">
                       <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-muted">
-                        Hazards the recycler must be told about
+                        Hazards to share with the recycler
                       </p>
                       {openItem.hazards.length > 0 ? (
                         <ul className="mt-2 flex flex-wrap gap-1.5">
@@ -344,8 +336,7 @@ export default async function ValuationsPage({
                         </ul>
                       ) : (
                         <p className="mt-2 text-[12px] leading-snug text-ink-muted">
-                          None flagged on this item — the gatekeeper writes a row only when
-                          the material carries one.
+                          None flagged on this item.
                         </p>
                       )}
                     </div>
@@ -356,7 +347,7 @@ export default async function ValuationsPage({
                   <SectionHeader
                     eyebrow="Assay"
                     title="Metal breakdown"
-                    note="Hazardous and inert lines are worth nothing because they carry a disposal cost, not a payout."
+                    note="Materials, weights, rates and values used for this item."
                   />
                   <Surface className="mt-4">
                     <Table>
@@ -426,8 +417,8 @@ export default async function ValuationsPage({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <SectionHeader
                       eyebrow="Clearance"
-                      title="Gatekeeper decision"
-                      note="No credit is promised to the collector unless this reads Verified."
+                      title="Clearance decision"
+                      note="Credit is promised only when the item is verified."
                     />
                     <VerdictMark verdict={openVerdict.verdict} />
                   </div>
@@ -439,7 +430,7 @@ export default async function ValuationsPage({
 
                     <div className="mt-4 border-t border-rule pt-3">
                       <MeterRow
-                        label="Model confidence"
+                        label="Confidence"
                         value={openVerdict.confidence}
                         display={`${Math.round(openVerdict.confidence * 100)}% on ${openVerdict.matchedClass}`}
                         tone={verdictTone(openVerdict.verdict)}
@@ -459,13 +450,13 @@ export default async function ValuationsPage({
                       </FieldList>
                     ) : (
                       <p className="mt-4 text-[12px] leading-snug text-ink-muted">
-                        No signals were recorded with this verdict.
+                        No signals recorded.
                       </p>
                     )}
 
                     {openItem.decision ? (
                       <p className="mt-4 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-soft">
-                        An officer decided this on{" "}
+                        Decision made on{" "}
                         {formatIstStamp(openItem.decision.decidedAt)}:{" "}
                         <span className="font-mono">
                           {openItem.decision.decision.replace(/_/g, " ")}
@@ -473,19 +464,19 @@ export default async function ValuationsPage({
                         {openItem.decision.reason ? ` — ${openItem.decision.reason}` : ""}
                         {openItem.decision.decidedByName
                           ? ` (${openItem.decision.decidedByName})`
-                          : " (no user row to attribute it to)"}
+                          : ""}
                         .
                       </p>
                     ) : null}
 
                     <p className="mt-5 border-t border-rule pt-3 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">
-                      Automated gatekeeper · checked{" "}
+                      Automatic check ·{" "}
                       {formatIstStamp(openVerdict.checkedAt)} ·{" "}
                       <Link
                         href="/validation"
                         className="underline decoration-rule underline-offset-2 hover:decoration-copper"
                       >
-                        Full validation log
+                        View validation
                       </Link>
                     </p>
                   </Panel>
@@ -494,13 +485,13 @@ export default async function ValuationsPage({
 
               <aside className="flex flex-col gap-6 lg:sticky lg:top-16 lg:self-start">
                 <Receipt
-                  title="Scrap rate receipt"
+                  title="Valuation summary"
                   reference={openItem.id}
                   issuedAt={`Issued ${formatIstStamp(openValuation.computedAt)}`}
                   lines={receiptLines}
                   adjustments={[
                     {
-                      label: "Handling & licensed line fee",
+                      label: "Handling & line fee",
                       value: `−${formatInr(openValuation.handlingFee)}`,
                     },
                   ]}
@@ -509,19 +500,17 @@ export default async function ValuationsPage({
                     value: formatInr(openValuation.netToCollector),
                     sub: openValuation.validUntil
                       ? `Valid until ${formatIstStamp(openValuation.validUntil)}`
-                      : "The card in force carried no expiry",
+                      : "No expiry recorded",
                   }}
-                  note={`${openValuation.rateBasis}. ${SIMULATED_CLAIM} No payment is settled by it.`}
+                  note={`${openValuation.rateBasis}. This is a valuation summary; no payment is settled here.`}
                   stamp={<Stamp verdict={openVerdict.verdict} />}
                 />
 
                 <Panel eyebrow="Compliance" title="Brand EPR credit">
                   <div className="flex flex-col gap-3">
                     <p className="text-sm leading-relaxed text-ink-soft">
-                      Diverting this unit formally creates a brand liability offset against
-                      the CPCB EPR mandate. It is a compliance asset, not a payment to the
-                      collector — the two instruments ride on the same load but go to
-                      different parties.
+                      This value is for brand EPR tracking. It is separate from any
+                      payment to the collector.
                     </p>
                     <FieldList columns={1}>
                       <Field
@@ -532,12 +521,12 @@ export default async function ValuationsPage({
                       />
                       <Field
                         label="Credit note"
-                        value={openValuation.eprCreditNote ?? "Not on file — registered when the load is routed"}
+                        value={openValuation.eprCreditNote ?? "Not recorded yet"}
                         mono
                       />
                       <Field
                         label="Basis"
-                        value="CPCB category sheet, brand plate read from the upload"
+                        value="Category and brand from the intake"
                       />
                     </FieldList>
                     <p className="flex items-center gap-2">
@@ -545,7 +534,7 @@ export default async function ValuationsPage({
                         {verdictLabel(openVerdict.verdict)}
                       </Badge>
                       <span className="text-[12px] text-ink-muted">
-                        Credit is withheld unless this reads Verified.
+                        Credit applies only when verified.
                       </span>
                     </p>
                   </div>
@@ -554,15 +543,12 @@ export default async function ValuationsPage({
                 <Panel eyebrow="Next step" title="Route the item">
                   <p className="text-sm leading-relaxed text-ink-soft">
                     {openItem.hazards.length > 0
-                      ? "Hazard declared, so this can only go to a recycler licensed for that stream."
-                      : "No hazard declared, so this can take the standard board line."}
+                      ? "Hazard declared. Route it to a recycler licensed for this stream."
+                      : "No hazard declared. Standard routing is available."}
                   </p>
                   <p className="mt-3 text-[12px] leading-relaxed text-ink-muted">
-                    Routing, the pickup and the credit note are feature 04 (Smart Pickup
-                    &amp; Digital Credit), and they run on the handoff screen — the
-                    collector&rsquo;s phone routes the load to a licensed recycler and puts a
-                    PIN on screen for the gate to settle against. This screen prices an item
-                    and never routes it: nothing here creates a load.
+                    Routing and pickup happen on the handoff screen. This page only prices
+                    the item.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <ButtonLink href="/handoff">Open handoff</ButtonLink>
@@ -574,11 +560,9 @@ export default async function ValuationsPage({
               </aside>
             </div>
           ) : rows.length > 0 ? (
-            <Panel eyebrow="Incomplete row" title="This item has no stored valuation or verdict">
+            <Panel eyebrow="Incomplete" title="Valuation details are unavailable">
               <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-                The item is on file but its valuation and verdict are not, so there is
-                nothing to show in the workspace. That is a shape this screen renders rather
-                than hides.
+                This item is recorded, but its valuation or clearance decision is missing.
               </p>
             </Panel>
           ) : null}

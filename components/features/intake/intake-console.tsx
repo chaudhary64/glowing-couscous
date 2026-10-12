@@ -39,8 +39,7 @@ export function IntakeConsole({
     return (
       <Surface className="mt-4 p-4">
         <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-          Nothing has been recorded yet, so there is no submission to open. Run a capture
-          above and it appears here with the fields the model read out of it.
+          Nothing recorded yet. Complete an intake above to open it here.
         </p>
       </Surface>
     );
@@ -56,7 +55,7 @@ export function IntakeConsole({
         <SectionHeader
           eyebrow="Recorded"
           title="Open a submission"
-          note="The most recent submissions on file. Each one is a row the pipeline wrote when it priced the upload."
+          note="Select a recent intake to review its result."
         />
 
         <div role="group" aria-label="Recorded submissions" className="mt-4 flex flex-wrap gap-2">
@@ -101,9 +100,8 @@ export function IntakeConsole({
             ) : (
               <Panel eyebrow="Vision extraction" title="No text was typed">
                 <p className="text-sm leading-relaxed text-ink-soft">
-                  This intake arrived as a photograph. The vision model read the object
-                  class, the brand plate and the hazard markers straight off the image, so
-                  the collector never filled in a form.
+                  This photo was read automatically. Review the item, brand and hazard
+                  details below.
                 </p>
                 <Surface
                   tone="inset"
@@ -132,7 +130,7 @@ export function IntakeConsole({
         <SectionHeader
           eyebrow="Structured output"
           title="Fields read from the upload"
-          note="Every field carries the model's own confidence, so a weak read is visible rather than hidden."
+          note="Review the extracted fields and their confidence."
         />
         <div className="mt-4">
           {active.fields.length > 0 ? (
@@ -140,8 +138,7 @@ export function IntakeConsole({
           ) : (
             <Surface className="p-4">
               <p className="text-sm leading-relaxed text-ink-soft">
-                No parsed field was kept for this submission — the route ran the
-                identification pass only, so there is no per-field record to show.
+                No extracted fields are available for this intake.
               </p>
             </Surface>
           )}
@@ -152,7 +149,7 @@ export function IntakeConsole({
         <SectionHeader
           eyebrow="Handoff"
           title="Resolved to a priced item"
-          note="Identification is only useful if it lands on a valuation the collector can accept."
+          note="The identified item and its current price."
         />
         {item ? (
           <Panel className="mt-4">
@@ -187,12 +184,11 @@ export function IntakeConsole({
 
               {item.verdict === "rejected" ? (
                 <p className="text-[12px] leading-snug text-ink-muted">
-                  No credit is issued for this item. The gatekeeper stops it before a rupee
-                  is promised.
+                  No credit is issued for this item.
                 </p>
               ) : (
                 <p className="text-[12px] leading-snug text-ink-muted">
-                  Clearance is confirmed before the credit note is minted.
+                  Clearance is confirmed before credit is recorded.
                 </p>
               )}
 
@@ -209,8 +205,7 @@ export function IntakeConsole({
         ) : (
           <Surface className="mt-4 p-4">
             <p className="text-sm leading-relaxed text-ink-soft">
-              This submission was priced without an item row — no item is joined to it, so
-              there is nothing to open a valuation for.
+              This intake has no priced item to open.
             </p>
           </Surface>
         )}

@@ -59,7 +59,7 @@ export default async function RecyclersPage() {
   );
 
   const notice = !directory.configured
-    ? "The pickup service is not connected, so the directory cannot be read. The table below is therefore absent rather than empty — an unread registry and an empty one look the same on a screen, and they are not the same fact."
+    ? "The pickup service is unavailable, so destinations cannot be listed."
     : directory.error
       ? `The directory could not be read: ${directory.error}`
       : null;
@@ -69,7 +69,7 @@ export default async function RecyclersPage() {
       <ScreenHeader
         eyebrow="Network · Destinations"
         title="Recyclers"
-        lede="Every load leaves through a line on this page. The CPCB registration number is the compliance identity, and the authorisation is per stream: if a destination is not registered for a stream, we cannot route that stream to it."
+        lede="Review registered recycling and reuse destinations, their accepted streams and available capacity."
         actions={
           <ButtonLink href="/pickups" variant="secondary">
             See the load board
@@ -78,12 +78,12 @@ export default async function RecyclersPage() {
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={notice ? "hazard" : "verified"}>
-              {notice ? "Directory unread" : "Read from the pickup service"}
+              {notice ? "Unavailable" : "Live destinations"}
             </Badge>
             {notice ? null : (
               <>
                 <Badge tone="review">
-                  {licensedForHazards.length} licensed for hazardous streams
+                  {licensedForHazards.length} hazardous-capable
                 </Badge>
                 <Badge tone="lead">{reusePartners.length} reuse partner</Badge>
                 <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
@@ -109,24 +109,24 @@ export default async function RecyclersPage() {
               label="Destinations on file"
               value={String(destinations.length)}
               unit="facilities"
-              note={`${registered.length} hold a CPCB registration number.`}
+              note={`${registered.length} have a CPCB registration.`}
             />
             <Stat
               label="Combined capacity"
               value={formatTonnes(totalCapacityKg / 1000)}
               unit="per day"
-              note="The sum of the sites' own ceilings. Capacity is a promise, not today's intake — the allocation panel below is what was actually routed."
+              note="Combined daily capacity."
             />
             <Stat
               label="Licensed for hazards"
               value={String(licensedForHazards.length)}
-              note={`Across ${acceptedStreams.size} streams on the catalogue. A hazard authorisation is per stream, not per site.`}
+              note={`${acceptedStreams.size} accepted streams.`}
             />
             <Stat
               label="Fastest SLA"
               value={fastestSla === null ? "—" : String(fastestSla)}
               unit="hours"
-              note="Shortest accepted turnaround from assignment to receipt."
+              note="Fastest assignment-to-receipt time."
             />
           </StatGrid>
 
@@ -134,7 +134,7 @@ export default async function RecyclersPage() {
             <SectionHeader
               eyebrow="Directory"
               title="Authorised destinations"
-              note="Registration, capacity and per-stream authorisation, shown in full because a summarised licence number is not evidence of anything."
+              note="Registration, capacity and accepted streams."
             />
             <RecyclerTable destinations={destinations} className="mt-4" />
           </section>
@@ -144,9 +144,7 @@ export default async function RecyclersPage() {
 
             <Panel eyebrow="Compliance" title="Licence watch">
               <p className="text-sm leading-relaxed text-ink-soft">
-                The registration number is what a brand points at when CPCB asks where its
-                e-waste went. One entry here is not a registration, and the difference
-                matters.
+                Check registration and stream authorisation before routing a load.
               </p>
 
               <FieldList columns={1} className="mt-4">
@@ -182,9 +180,7 @@ export default async function RecyclersPage() {
                   <li className="flex gap-3 text-[12px] leading-relaxed text-ink-soft">
                     <span aria-hidden className="mt-1.5 size-2 shrink-0 bg-hazard" />
                     <span>
-                      Only a CPCB-registered line may take a hazardous stream, and the
-                      authorisation is per stream: a site with a licensed battery bench is
-                      not thereby licensed for leaded glass.
+                      Hazardous loads can go only to destinations authorised for that stream.
                     </span>
                   </li>
                   <li className="flex gap-3 text-[12px] leading-relaxed text-ink-soft">
@@ -193,15 +189,14 @@ export default async function RecyclersPage() {
                       {reusePartners.length > 0
                         ? `${reusePartners
                             .map((partner) => partner.name)
-                            .join(", ")} carries a dash instead of a registration because it refurbishes working devices rather than recycling them. Working units never enter the shredding stream, so no scrap credit is issued for them.`
+                            .join(", ")} refurbishes working devices instead of recycling them.`
                         : "No reuse partner is on the directory, so every accepted stream is a recycling destination."}
                     </span>
                   </li>
                   <li className="flex gap-3 text-[12px] leading-relaxed text-ink-soft">
                     <span aria-hidden className="mt-1.5 size-2 shrink-0 bg-copper" />
                     <span>
-                      SLA is the accepted turnaround from assignment to receipt, not a
-                      delivery guarantee: an inter-city transfer takes the longest.
+                      SLA is the expected time from assignment to receipt, not a guarantee.
                     </span>
                   </li>
                 </ul>
@@ -213,10 +208,8 @@ export default async function RecyclersPage() {
 
       <Surface className="flex flex-wrap items-center justify-between gap-4 p-4">
         <p className="max-w-xl text-[12px] leading-relaxed text-ink-muted">
-          Destinations decide what a load is worth: a clean board can take the standard
-          line, while anything with a hazard declaration has to go to a stream the
-          destination is actually authorised for — which is why routing is settled before a
-          credit note is issued.
+          Route each load to a destination that accepts its stream. Hazardous loads need
+          matching authorisation.
         </p>
         <Link
           href="/pickups"

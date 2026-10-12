@@ -136,13 +136,13 @@ const ENDPOINTS: Record<LiveMode, string> = {
 const COPY: Record<LiveMode, { caption: string; action: string; body: string }> = {
   valuation: {
     caption: "Live valuation",
-    action: "Value this item",
-    body: "Photograph the item and it is identified, assayed into material fractions and priced off the same stored rate card every priced item is computed from. Add a note if the collector has already weighed it.",
+    action: "Price this item",
+    body: "Add a photo and an optional weight note. The item is identified, valued and checked against the current rate card.",
   },
   intake: {
     caption: "Live intake",
-    action: "Read this intake",
-    body: "A photo, a voice note in Hindi, or both. The voice note is transcribed first, then the photograph and the transcript are read together — the extracted fields and the price come back with it.",
+    action: "Process intake",
+    body: "Add a photo, a Hindi voice note, or both. The result includes the extracted fields and price.",
   },
   gatekeeper: {
     caption: "Live gatekeeper",

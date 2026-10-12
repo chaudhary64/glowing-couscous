@@ -30,15 +30,15 @@ export default async function TeamPage() {
       <ScreenHeader
         eyebrow="Administration"
         title="Team"
-        lede={`Everyone who has signed in to EcoEPR, most recently seen first. ${
+        lede={`People who have signed in, most recent first. ${
           pool.readable
-            ? "A role is a Cognito group; a change here takes effect the next time that person signs in."
-            : "Roles are groups in the Cognito pool and are changed there."
-        } You are signed in as ${roleLabel(user.role)}.`}
+            ?             "Role changes apply at the next sign-in."
+            : "Roles are managed in the Cognito user pool."
+        } You are ${roleLabel(user.role)}.`}
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={members.configured ? "verified" : "hazard"}>
-              {members.configured ? "Read from the database" : "No database"}
+              {members.configured ? "Live records" : "Unavailable"}
             </Badge>
             {members.configured ? (
               <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
@@ -46,7 +46,7 @@ export default async function TeamPage() {
               </span>
             ) : null}
             <Badge tone={pool.readable ? "verified" : "neutral"}>
-              {pool.readable ? "Roles read from the user pool" : "Roles not readable here"}
+              {pool.readable ? "Roles available" : "Roles unavailable"}
             </Badge>
             {pool.error ? (
               <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-hazard-ink">
@@ -65,14 +65,12 @@ export default async function TeamPage() {
       {pool.readable ? null : (
         <Surface tone="inset" className="p-4">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-            Role changes need AWS credentials allowed to administer this user pool. The app
-            first uses the standard AWS credential chain (your local AWS CLI profile or the
-            hosting runtime&apos;s IAM role); set{" "}
+            Role changes need permission to administer this user pool. The app uses the
+            local AWS profile or the hosting IAM role first; set{" "}
             <span className="font-mono">COGNITO_ADMIN_ACCESS_KEY_ID</span> and{" "}
-            <span className="font-mono">COGNITO_ADMIN_SECRET_ACCESS_KEY</span> only when
-            explicit credentials are required. The required actions are listed in{" "}
+            <span className="font-mono">COGNITO_ADMIN_SECRET_ACCESS_KEY</span>             only when explicit credentials are required. Required actions are listed in{" "}
             <span className="font-mono">.env.example</span>. Until usable credentials are
-            available, roles must be changed in the Cognito console.
+            available, change roles in the Cognito console.
           </p>
         </Surface>
       )}
@@ -81,8 +79,8 @@ export default async function TeamPage() {
         {members.rows.length === 0 ? (
           <p className="p-4 text-sm leading-relaxed text-ink-soft">
             {members.configured
-              ? "Nobody has signed in yet. An account appears here after its first sign-in."
-              : "The team list needs a database. Without one there is no record of who has signed in."}
+              ? "No accounts yet."
+              : "No database is connected, so accounts cannot be listed."}
           </p>
         ) : (
           <Table caption="Accounts that have signed in">
@@ -130,7 +128,7 @@ export default async function TeamPage() {
         <SectionHeader
           eyebrow="Roles"
           title="What each role opens"
-          note="Highest authority first. A person in several groups gets the strongest one."
+          note="Higher roles include more access."
         />
         <Surface className="mt-4">
           <ol>

@@ -61,7 +61,7 @@ export default async function CollectorsPage() {
       <ScreenHeader
         eyebrow="Network · Collectors"
         title="Collectors"
-        lede="Every route the platform has recorded, grouped by the collector who asked for it. A collector id is what the service stores; the person behind it is not on file, so the page shows the activity rather than a name it cannot verify."
+        lede="Activity grouped by collector ID. Names are not stored, so this page shows routes and settlements instead."
         actions={
           <ButtonLink href="/pickups" variant="secondary">
             See the load board
@@ -70,7 +70,7 @@ export default async function CollectorsPage() {
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={notice ? "hazard" : "verified"}>
-              {notice ? "No activity" : "Counted from the load board"}
+              {notice ? "Unavailable" : "Live records"}
             </Badge>
             {notice ? null : (
               <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
@@ -96,13 +96,13 @@ export default async function CollectorsPage() {
               label="Collectors with activity"
               value={String(collectors.length)}
               unit="ids"
-              note={`Ids the service has recorded asking for a route, not a loaded roster. ${hazardous} load${hazardous === 1 ? " was" : "s were"} carrying a hazard declaration.`}
+              note={`${hazardous} load${hazardous === 1 ? " was" : "s were"} marked hazardous.`}
             />
             <Stat
               label="Loads asked for"
               value={String(totalLoads)}
               unit="loads"
-              note={`Across every collector id above. ${openLoads} still open.`}
+              note={`${openLoads} still open.`}
             />
             <Stat
               label="Credit notes issued"
@@ -114,9 +114,7 @@ export default async function CollectorsPage() {
               label="Settled to collectors"
               value={formatInr(settledInr)}
               emphasis
-              note={simulatedNote(
-                "Each note is tied to a weighed load at a licensed recycler.",
-              )}
+              note={simulatedNote("Based on settled loads.")}
             />
           </StatGrid>
 
@@ -124,7 +122,7 @@ export default async function CollectorsPage() {
             <SectionHeader
               eyebrow="Activity"
               title="Everyone with a load on the board"
-              note="Ordered by credits settled, with the totals row summing to the same figures the load board shows."
+              note="Ordered by settled credits."
             />
             <div className="mt-5">
               <CollectorActivityTable activity={collectors} />
@@ -136,7 +134,7 @@ export default async function CollectorsPage() {
               <SectionHeader
                 eyebrow="Distribution"
                 title="Credits share"
-                note="Measured against the leading collector, so the shape of the tail is visible at a glance."
+                note="Share of the leading collector's settled credits."
               />
               <Surface className="mt-5 p-4">
                 <CreditsShare activity={collectors} />
@@ -147,15 +145,11 @@ export default async function CollectorsPage() {
               <SectionHeader
                 eyebrow="Language coverage"
                 title="Not recorded"
-                note="Which languages a collector speaks is a roster fact, and there is no roster."
+                note="Collector language details are not stored."
               />
               <Surface className="mt-5 p-4">
                 <p className="text-[13px] leading-relaxed text-ink-soft">
-                  The intake pipeline resolves a Hindi voice note into a structured item,
-                  and the collector id on a load is the only identity the platform stores.
-                  Nothing records what a collector speaks, so a language-coverage panel
-                  would be a chart of guesses. It is absent rather than approximate — the
-                  same reason there is no name beside a collector id.
+                  The platform stores collector IDs, not names or language preferences.
                 </p>
               </Surface>
             </section>
@@ -165,12 +159,12 @@ export default async function CollectorsPage() {
             <SectionHeader
               eyebrow="Loads in flight"
               title="Recently active"
-              note="Which collector asked for which load, and what state it is in now."
+              note="Recent routes and their current status."
             />
             <Surface className="mt-5">
               {recent.length === 0 ? (
                 <p className="p-4 text-sm leading-relaxed text-ink-soft">
-                  No load has been routed yet, so no collector has activity to show.
+                  No loads routed yet.
                 </p>
               ) : (
                 <>

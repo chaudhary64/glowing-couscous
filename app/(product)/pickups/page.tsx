@@ -80,7 +80,7 @@ export default async function PickupsPage() {
       <ScreenHeader
         eyebrow="Operations · Pickups"
         title="Pickups"
-        lede="Route every load to a licensed line, then settle the note against the weight the recycler actually took. Hazardous loads can only go to a destination authorised for that stream."
+        lede="Track loads from routing through final settlement. Hazardous loads need a matching authorised destination."
         actions={
           <>
             {mayOpen(user.role, "/recyclers") ? (
@@ -96,7 +96,7 @@ export default async function PickupsPage() {
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={notice ? "hazard" : "verified"}>
-              {notice ? "No board" : "Read from the pickup service"}
+              {notice ? "Unavailable" : "Live load board"}
             </Badge>
             {notice ? null : (
               <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
@@ -121,15 +121,15 @@ export default async function PickupsPage() {
               label="Open loads"
               value={String(openLoads.length)}
               unit="loads"
-              note={`${loads.length} on the board in total. A load is open until the gate settles it.`}
+              note={`${loads.length} on the board. Loads close at settlement.`}
             />
             <Stat
               label="Hazardous share"
               value={formatPct(loads.length > 0 ? hazardous.length / loads.length : 0)}
               note={
                 declined > 0
-                  ? `${declined} load${declined === 1 ? "" : "s"} carried a refused candidate, so the router passed over a nearer site.`
-                  : "Hazardous loads can only go to a destination authorised for that stream."
+                  ? `${declined} load${declined === 1 ? "" : "s"} had no accepted destination.`
+                  : "Hazardous loads need matching authorisation."
               }
             />
             <Stat
@@ -142,7 +142,7 @@ export default async function PickupsPage() {
               label="Settled to collectors"
               value={formatInr(settledInr)}
               emphasis
-              note={simulatedNote("The sum of the notes on this board.")}
+              note={simulatedNote("Based on settled loads.")}
             />
           </StatGrid>
 
@@ -150,14 +150,13 @@ export default async function PickupsPage() {
             <SectionHeader
               eyebrow="Live board"
               title="All loads"
-              note="Hazardous loads carry a mark in the left margin, because that flag is what restricts the destination."
+              note="Hazardous loads are marked and require matching authorisation."
             />
 
             <Surface className="mt-4">
               {loads.length === 0 ? (
                 <p className="p-4 text-sm leading-relaxed text-ink-soft">
-                  No load has been routed yet. A route on the collector handoff screen
-                  appears here as soon as the service records it.
+                  No loads routed yet. A handoff appears here when recorded.
                 </p>
               ) : (
                 <>

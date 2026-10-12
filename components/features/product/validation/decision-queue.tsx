@@ -160,8 +160,7 @@ export function DecisionQueue({
       >
         {pending.length === 0 ? (
           <p className="text-sm leading-relaxed text-ink-soft">
-            Nothing is held. Every item on file either cleared the gatekeeper on its own or
-            already has a decision recorded against it.
+            Nothing is waiting for review.
           </p>
         ) : (
           <ul className="flex flex-col gap-px bg-rule">
@@ -173,19 +172,19 @@ export function DecisionQueue({
                   <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                     <div className="min-w-0">
                       <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
-                        {item.id} · priced {formatTimestamp(item.storedAt)}
+                        {item.id} · {formatTimestamp(item.storedAt)}
                       </p>
                       <h3 className="mt-1 text-base font-medium leading-snug">{item.label}</h3>
                       <p className="mt-1 text-[12px] text-ink-muted">
                         {formatMass(item.massGrams)}
                         {item.brand ? ` · ${item.brand}` : " · plate unread"}
                         {item.hazards.length > 0
-                          ? ` · ${item.hazards.length} hazard${item.hazards.length === 1 ? "" : "s"} flagged`
+                          ? ` · ${item.hazards.length} hazard${item.hazards.length === 1 ? "" : "s"}`
                           : ""}
                         {verdict ? (
                           <>
                             {" "}
-                            · model confidence{" "}
+                            · confidence{" "}
                             <span className="font-mono">
                               {formatConfidence(verdict.confidence)}
                             </span>
@@ -222,14 +221,12 @@ export function DecisionQueue({
                       href={`/valuation?item=${encodeURIComponent(item.id)}`}
                       className="ml-auto font-mono text-[10px] uppercase tracking-[0.14em] text-copper underline decoration-copper/40 underline-offset-2 hover:decoration-copper"
                     >
-                      See the valuation →
+                      View valuation →
                     </Link>
                   </div>
 
                   <p className="mt-2 text-[12px] leading-snug text-ink-muted">
-                    Approving releases the valuation and promises a credit. Sending to
-                    reuse and refusing both end the item without one — and both are
-                    recorded, so &ldquo;why was this not paid?&rdquo; has an answer.
+                    Approve to release the valuation. Reuse and refusal do not create credit.
                   </p>
 
                   {failure?.id === item.id ? (
@@ -251,8 +248,7 @@ export function DecisionQueue({
       >
         {live.length === 0 ? (
           <p className="text-sm leading-relaxed text-ink-soft">
-            No decision has been recorded yet. Choosing an action above writes a row here,
-            and it is still on this list after a reload.
+            No decisions recorded yet.
           </p>
         ) : (
           <ul className="flex flex-col">
@@ -293,11 +289,7 @@ export function DecisionQueue({
         )}
 
         <p className="mt-4 border-t border-rule pt-3 text-[12px] leading-relaxed text-ink-muted">
-          Every decision here is a <span className="font-mono">validation_decisions</span>{" "}
-          row, so it survives a reload and a deploy. Taking one back marks it{" "}
-          <span className="font-mono">undone_at</span> rather than deleting it — the row
-          stays as the record that the answer was revisited — and the item returns to the
-          queue above.
+          Decisions remain available after reload. Undo returns the item to the review queue.
         </p>
 
         {failure && !pending.some((item) => item.id === failure.id) ? (
@@ -307,11 +299,10 @@ export function DecisionQueue({
         ) : null}
       </Panel>
 
-      <Panel eyebrow="Refused by the gatekeeper" title="Already turned away">
+      <Panel eyebrow="Rejected" title="Already turned away">
         {refused.length === 0 ? (
           <p className="text-sm leading-relaxed text-ink-soft">
-            No refusal is on file. An item the gatekeeper rejects is recorded here, because
-            &ldquo;show me what you turned away&rdquo; should have an answer.
+            No rejected items recorded yet.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
