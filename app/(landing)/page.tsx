@@ -25,9 +25,9 @@ import { materialLabel, materialTone, verdictLabel } from "@/lib/tone";
 import type { FeatureSlug } from "@/lib/types";
 
 export const metadata: Metadata = {
-  title: "EcoEPR — Prove it went to a licensed recycler",
+  title: "EcoEPR — Trace e-waste to responsible recyclers",
   description:
-    "India generates 3.2M tonnes of e-waste a year and over 90% moves through informal collectors. EcoEPR turns a photo or a Hindi voice note into a metal assay, a server-computed rate and an EPR credit note — routed only to CPCB-registered recyclers.",
+    "EcoEPR is a traceability prototype for e-waste intake, valuation and recycler routing. It turns a photo or a Hindi voice note into a reviewable material record, a server-computed rate and an illustrative credit note.",
 };
 
 /*
@@ -84,7 +84,7 @@ const receiptLines: ReceiptLine[] = item.materials.map((line) => {
 const gaps = [
   {
     title: "The collection is invisible",
-    body: "Over 90% of e-waste is bought by informal collectors. Nothing is geotagged, weighed or receipted, so the tonnage never reaches a compliance file.",
+    body: "Informal collection can leave gaps in the record. Without a consistent intake, weight and receipt trail, material may never reach a compliance file.",
   },
   {
     title: "Any photo can claim a credit",
@@ -108,7 +108,7 @@ const boundaries = [
   },
   {
     title: "We are not processing the waste.",
-    body: "We route to CPCB-registered recyclers; we do not process waste ourselves. The licensed line, the certificate and the audit are theirs — our job is the chain of evidence that gets a submission there.",
+    body: "The prototype can record a proposed recycler route; it does not process waste or independently verify registration. Any licensed treatment, certificate or audit must come from the relevant recycler and regulator.",
   },
   {
     title: "WhatsApp is not in this build.",
@@ -163,7 +163,7 @@ const awsStack = [
   },
   {
     name: "Amazon S3",
-    role: "The media archive: the collector's photograph and voice note, written under a key scoped to media/* and read back through the app, never a public URL.",
+    role: "The media archive: the photograph and voice note, written under a key scoped to media/* and read back through the app rather than exposed as a public URL.",
   },
   {
     name: "Amazon DynamoDB",
@@ -171,7 +171,7 @@ const awsStack = [
   },
   {
     name: "AWS Lambda",
-    role: "One function serves the pickup API; a second consumes the stream and pays out once per settled load, never twice.",
+    role: "One function serves the pickup API; a second consumes the stream and records the configured pickup workflow. Credits remain simulated in this prototype.",
   },
   {
     name: "Amazon API Gateway",
@@ -316,21 +316,22 @@ export default async function LandingPage() {
       {/* ------------------------------------------------------------- hero */}
       <section className="border-b border-rule">
         <div className="mx-auto w-full max-w-6xl px-5 py-20 text-center sm:px-8 sm:py-28">
-          <Eyebrow label="Brand EPR compliance · Mumbai + Pune pilot" center />
+          <Eyebrow label="E-waste intelligence · intake, valuation, routing" center />
 
           {/* One line solid, one line struck as an outline: the second line is the claim,
               the first is only the run-up to it. */}
           <h1 className="mx-auto mt-7 max-w-4xl font-display text-[clamp(2.75rem,8.4vw,6.5rem)] uppercase leading-[0.92] tracking-tight">
-            Prove it went to a
+            Trace it to a
             <br />
-            <span className="display-outline">licensed recycler.</span>
+            <span className="display-outline">responsible recycler.</span>
           </h1>
 
           <p className="mx-auto mt-7 max-w-2xl text-base leading-relaxed text-ink-soft">
-            India generates 3.2 million tonnes of e-waste a year and over 90% of it moves
-            through informal collectors — no safety protocol, no paper trail. EcoEPR turns a
-            photo or a Hindi voice note into a metal assay, a rate computed on the server,
-            and an EPR credit note stamped at a CPCB-registered recycler.
+            EcoEPR is a working prototype for recording e-waste intake, valuation and
+            recycler routing. It turns a photo or a Hindi voice note into a reviewable
+            material record, a rate computed on the server, and an illustrative credit
+            note. Recycler registration, treatment and compliance outcomes still require
+            verification outside this prototype.
           </p>
 
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
@@ -360,34 +361,34 @@ export default async function LandingPage() {
         id="problem"
         index="01"
         name="The problem"
-        title="A legal mandate with no paper trail."
-        lede="A brand carries an EPR obligation from CPCB and no reliable way to prove it was met. India generates 3.2 million tonnes of e-waste a year and over 90% of it moves through informal collectors — and three things break between that doorstep and the compliance file."
+        title="Compliance evidence is hard to assemble."
+        lede="A brand needs a reliable chain of intake, valuation and routing records. This prototype shows how those records could be assembled; it does not certify compliance or replace a regulator, recycler or auditor."
       >
         <StatGrid columns={2}>
           <Stat
-            label="E-waste generated"
-            value="3.2M"
-            unit="tonnes / year"
-            note="National annual volume. Over 90% is handled informally."
+            label="Intake record"
+            value="Sample"
+            unit="illustrative"
+            note="Sample data used to show the intake and evidence flow."
           />
           <Stat
-            label="Handled informally"
-            value="90%"
-            unit="of the flow"
-            note="Collected without a safety protocol and without a paper trail."
+            label="Routing record"
+            value="Sample"
+            unit="illustrative"
+            note="A proposed route is not proof that a recycler accepted or processed waste."
           />
           <Stat
             label="Hazardous share"
             value={formatPct(logisticsStats.hazardousShare)}
-            unit="of pilot pickups"
-            note="Batteries, leaded glass and capacitor banks on a licensed route."
+            unit="of sample pickups"
+            note="Fixture-derived example; not a measured pilot statistic or licensed-route claim."
           />
           <Stat
-            label="Median settlement"
+            label="Sample settlement"
             value={logisticsStats.medianSettleHours.toFixed(1)}
             unit="hours"
             emphasis
-            note="From doorstep valuation to a settled credit note."
+            note="Fixture-derived timing; credits are simulated and no settlement is issued."
           />
         </StatGrid>
 
@@ -411,7 +412,7 @@ export default async function LandingPage() {
       {/* -------------------------------------------------------- the artefact */}
       {/* The one framed object on the page, because it is the one object the product
           produces. It follows the problem for that reason: the numbers above are what give
-          it a job — over 90% of the flow leaves no paper trail — and every band below it is
+          it a job — an incomplete paper trail leaves evidence gaps — and every band below it is
           either the assay and the rate card it is derived from, or why it can be trusted.
           Proof needs a question before it means anything. Centred, and the only band with a
           centred heading, because it is an object rather than a claim. */}
@@ -427,7 +428,7 @@ export default async function LandingPage() {
                 lines={receiptLines}
                 adjustments={[
                   {
-                    label: "Handling & licensed line fee",
+                    label: "Handling & routing fee",
                     value: `−${formatInr(valuation.handlingFee)}`,
                   },
                 ]}
@@ -441,8 +442,8 @@ export default async function LandingPage() {
               />
             </div>
             <p className="mt-6 text-center text-[13px] leading-relaxed text-ink-muted">
-              The one artefact a compliance officer can hold: a note that names the item, the
-              rate and the recycler.
+              An illustrative artefact: a note that names the item, the rate and the
+              proposed recycler. It is not a compliance certificate or proof of treatment.
             </p>
           </div>
         </div>
@@ -461,7 +462,7 @@ export default async function LandingPage() {
         index="02"
         name="How it works"
         title="One item, three instruments."
-        lede={`Assay, rate, gate — the path one submission takes. Every figure belongs to ${item.id}, the same item the receipt above prices; none of it is an average.`}
+        lede={`Assay, rate, gate — the path one submission takes. The example below belongs to ${item.id}, the same fixture item the receipt above prices; it is not a live customer record.`}
       >
         <ul data-motion="rows" className="grid gap-x-6 gap-y-10 sm:grid-cols-2 xl:grid-cols-3">
           <Instrument
@@ -517,7 +518,7 @@ export default async function LandingPage() {
                   mono
                 />
                 <Field
-                  label="Handling & licensed line fee"
+                  label="Handling & routing fee"
                   value={`−${formatInr(valuation.handlingFee)}`}
                   mono
                 />
@@ -577,7 +578,7 @@ export default async function LandingPage() {
             <FieldList columns={1} className="mt-8">
               <Field label="Gross material value" value={formatInr(valuation.grossValue)} mono />
               <Field
-                label="Handling & licensed line fee"
+                label="Handling & routing fee"
                 value={`−${formatInr(valuation.handlingFee)}`}
                 mono
               />
@@ -642,7 +643,7 @@ export default async function LandingPage() {
                 <p className="mt-5 text-[14px] leading-relaxed text-ink-muted">
                   Hazardous and inert fractions carry a rate of zero and a handling note
                   instead of a value, because they are a disposal cost rather than a payout.
-                  Rates here are a labelled demo card; replacing them with a licensed feed
+                  Rates here are a labelled sample card; replacing them with a licensed feed
                   moves nothing else.
                 </p>
               </div>
@@ -657,7 +658,7 @@ export default async function LandingPage() {
         index="03"
         name="The loop"
         title="One item, four screens."
-        lede="Numbered because it is a real sequence: nothing is promised to the collector until step 03 clears the item. The four screens below are photographs of the running app with a session signed in, not mock-ups — npm run shots takes them again on demand."
+        lede="Numbered because it is the intended sequence: the prototype places the gate before any simulated credit is shown. The four screens below are captures of the running app with a session signed in; the displayed records may be fixtures."
       >
         <LoopTrace>
           <ol className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
@@ -769,8 +770,8 @@ export default async function LandingPage() {
         id="honesty"
         index="04"
         name="Honesty clause"
-        title="What we are not claiming."
-        lede="A prototype that survives a demo is one that says where its edges are before someone finds them."
+        title="What this prototype is not claiming."
+        lede="A prototype that is evaluated honestly says where its edges are before someone finds them."
       >
         <ul data-motion="rows" className="border-t border-rule">
           {boundaries.map((boundary, index) => (
@@ -798,7 +799,7 @@ export default async function LandingPage() {
 
         <p className="mt-8 max-w-2xl text-[13px] leading-relaxed text-ink-muted">
           The gatekeeper exists for the first boundary. A prototype that pays out on any
-          photograph would be a demonstration of the problem, not of the fix.
+          photograph would expose the problem, not validate the fix.
         </p>
       </Band>
 
@@ -816,8 +817,9 @@ export default async function LandingPage() {
             Open the working screens.
           </h2>
           <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-paper/70">
-            Intake, valuation, the gatekeeper and pickup routing all run against a live
-            multimodal model. Sign in with a demo account to work the queue.
+            Intake, valuation, the gatekeeper and pickup routing are available in this
+            working prototype. When configured, intake uses a multimodal model; sign in
+            with an account to inspect the queue.
           </p>
           <div className="mt-9 flex justify-center">
             <ButtonLink href={entry.primary.href} variant="inverse">

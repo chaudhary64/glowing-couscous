@@ -134,10 +134,11 @@ export function LandingFooter({ user }: { user: AuthUser | null }) {
               {SIMULATED_LABEL}
             </h2>
             <p className="mt-4 max-w-md text-[13px] leading-relaxed text-paper/60">
-              EcoEPR routes hazardous e-waste to CPCB-registered recyclers; it does not
-              process waste itself. This prototype runs a real multimodal model and a real
-              Cognito pool, and every figure on the working screens is read from a row the
-              pipeline wrote — anything authored says so on its own panel.
+              EcoEPR is a traceability prototype; it does not process waste or independently
+              verify recycler registration. It uses a real multimodal model and a real Cognito
+              pool when configured, while the working screens can combine fixture data with
+              records written by the pipeline. Sample and simulated values are labelled on their
+              panels.
             </p>
             {/* The sign-off: an outline that fills with copper as it scrolls into view. */}
             <p
@@ -184,9 +185,9 @@ export function LandingFooter({ user }: { user: AuthUser | null }) {
             </p>
             <Badge tone="review">{SIMULATED_LABEL}</Badge>
             <p className="font-mono text-[10px] uppercase leading-relaxed tracking-[0.14em] text-paper/60">
-              Rates: a labelled demo card
+              Rates: a labelled sample card
               <br />
-              Route: CPCB-registered recyclers
+              Route: proposed recycler route
             </p>
           </div>
         </div>
@@ -196,10 +197,10 @@ export function LandingFooter({ user }: { user: AuthUser | null }) {
           className="mx-auto mt-16 flex w-full max-w-6xl flex-col gap-2 border-t border-paper/20 px-5 pt-6 sm:px-8 lg:flex-row lg:items-center lg:justify-between"
         >
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-paper/60">
-            © 2026 EcoEPR · Mumbai + Pune pilot
+            © 2026 EcoEPR · EPR traceability prototype
           </p>
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-paper/60">
-            Verified before a rupee is promised
+            Simulated before any real payout
           </p>
         </div>
       </div>
