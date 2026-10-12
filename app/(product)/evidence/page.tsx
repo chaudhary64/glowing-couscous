@@ -248,35 +248,9 @@ export default async function EvidencePage({
         </Surface>
       </section>
 
-      <section>
-        <Panel eyebrow="Limits" title="What this screen is not">
-          <ul className="flex flex-col gap-3">
-            {LIMITS.map((limit) => (
-              <li key={limit} className="flex gap-3 text-sm leading-relaxed">
-                <span aria-hidden className="mt-2 size-2 shrink-0 bg-lead" />
-                <span className="text-ink-soft">{limit}</span>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      </section>
     </div>
   );
 }
 
 /** Bounded, and named so the note above and the query cannot disagree about the number. */
 const LIST_LIMIT = 24;
-
-/**
- * The honest edges of a screen that reads an archive back.
- *
- * Each one is a real gap rather than a caveat, and each is stated here because a reader
- * who finds it later in the schema — a nullable `uploader_user_id`, a nullable
- * `intakes.collector_id`, an `items` table with no writer — should not have to wonder
- * whether it was known.
- */
-const LIMITS = [
-  "Only the primary asset is joined to a submission: a photograph sent alongside a voice note is one submission, and the clip is archived without a lookup of its own.",
-  "Priced figures are computed for a single request and are not stored, so this screen shows the evidence a price came from rather than the price itself.",
-  "No retention policy: evidence is kept until it is removed deliberately.",
-];

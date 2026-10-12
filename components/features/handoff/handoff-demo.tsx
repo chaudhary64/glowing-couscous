@@ -29,7 +29,7 @@ export function HandoffDemo({ load }: { load: HandoffLoad }) {
             Smart pickup &amp; digital credit
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-ink-soft">
-            Collector hands over a hazardous load → PIN on the phone → recycler weighs and verifies → credit note → DynamoDB Stream → UPI payout.
+            Collector hands over the load → recycler verifies it → credit note.
           </p>
         </div>
         <Button
