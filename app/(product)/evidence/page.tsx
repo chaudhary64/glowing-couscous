@@ -92,7 +92,7 @@ export default async function EvidencePage({
       <ScreenHeader
         eyebrow="Operations · Evidence"
         title="Evidence archive"
-        lede="Every photo and voice note behind a valuation, kept here so a price can always be checked against the evidence it came from. Open any one to view or play it."
+        lede="Review the photos and voice notes linked to valuations."
         actions={
           mayOpen(user.role, "/intake") ? (
             <ButtonLink href="/intake" variant="secondary">
@@ -103,16 +103,16 @@ export default async function EvidencePage({
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={archive ? "verified" : "hazard"}>
-              {archive ? "Archive ready" : "Archive off"}
+              {archive ? "Archive ready" : "Archive unavailable"}
             </Badge>
             <Badge tone={listing.configured ? "neutral" : "hazard"}>
-              {listing.configured ? "Records available" : "No database"}
+              {listing.configured ? "Live records" : "Unavailable"}
             </Badge>
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
-              {joined} of {assets.length} linked to a submission
+              {joined} of {assets.length} linked
             </span>
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
-              {attributed} of {assets.length} with a named uploader
+              {attributed} of {assets.length} with an uploader
             </span>
           </div>
         }
@@ -149,18 +149,14 @@ export default async function EvidencePage({
           </form>
 
           <p className="mt-3 max-w-3xl text-[12px] leading-relaxed text-ink-muted">
-            The id a priced result carries — the <span className="font-mono">LIVE-2026-…</span>{" "}
-            string the valuation screen shows. The match is exact, so an id only ever
-            returns its own submission.
+            Enter the valuation ID shown on the valuation page.
           </p>
 
           {lookup ? (
             <div className="mt-4 border-t-[3px] border-ink pt-4">
               {!lookup.configured ? (
                 <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-                  This deployment has no records database, so no id can be resolved: the
-                  archive&rsquo;s rows were never recorded, and nothing here can walk from
-                  an id to an object.
+                  No database is connected, so valuation IDs cannot be resolved.
                 </p>
               ) : lookup.error ? (
                 <p className={`max-w-3xl text-sm leading-relaxed ${scoped ? "text-ink-soft" : "text-hazard-ink"}`}>
@@ -168,9 +164,7 @@ export default async function EvidencePage({
                 </p>
               ) : lookup.asset === null ? (
                 <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-                  Nothing in the archive holds <span className="font-mono">{code}</span>.
-                  Either that id was never priced here, or the submission behind it was not
-                  recorded — an id is findable only once its submission is on file.
+                  No evidence found for <span className="font-mono">{code}</span>.
                 </p>
               ) : (
                 <>

@@ -39,7 +39,7 @@ export default async function IntakePage() {
       <ScreenHeader
         eyebrow="Operations · Intake"
         title="New intake"
-        lede="Point a phone at the item or say what it is in Hindi. The upload comes back as a priced item with a confidence on every field, and nothing is promised to the collector until it clears the gatekeeper. Every figure below is counted from the submissions this database holds."
+        lede="Take a photo or describe the item in Hindi. The intake returns the item, price and confidence for review."
         actions={
           canValue ? (
             <ButtonLink href="/valuation" variant="secondary">
@@ -54,8 +54,8 @@ export default async function IntakePage() {
             </Badge>
             <Badge tone={log.configured ? "neutral" : "hazard"}>
               {log.configured
-                ? `${counts?.intakesTotal ?? 0} submissions on file`
-                : "Records off"}
+                ? `${counts?.intakesTotal ?? 0} recorded`
+                : "Unavailable"}
             </Badge>
             {readError ? (
               <span className="text-[12px] leading-snug text-hazard-ink">{readError}</span>
@@ -71,7 +71,7 @@ export default async function IntakePage() {
           label="Intakes today"
           value={String(counts?.intakesToday ?? 0)}
           unit="items"
-          note={`${counts?.intakesTotal ?? 0} submissions on file in total.`}
+          note={`${counts?.intakesTotal ?? 0} recorded in total.`}
         />
         <Stat
           label="Voice first"
@@ -83,8 +83,8 @@ export default async function IntakePage() {
           emphasis
           note={
             counts?.voiceShare === null || counts?.voiceShare === undefined
-              ? "No submission has been recorded today, so there is no share to take."
-              : "Spoken descriptions, not typed forms, among today's submissions."
+              ? "No voice intakes today."
+              : "Share of today's intakes sent by voice."
           }
         />
         <Stat
@@ -96,13 +96,13 @@ export default async function IntakePage() {
               : String(counts.medianLatencySeconds)
           }
           unit="seconds"
-          note="From upload to a field the collector can be shown, across today's submissions."
+          note="Typical time from upload to a readable result."
         />
         <Stat
           label="Items priced"
           value={String(counts?.itemsPriced ?? 0)}
           unit="items"
-          note={`${counts?.verified ?? 0} cleared, ${counts?.held ?? 0} held, ${counts?.rejected ?? 0} refused.`}
+          note={`${counts?.verified ?? 0} cleared · ${counts?.held ?? 0} held · ${counts?.rejected ?? 0} refused.`}
         />
       </StatGrid>
 
@@ -112,20 +112,19 @@ export default async function IntakePage() {
         <SectionHeader
           eyebrow="Recorded"
           title="Intakes captured"
-          note="The most recent submissions on file, each with the item it was priced as and the fields the model read out of it."
+          note="Recent intakes, extracted fields and pricing status."
         />
 
         <Surface className="mt-4">
           {!log.configured ? (
             <p className="px-4 py-4 text-sm leading-relaxed text-ink-soft">
-              <Badge tone="hazard">No database</Badge> — this deployment has no records
-              database, so nothing is recorded and there is nothing to list. The capture
-              panel above still analyses and prices; the result simply is not kept.
+              <Badge tone="hazard">No database</Badge> — results cannot be saved or listed
+              in this deployment.
             </p>
           ) : log.rows.length === 0 ? (
             <p className="px-4 py-4 text-sm leading-relaxed text-ink-soft">
-              <Badge tone="neutral">Nothing recorded yet</Badge> — run a capture above
-              and the submission appears here with the item it resolved to.
+              <Badge tone="neutral">Nothing recorded yet</Badge> — complete an intake above
+              to add the first record.
             </p>
           ) : (
             <>
@@ -170,7 +169,7 @@ export default async function IntakePage() {
                         <p className="mt-1 text-[11px] leading-snug text-ink-muted">
                           {row.fields.length > 0
                             ? `${row.fields.length} parsed field${row.fields.length === 1 ? "" : "s"} kept`
-                            : "No parsed fields kept — this route ran the identification pass only"}
+                            : "                            No extracted fields"}
                         </p>
                       </TD>
                       <TD>
@@ -191,7 +190,7 @@ export default async function IntakePage() {
                           <>
                             <span className="text-ink-muted">Not priced</span>
                             <p className="mt-1 text-[11px] leading-snug text-ink-muted">
-                              No item row is joined to this submission.
+                              Not priced yet.
                             </p>
                           </>
                         )}
@@ -236,10 +235,7 @@ export default async function IntakePage() {
               </Table>
 
               <p className="border-t border-rule px-3 py-3 text-[12px] leading-relaxed text-ink-muted">
-                A rejected submission keeps its evidence and is listed here like any
-                other; it simply never reaches a payout. A submission written before the
-                priced record existed shows as not priced rather than being handed an
-                item it never resolved to.
+                Rejected and unpriced intakes remain listed for review.
               </p>
             </>
           )}

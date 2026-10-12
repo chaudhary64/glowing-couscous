@@ -67,20 +67,20 @@ export default async function ValidationQueuePage() {
       <ScreenHeader
         eyebrow="Operations · Validation"
         title="Validation queue"
-        lede="Nothing is paid until this queue agrees. An item the model will not settle on its own waits here for a human, and only one of the three outcomes creates a payable credit. Every hold, refusal and decision below is a row this database holds."
+        lede="Review items the automated check could not clear. Approve, send to reuse, or refuse each item."
         actions={<ButtonLink href="/intake">New intake</ButtonLink>}
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={configured ? "verified" : "hazard"}>
-              {configured ? "Read from the database" : "No database"}
+              {configured ? "Live records" : "Unavailable"}
             </Badge>
             <Badge tone="neutral">
-              Holdout evidence is authored — last trained {metricHoldout.lastTrained}
+              Benchmark · last trained {metricHoldout.lastTrained}
             </Badge>
             {counts ? (
               <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
-                {counts.verified} cleared · {counts.held} held · {counts.rejected} refused,
-                across {counts.itemsPriced} priced items
+                {counts.verified} cleared · {counts.held} held · {counts.rejected} refused ·{" "}
+                {counts.itemsPriced} priced
               </span>
             ) : null}
             {readError ? (
@@ -98,31 +98,31 @@ export default async function ValidationQueuePage() {
           value={String(counts?.awaitingDecision ?? 0)}
           unit="items"
           emphasis
-          note="Held because the model would not call it alone, not because it failed."
+          note="Items that need a human decision."
         />
         <Stat
-          label="Refused before a credit"
+          label="Refused"
           value={String(counts?.rejected ?? 0)}
-          note="Verdicts recorded as rejected. Each keeps its evidence and can be looked up from the valuation id."
+          note="Items rejected before credit."
         />
         <Stat
-          label="Cleared by the gatekeeper"
+          label="Cleared"
           value={String(counts?.verified ?? 0)}
-          note={`${counts?.itemsPriced ?? 0} items priced in total, ${counts?.held ?? 0} of them on hold.`}
+          note={`${counts?.itemsPriced ?? 0} priced in total · ${counts?.held ?? 0} held.`}
         />
         <Stat
           label="Decided today"
           value={String(counts?.decidedToday ?? 0)}
           unit="decisions"
-          note="Decisions taken since midnight IST. A reload does not lose them."
+          note="Decisions made since midnight."
         />
       </StatGrid>
 
       <section>
         <SectionHeader
-          eyebrow="Judgement calls"
+          eyebrow="Review"
           title="Held for a human"
-          note="Work the operator first, then the paperwork: rules, metrics and payout streams come after. Every action here is recorded; undo marks it undone rather than deleting it."
+          note="Review held items and record a decision."
         />
         <div className="mt-5">
           <DecisionQueue
@@ -135,11 +135,8 @@ export default async function ValidationQueuePage() {
 
       <Surface tone="inset" className="p-4">
         <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-          The threshold is tuned for precision, not accuracy, because the two errors do not
-          cost the same: a wrongly credited bottle pays the brand&rsquo;s EPR budget for
-          material that never entered the formal route, while a wrongly rejected board only
-          costs the collector a re-upload — the item still reaches a licensed recycler on
-          the second attempt.
+          The check favors precision: approving the wrong item creates an invalid credit,
+          while a rejected item can be submitted again.
         </p>
       </Surface>
 
@@ -147,15 +144,15 @@ export default async function ValidationQueuePage() {
         <SectionHeader
           eyebrow="Evidence"
           title="Refusals worth reading"
-          note="Pulled from the same verdicts the valuation screen prices from, so the decision and the rupee figure line up."
+          note="Examples of items rejected before review."
         />
 
         {evidence.length === 0 ? (
           <Surface className="mt-5 p-4">
             <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
               {configured
-                ? "No refusal is on file yet. Run something through the gatekeeper above that is not e-waste and it will be recorded here with the reason and the evidence behind it."
-                : "This deployment has no records database, so a refusal cannot be recorded and there is nothing to read back. The gatekeeper above still refuses; the refusal is simply not kept."}
+                ? "No refusals recorded yet."
+                : "No database is connected, so refusals cannot be saved or listed here."}
             </p>
           </Surface>
         ) : (
@@ -222,7 +219,7 @@ export default async function ValidationQueuePage() {
                 </div>
 
                 <p className="mt-4 border-t border-dotted border-rule pt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">
-                  Refused by the automated gatekeeper at{" "}
+                  Rejected at{" "}
                   {item.gatekeeper
                     ? formatIstStamp(item.gatekeeper.checkedAt)
                     : "an unrecorded time"}
@@ -235,9 +232,9 @@ export default async function ValidationQueuePage() {
 
       <section>
         <SectionHeader
-          eyebrow="Model health · authored benchmark"
-          title="Holdout metrics against target"
-          note="Precision and recall are reported on the labelled holdout, not on live uploads. These are the published benchmark from the write-up and are not recomputed from the rows on this page."
+          eyebrow="Benchmark"
+          title="Model performance"
+          note="These results come from a labelled test set, not live uploads."
         />
         <div className="mt-5">
           <MetricPanel />
@@ -247,8 +244,8 @@ export default async function ValidationQueuePage() {
       <section>
         <SectionHeader
           eyebrow="Controls"
-          title="Rules that fire before a credit exists"
-          note="R-01 to R-04 are the reasons a refusal can carry. The total is counted; the per-rule split is not recorded anywhere, so the table shows no per-rule counts."
+          title="Rejection rules"
+          note="Rules that can reject an item before review."
         />
         <div className="mt-5">
           <RejectRules refused={counts?.rejected ?? null} />
@@ -256,13 +253,10 @@ export default async function ValidationQueuePage() {
       </section>
 
       <section>
-        <Panel eyebrow="Next" title="Where a clearance goes">
+        <Panel eyebrow="Next step" title="After approval">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-            Approving an item releases its valuation. Turning that release into a routed
-            pickup with a credit note attached is feature 04, Smart Pickup &amp; Digital
-            Credit, and it runs on the handoff screen — the approval recorded here is the
-            state it starts from. A refusal or a reuse decision never reaches it, and no
-            credit note is minted for either.
+            Approval releases the valuation for handoff and pickup. Reuse and refusal do
+            not create a credit note.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <ButtonLink href="/valuation">Open valuations</ButtonLink>
@@ -273,7 +267,7 @@ export default async function ValidationQueuePage() {
           <p className="mt-4 flex items-center gap-2">
             <Badge tone="verified">Verified</Badge>
             <span className="text-[12px] text-ink-muted">
-              only this state creates a payable credit.
+              only approved items can create a credit.
             </span>
           </p>
         </Panel>

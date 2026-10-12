@@ -695,6 +695,7 @@ create_route() {
 }
 
 say "Routes:"
+create_route "GET /"
 create_route "GET /health"
 create_route "GET /streams"
 create_route "GET /recyclers"

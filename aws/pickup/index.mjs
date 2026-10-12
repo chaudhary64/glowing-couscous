@@ -112,7 +112,12 @@ async function route(event) {
   const access = requireRole(event, ALL_ROLES);
   if (!access.ok) return access.response;
 
-  if (segments.length === 1 && segments[0] === "health" && method === "GET") {
+  // Keep the API root useful for probes and operators who open the base URL directly.
+  // `/health` remains the explicit health route used by the application checks.
+  if (
+    method === "GET" &&
+    (segments.length === 0 || (segments.length === 1 && segments[0] === "health"))
+  ) {
     return await health();
   }
   if (segments.length === 1 && segments[0] === "streams" && method === "GET") {
@@ -151,7 +156,7 @@ async function route(event) {
   }
 
   return problem("invalid_request", `No route for ${method} ${path}`, {
-    hint: "POST /pickups, POST /pickups/{id}/pin, POST /pickups/{id}/settle, GET /pickups, GET /pickups/{id}, GET /pickups/{id}/events, GET /credit-notes/{pickupId}, GET /streams, GET /recyclers, GET /health",
+    hint: "GET /, GET /health, POST /pickups, POST /pickups/{id}/pin, POST /pickups/{id}/settle, GET /pickups, GET /pickups/{id}, GET /pickups/{id}/events, GET /credit-notes/{pickupId}, GET /streams, GET /recyclers",
   });
 }
 

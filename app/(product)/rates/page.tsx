@@ -74,7 +74,7 @@ export default async function RatesPage() {
       <ScreenHeader
         eyebrow="Administration"
         title="Rate card"
-        lede="The prices every valuation is computed from, on the server. The card is stored, so changing a rate is a governed write rather than a deploy; the metals with a market price follow it once a day, from MetalpriceAPI."
+        lede="The rates used to calculate valuations. Market-linked rates update daily; other rates stay fixed until changed."
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={card.source === "code" ? "neutral" : "verified"}>
@@ -82,7 +82,7 @@ export default async function RatesPage() {
                 ? `Daily card · ${displayDay(card.day)}`
                 : card.source === "database"
                   ? "Read from the database"
-                  : "Card shipped in code"}
+                  : "Default card"}
             </Badge>
             <Badge tone="neutral">{card.basis}</Badge>
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
@@ -106,9 +106,7 @@ export default async function RatesPage() {
       {fixed.length > 0 ? (
         <Surface tone="inset" className="p-4">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-            The MetalpriceAPI plan in use has no daily price for {listOf(fixed)}, so their market prices are held
-            fixed at the latest close when they were taken, shown beside each. They are paid exactly like the
-            metals priced daily, as a share of that price, and a paid plan would replace them with the day&rsquo;s.
+            No daily market price is available for {listOf(fixed)}. Their latest fixed price is shown beside each.
           </p>
         </Surface>
       ) : null}
@@ -116,8 +114,7 @@ export default async function RatesPage() {
       {paidPlan.length > 0 ? (
         <Surface tone="inset" className="p-4">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
-            The MetalpriceAPI plan in use has no price for {listOf(paidPlan)}, so they keep the demo card&rsquo;s
-            rates. On a paid plan each one joins the market the first day it is priced, at the rate it pays now.
+            No market price is available for {listOf(paidPlan)}, so these materials use their configured rates.
           </p>
         </Surface>
       ) : null}
@@ -128,9 +125,9 @@ export default async function RatesPage() {
           title="Price per kilogram"
           note={`${materials.length} materials${
             marketLinked > 0
-              ? `, ${marketLinked - fixedLinked} at today's market${fixedLinked > 0 ? ` and ${fixedLinked} at a fixed market price` : ""}: each pays the share of the market it paid the day it was first priced, never more than the market`
+              ? `, ${marketLinked - fixedLinked} linked to market rates${fixedLinked > 0 ? ` and ${fixedLinked} fixed` : ""}`
               : ""
-          }. A zero rate still has to be declared: a hazardous or inert fraction carries handling cost.`}
+          }. Zero-value materials still carry handling rules.`}
         />
         <Surface className="mt-4">
           <Table caption="Material rates">
@@ -201,7 +198,7 @@ export default async function RatesPage() {
         <SectionHeader
           eyebrow="Item classes"
           title="Handling fee and EPR credit"
-          note="Each item is priced under one class: the handling fee comes off the material value, and the EPR credit goes to the brand."
+          note="Each class defines the handling fee and brand EPR credit."
         />
         <Surface className="mt-4">
           <Table caption="Item classes">

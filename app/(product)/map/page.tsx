@@ -85,13 +85,13 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
         title="Hotspot map"
         lede={
           readOnly
-            ? "Every geotagged intake anywhere in India is filed to its district (and, in Mumbai, to its BMC ward). Where four or more land within 150 m of each other within three weeks, that spot is a site. This view is read-only: an operator decides where the next collection van goes."
-            : "Every geotagged intake anywhere in India is filed to its district (and, in Mumbai, to its BMC ward). Where four or more land within 150 m of each other within three weeks, that spot is a site, and an operator can see where the next collection van should stand."
+            ? "See where accepted, geotagged intakes are clustering. This view is read-only: an operator decides where vans go."
+            : "See where accepted, geotagged intakes are clustering and which sites may need collection."
         }
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge tone={data.configured ? "verified" : "hazard"}>
-              {data.configured ? "Live intakes" : "No database"}
+              {data.configured ? "Live records" : "Unavailable"}
             </Badge>
             {readOnly ? <Badge tone="ink">Read-only</Badge> : null}
             <Badge tone="ink">4 within {data.rule.radiusM} m · {data.rule.windowDays}-day window</Badge>
@@ -129,19 +129,19 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
         <Stat
           label="Detections in window"
           value={inWindow.length.toLocaleString("en-IN")}
-          note="Geotagged at intake, gatekeeper-accepted."
+          note="Accepted intakes with a location."
         />
         <Stat
           label="Districts with pickups"
           value={`${districtsWithPoints}`}
           unit={`/ ${DISTRICTS.length}`}
-          note="India's districts, filed by boundary; Mumbai also by BMC ward."
+          note="Districts with accepted intakes."
         />
         <Stat
           label="Open sites"
           value={String(open)}
           emphasis
-          note={`Cells with ${data.rule.minDetections}+ detections in ${data.rule.windowDays} days, no van yet.`}
+          note={`${data.rule.minDetections}+ detections in ${data.rule.windowDays} days, not assigned.`}
         />
         <Stat
           label="Highest pressure"
@@ -152,11 +152,11 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
       </StatGrid>
 
       {empty ? (
-        <Panel tone="inset" eyebrow="No data yet" title="The map fills from real intakes">
+        <Panel tone="inset" eyebrow="No data yet" title="No locations to show">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
             {data.configured
-              ? "No intake with a location has been recorded in the last three weeks, so there is nothing to cluster. "
-              : "There is no database connection, so no intakes can be read. "}
+              ? "No intake with a location was recorded in the last three weeks. "
+              : "No database is connected. "}
             Submit an item from{" "}
             <RoleLink
               role={user.role}
@@ -177,7 +177,7 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
         <SectionHeader
           eyebrow="Map"
           title="Where the load is concentrated"
-          note="Districts shaded by pressure across India, Mumbai's wards from city zoom, heat by recency, and every detected site at its true radius. Click a site to inspect it."
+          note="View district pressure, Mumbai wards and detected sites."
         />
         <div className="mt-4">
           <HeatmapExplorer data={data} canDispatch={canDispatch} />
@@ -189,7 +189,7 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
           <SectionHeader
             eyebrow="District ranking · India"
             title="Pressure by district"
-            note="Score is detections per km², relative to the busiest district (= 100). The note under each bar is detections and detected sites."
+            note="Ranked by detections per km² relative to the busiest district."
           />
           <Surface className="mt-4 p-4">
             <WardDensity wards={districts.slice(0, 12)} />
@@ -200,7 +200,7 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
                 className="mt-8"
                 eyebrow="Ward ranking · Mumbai"
                 title="Pressure by BMC ward"
-                note="Inside Mumbai the same score is kept per BMC ward, the unit a van is dispatched to."
+                note="Mumbai sites are ranked by BMC ward."
               />
               <Surface className="mt-4 p-4">
                 <WardDensity wards={wards.filter((w) => w.pickups > 0).slice(0, 12)} />
@@ -211,11 +211,11 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
         <div>
           <SectionHeader
             eyebrow={readOnly ? "Routing · read-only" : "Action"}
-            title={readOnly ? "The round an operator works through" : "Turn sites into a round"}
+            title={readOnly ? "The collection round" : "Plan a collection round"}
             note={
               readOnly
-                ? "Cleared sites drop off; the rest are ordered by detection count. An Operator or Admin assigns the vans."
-                : "Cleared sites drop off; the rest are ordered by detection count."
+                ? "Open sites are ordered by detection count. An Operator or Admin assigns the vans."
+                : "Open sites are ordered by detection count."
             }
           />
           <div className="mt-4">
@@ -233,8 +233,7 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
               }
               note={
                 <>
-                  {hotspots.filter((h) => h.status !== "cleared").length} sites on the round, ordered by detection count — a
-                  priority list, not a driving route.
+                  {hotspots.filter((h) => h.status !== "cleared").length} open sites, ordered by priority.
                 </>
               }
             />
@@ -246,7 +245,7 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
         <SectionHeader
           eyebrow="Sites"
           title="Every site in the window"
-          note="Codes are stable: a site keeps its code across recomputes, so a van assignment survives new detections."
+          note="Stable site IDs keep assignments linked as new intakes arrive."
         />
         <Surface className="mt-4 p-4">
           <HotspotTable hotspots={hotspots} wards={wards} />
@@ -254,7 +253,7 @@ export default async function HotspotMapPage({ searchParams }: { searchParams: P
       </section>
 
       <section>
-        <Panel eyebrow="Limits" title="What this screen is, and is not">
+        <Panel eyebrow="About the map" title="How it works">
           <ul className="flex flex-col gap-3">
             {limits.map((limit) => (
               <li key={limit} className="flex gap-3 text-sm leading-relaxed">

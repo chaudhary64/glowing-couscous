@@ -178,7 +178,7 @@ Environment variables, grouped as they appear in [`.env.example`](.env.example):
 | --- | --- | --- |
 | Browser | `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_COGNITO_*` | Public; inlined into the bundle |
 | Cognito (server) | `COGNITO_REGION`, `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID`, `COGNITO_ISSUER` | Needed or sign-in reports the pool as unconfigured |
-| Team admin | `COGNITO_ADMIN_ACCESS_KEY_ID`, `COGNITO_ADMIN_SECRET_ACCESS_KEY` | Optional; without it `/team` is read-only |
+| Team admin | `COGNITO_ADMIN_ACCESS_KEY_ID`, `COGNITO_ADMIN_SECRET_ACCESS_KEY` | Optional explicit credentials; otherwise the AWS SDK uses the local CLI profile or hosting IAM role |
 | AI | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_SPEECH_REGION` | Vision model for the photo, Speech for Hindi |
 | Database | `DATABASE_URL` | Secret. `sslmode=no-verify` against RDS |
 | Archive | `S3_BUCKET`, `S3_REGION`, `S3_PREFIX`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Leave the bucket empty and the archive is simply off |

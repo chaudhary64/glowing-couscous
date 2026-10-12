@@ -24,7 +24,7 @@ export default async function HandoffPage() {
       <ScreenHeader
         eyebrow="Smart pickup · collector"
         title="Hand over e-waste"
-        lede="The kabadiwala's phone. One tap routes the newest cleared load to a licensed recycler and puts a 4-digit PIN on screen; the money arrives when the gate types it."
+        lede="Route the newest cleared load to a licensed recycler and share a handoff PIN with the collector."
       />
       <HandoffLoadContext context={context} />
       {context.load ? (
@@ -32,12 +32,12 @@ export default async function HandoffPage() {
           <CollectorPhone load={context.load} />
         </PhoneFrame>
       ) : (
-        <Panel eyebrow="Nothing to route" title="No load can be handed over yet">
+        <Panel eyebrow="Nothing to route" title="No cleared load available">
           <p className="max-w-3xl text-sm leading-relaxed text-ink-soft">
             {context.loadError
-              ? `The priced record could not be read: ${context.loadError}`
+              ? `Could not read the priced item: ${context.loadError}`
               : (context.loadReason ??
-                "No cleared item is on file, so the phone has no load to route.")}
+                "No cleared item is available to route.")}
           </p>
         </Panel>
       )}

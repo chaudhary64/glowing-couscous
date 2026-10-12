@@ -13,7 +13,7 @@ export default async function GatePage({ searchParams }: PageProps<"/gate">) {
       <ScreenHeader
         eyebrow="Smart pickup · recycler"
         title="Recycler gate"
-        lede="Weigh the load, type the PIN from the collector's phone, and the credit note issues on the weighed mass. Five wrong PINs lock the load."
+        lede="Weigh the load and enter the collector's PIN to complete the handoff. Five wrong attempts lock the load."
       />
       <RecyclerGate pickupId={typeof pickup === "string" ? pickup : null} />
     </div>
