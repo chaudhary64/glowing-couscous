@@ -1,6 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 
 import { database, databaseConfigured } from "@/db/client";
+import { FACILITIES } from "@/aws/pickup/catalogue.mjs";
 import { collectors, facilities, organizationMembers, organizations, users } from "@/db/schema";
 import { scopeFor, type Scope, type ScopeIdentity } from "@/lib/auth/scope";
 import type { AuthUser } from "@/lib/auth/token";
@@ -49,8 +50,14 @@ async function scopeIdentity(user: AuthUser): Promise<ScopeIdentity> {
     // An Officer is bound to the recycler that employs them, and through it to one site.
     // A recycler with several sites needs the site on the membership itself; until then
     // the oldest active site stands for it.
+    //
+    // The scope carries the pickup service's id for that site (`RX-03`), not the row's
+    // uuid: the only reads a facility scope cuts are the load board and the recycler
+    // directory, and both key a site by the service's id. The two records share the
+    // site's CPCB licence, so that is the join; a site whose licence the service does
+    // not list resolves to nothing, and the scope stays unresolved.
     const [row] = await db
-      .select({ facilityId: facilities.id })
+      .select({ licenseNo: facilities.licenseNo })
       .from(organizationMembers)
       .innerJoin(users, eq(users.id, organizationMembers.userId))
       .innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
@@ -65,7 +72,8 @@ async function scopeIdentity(user: AuthUser): Promise<ScopeIdentity> {
       )
       .orderBy(asc(facilities.createdAt))
       .limit(1);
-    return { facilityId: row?.facilityId ?? null };
+    const site = row?.licenseNo ? FACILITIES.find((facility) => facility.cpcbLicense === row.licenseNo) : undefined;
+    return { facilityId: site?.id ?? null };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[db] resolving the scope identity failed", message.replace(/\s+/g, " ").slice(0, 200));
