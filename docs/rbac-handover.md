@@ -152,8 +152,13 @@ live caller can do stopped working mid-deploy.
 | `npm run test:heatmap` | 24/24 |
 | `tests/e2e/access.spec.ts` | **11/11 passing** (five roles × the full matrix, live accounts) |
 | `tests/e2e/dashboard.spec.ts` | **5/5 passing** |
-| `tests/e2e/team.spec.ts` | **1 failing** — see §4.1 |
-| `tests/e2e/pickup.spec.ts` | **1 failing** — see §4.2, and read it before starting Track C |
+| `tests/e2e/team.spec.ts` | **Passing** — the five-role assertion, plus a case that proves `eco-collector` reaches the pool rather than being rejected as unknown. Was 1 failing; see §4.1 |
+| `tests/e2e/pickup.spec.ts` | **Passing** as an Admin session — the only seat that holds both halves of `/demo`. §4.2 option (a) is still the faithful version; read §4.2 before starting Track C |
+| The whole battery, `npm run test:e2e` | **88 passing, 1 skipped**, on the Track A + Track B merge (89 cases). The skip is `team.spec.ts`'s unconfigured-pool case, which is deliberate |
+
+The battery's first run is what found the last of it: 67 passed, 3 failed, and the one
+deliberate skip. One of the three is §4.2's, and the other two are specs this document's
+step 25 table did not know were broken — step 25 in §3 now lists all four.
 
 `access.spec.ts` and `dashboard.spec.ts` were rewritten as part of the contract because the
 typecheck required it (they read `ROLE_RANK` and `SCREENS[].minRank`, which no longer exist).
@@ -269,8 +274,10 @@ new `app/(product)/intakes/page.tsx` · new `components/features/collector/call-
    | [`access.spec.ts`](../tests/e2e/access.spec.ts) | **Done** in Phase A |
    | [`dashboard.spec.ts`](../tests/e2e/dashboard.spec.ts) | **Done** in Phase A |
    | [`global-setup.ts`](../tests/e2e/global-setup.ts) | **No edit needed** — it iterates `ACCOUNTS`, so it signs in five accounts already |
-   | [`team.spec.ts`](../tests/e2e/team.spec.ts) | **One string left** — §4.1 |
-   | [`pickup.spec.ts`](../tests/e2e/pickup.spec.ts) | **Needs reworking** — §4.2 |
+   | [`team.spec.ts`](../tests/e2e/team.spec.ts) | **Done** — the assertion reads five role names, and the file proves the Collector is accepted rather than turned away. §4.1 |
+   | [`pickup.spec.ts`](../tests/e2e/pickup.spec.ts) | **Passing, not yet the faithful test** — it runs as Admin, which holds both halves of `/demo`. The two-session rewrite is §4.2 option (a) and Track C's step 22 |
+   | [`gatekeeper.spec.ts`](../tests/e2e/gatekeeper.spec.ts) | **Was missing from this table.** Every positive case ran as the officer against `/validation` and `/api/ai/gatekeeper` — both Admin-only now — so it timed out at a file input that never rendered and, being a serial file, skipped the three tests behind it. **Done**, on the Admin seat; the operator refusal stays |
+   | [`valuation.spec.ts`](../tests/e2e/valuation.spec.ts) | **Was missing too.** `/valuation`, `/validation` and `/api/validation/decision` are Admin-only, so one officer timeout hid all twelve cases in the file. **Done**, on the Admin seat; the operator and viewer refusals stay |
    | [`screens.spec.ts`](../tests/e2e/screens.spec.ts), [`public.spec.ts`](../tests/e2e/public.spec.ts) | No edit; they read only `.path` / `.title` and run as admin, who keeps every seat. Adding `/intakes` to `SCREENS` gets it a render check for free — do not "fix" these |
 
 3. **Step 26 — the full battery:** `npx tsc --noEmit`, `npm run lint`, `npm run db:check`,
@@ -292,9 +299,9 @@ new `app/(product)/intakes/page.tsx` · new `components/features/collector/call-
 
 ## 4. Open decisions and known traps
 
-### 4.1 The one red assertion in `team.spec.ts`
+### 4.1 The fifth role in `team.spec.ts` — fixed on Track A
 
-[`team.spec.ts:39`](../tests/e2e/team.spec.ts#L39) asserts the role-change route's message contains
+[`team.spec.ts:33`](../tests/e2e/team.spec.ts#L33) asserts the role-change route's message contains
 `eco-admin, eco-officer, eco-operator, eco-viewer`. The route now answers
 
 ```
@@ -302,9 +309,13 @@ Role must be one of eco-admin, eco-officer, eco-operator, eco-collector, eco-vie
 ```
 
 The route is correct — the fifth role *is* grantable — so the assertion is what changes. This is
-runbook step 25's "becomes five". One line; whoever merges first takes it.
+runbook step 25's "becomes five". **Taken**, on Track A: the assertion lists five names, and a
+new case in the same file asks the route for `eco-collector` against a username no pool holds —
+a role it did not know would be refused with a 400, so the pool's 404 is what proves the fifth
+role passes validation. It changes no real account's role, deliberately: these five accounts are
+what `access.spec.ts` walks.
 
-### 4.2 The demo screen cannot be driven end-to-end in one session — decide before Track C
+### 4.2 The demo screen cannot be driven end-to-end in one session — still open
 
 **This is verified, not theoretical.** `pickup.spec.ts` runs the whole flow in one session as the
 **operator** and now fails: the handover succeeds and the PIN renders, the gate loads the load and
@@ -349,6 +360,13 @@ Two things follow, and they are different problems:
      sides. Cheapest to make true, and it removes the split-screen demo that the write-up leans on.
 
    Decide this before Track C starts step 20, because it decides what `pickup.spec.ts` becomes.
+
+   **Where this stands now, after the first full battery run.** `pickup.spec.ts` runs its five
+   cases as an **Admin** session — the only seat holding both `/handoff` and `/gate` — so the flow
+   itself is covered end to end today, including the 20-second UPI assertion, wrong-PIN refusal and
+   the audit trail. Nothing in the application changed to get that: no seat was widened, and
+   `/settle` is still Officer + Admin. What is *not* covered by that shape is the two seats driving
+   the two halves separately, which is the point of option (a) and the reason it stays open.
 
 ### 4.3 The Collector's dashboard has nothing to filter on
 
